@@ -5,7 +5,7 @@
 
 const API_KEY = "";
 // Production: set MARKET_ENGINE_URL to your secure backend. Leave blank for CodePen prototype mode.
-const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protocol !== "file:" && !/codepen\.io$/i.test(location.hostname) ? "/api/market" : "https://legendary-zebra-rqjgrgvwjxfp4j6-3000.app.github.dev/");
+const MARKET_ENGINE_URL = "https://legendary-zebra-rqjgrgvwjxfp4j6-3000.app.github.dev";
 
 // Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
 
