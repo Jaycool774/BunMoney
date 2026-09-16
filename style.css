@@ -32,6 +32,14 @@ body {
   margin: auto;
   padding: 18px 16px 110px;
 }
+
+/* Desktop */
+@media (min-width: 768px) {
+  .app {
+    max-width: 1400px;
+    padding: 24px 32px 40px;
+  }
+}
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -289,20 +297,45 @@ button:active { transform: scale(.97); }
 }
 
 .bottom-nav {
-  position: fixed; z-index: 900; left: 50%; bottom: 10px; transform: translateX(-50%);
-  width: min(calc(100% - 20px), 500px); display: grid; grid-template-columns: repeat(5, 1fr);
-  gap: 4px; padding: 7px; background: rgba(17,21,30,.94); border: 1px solid var(--border);
-  border-radius: 16px; backdrop-filter: blur(12px); box-shadow: 0 10px 35px rgba(0,0,0,.4);
+  position: fixed;
+  z-index: 900;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(calc(100% - 20px), 500px);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 7px;
+  background: rgba(17, 21, 30, .94);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, .4);
 }
-.bottom-nav button { background: transparent; color: var(--muted); padding: 7px 3px; font-size: 17px; }
-.bottom-nav button span { display: block; font-size: 9px; margin-top: 3px; }
-.bottom-nav button:hover { color: var(--lime); }
 
-@media (max-width: 380px) {
-  .app { padding-left: 12px; padding-right: 12px; }
-  .price { font-size: 32px; }
-  .bun-character { width: 65px; height: 65px; font-size: 40px; }
-  .bottom-nav button { font-size: 15px; }
+.bottom-nav button {
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 3px;
+  font-size: 17px;
+}
+
+.bottom-nav button span {
+  display: block;
+  font-size: 9px;
+  margin-top: 3px;
+}
+
+.bottom-nav button:hover {
+  color: var(--lime);
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+  .bottom-nav {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -313,21 +346,62 @@ button:active { transform: scale(.97); }
   }
 }
 
-/* FAVORITES / COPILOT */
-.chart-card { position: relative; }
-.bun-chart-copilot {
-  display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px;
-  background: rgba(163,230,53,.05); border: 1px solid var(--border); border-radius: 12px;
-}
-.copilot-character {
-  flex: 0 0 auto; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
-  background: #090b10; border: 1px solid var(--border); border-radius: 50%; font-size: 25px;
-}
-.copilot-bubble { flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 9px 11px; }
-.copilot-bubble strong { color: var(--lime); font-size: 11px; }
-.copilot-bubble p { margin: 3px 0 0; color: var(--text); font-size: 12px; line-height: 1.4; }
 
-.character-action { animation: bunQuickReaction .45s ease; }
+/* FAVORITES / COPILOT */
+
+.chart-card {
+  position: relative;
+}
+
+.bun-chart-copilot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(163,230,53,.05);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.copilot-character {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #090b10;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 25px;
+}
+
+.copilot-bubble {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 11px;
+}
+
+.copilot-bubble strong {
+  color: var(--lime);
+  font-size: 11px;
+}
+
+.copilot-bubble p {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.character-action {
+  animation: bunQuickReaction .45s ease;
+}
+
 @keyframes bunQuickReaction {
   0% { transform: scale(1); }
   40% { transform: scale(1.15) rotate(-5deg); }
@@ -335,38 +409,20 @@ button:active { transform: scale(.97); }
   100% { transform: scale(1); }
 }
 
-.chart-quick-trade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.chart-quick-trade button { min-height: 48px; border-radius: 11px; font-size: 15px; }
-.quick-buy { background: var(--green); color: #061008; }
-.quick-sell { background: var(--red); color: white; }
-.chart-quick-trade button:active { transform: scale(.97); }
 
-.favorite-market { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
-.favorite-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.favorite-top strong { font-size: 17px; }
-.favorite-price { display: block; color: var(--lime); font-size: 20px; font-weight: bold; margin-top: 4px; }
-.favorite-remove { width: 32px; height: 32px; border-radius: 50%; background: var(--panel2); color: var(--muted); font-size: 18px; }
-.favorite-remove:hover { color: var(--red); }
-.favorite-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 12px; }
-.favorite-stats > div { background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; padding: 9px; }
-.favorite-stats span { display: block; color: var(--muted); font-size: 10px; margin-bottom: 4px; }
-.favorite-stats strong { font-size: 12px; }
-.favorite-levels { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 11px; }
-.favorite-levels strong { color: var(--text); }
-.favorite-open { width: 100%; margin-top: 11px; padding: 11px; border-radius: 9px; background: var(--lime); color: #090b10; }
-.favorites-add { display: flex; gap: 8px; margin-top: 12px; }
-.favorites-add input { flex: 1; min-width: 0; padding: 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel2); color: white; outline: none; text-transform: uppercase; }
-.favorites-add input:focus { border-color: var(--lime); }
-.favorites-add button { padding: 0 15px; border-radius: 9px; background: var(--lime); color: #090b10; }
+/* BUNMONEY DESKTOP LAYOUT */
 
-@media (min-width: 700px) {
-  .chart-card { display: grid; grid-template-columns: minmax(0, 1fr) 185px; gap: 12px; }
-  .chart-card h3 { grid-column: 1 / -1; }
-  .chart-card #chart { grid-column: 1; }
-  .chart-card .chart-zoom { grid-column: 1; }
-  .chart-card .bun-chart-copilot { grid-column: 2; grid-row: 2 / span 2; margin-top: 0; align-self: start; flex-direction: column; align-items: stretch; }
-  .chart-card .copilot-character { margin: 0 auto; }
-  .chart-card #chartQuickTrade { grid-column: 1; }
+@media (min-width: 768px) {
+  .app {
+    width: 100%;
+    max-width: 1400px !important;
+    margin: 0 auto;
+    padding: 24px 32px 40px;
+  }
+
+  .bottom-nav {
+    display: none !important;
+  }
 }
 
 /* BRANDED HEADER */
@@ -710,3 +766,526 @@ button:active { transform: scale(.97); }
 .bunai-home-card{display:none!important}
 .bun-chart-copilot{display:none!important}
 .future-events-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.future-events-pill{font-size:11px;font-weight:800;letter-spacing:.08em;padding:6px 9px;border-radius:999px;background:rgba(128,255,0,.12);border:1px solid rgba(128,255,0,.28);white-space:nowrap}.future-events-list{display:grid;gap:10px;margin-top:12px}.future-event{display:flex;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.025)}.future-event-date{min-width:118px;font-size:11px;font-weight:800;color:#b8ff62;line-height:1.35}.future-event-main{min-width:0}.future-event-codes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}.future-event-codes span{font-size:10px;font-weight:900;letter-spacing:.04em;padding:3px 6px;border-radius:6px;background:rgba(128,255,0,.08);border:1px solid rgba(128,255,0,.2);color:#d7ff9d}.future-event-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.future-event-head strong{font-size:13px}.future-event-head span{font-size:10px;opacity:.7;border:1px solid rgba(255,255,255,.12);padding:3px 6px;border-radius:999px}.future-event p{margin:5px 0 0;font-size:12px;line-height:1.45;opacity:.78}@media(max-width:600px){.future-event{display:block}.future-event-date{margin-bottom:7px}.future-event-head{align-items:flex-start}}
+
+/* =========================================================
+   BUNMONEY DESKTOP COMMAND CENTER — 2026
+   Keeps the existing mobile layout and turns desktop into
+   a wide trading dashboard.
+========================================================= */
+@media (min-width: 768px) {
+  body { overflow-x: hidden; }
+
+  .app {
+    width: min(100%, 1440px);
+    max-width: 1440px !important;
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+  }
+
+  .topbar.bun-header {
+    min-height: 74px;
+    margin-bottom: 12px;
+  }
+
+  .main-nav {
+    margin-bottom: 18px;
+    padding: 2px 0 4px;
+  }
+
+  .nav-button {
+    min-width: 104px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  /* Give the home screen an actual desktop dashboard structure. */
+  #home {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  #home > .hero-card,
+  #home > .search,
+  #home > .decision,
+  #home > .future-events-card {
+    grid-column: 1 / -1;
+  }
+
+  #home > .hero-card,
+  #home > .quick-actions-home,
+  #home > .market-snapshot-card,
+  #home > .master-command-card,
+  #home > .price-card,
+  #home > .grid,
+  #home > .chart-card,
+  #home > .setup,
+  #home > .trade-plan-card,
+  #home > .decision,
+  #home > .future-events-card,
+  #home > .trade-history-card {
+    margin-bottom: 0;
+    min-width: 0;
+  }
+
+  /* Top dashboard row */
+  #home > .hero-card { grid-column: 1 / -1; }
+  #home > .quick-actions-home { grid-column: 1 / 5; }
+  #home > .market-snapshot-card { grid-column: 5 / 9; }
+  #home > .master-command-card { grid-column: 9 / 13; }
+
+  /* Search + live quote row */
+  #home > .search { grid-column: 1 / -1; }
+  #home > .price-card { grid-column: 1 / 5; }
+  #home > .grid {
+    grid-column: 5 / 13;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: 100%;
+  }
+
+  /* Chart is the visual centerpiece; analysis sits beside it. */
+  #home > .chart-card { grid-column: 1 / 9; }
+  #home > .chart-card #chart { height: 430px; }
+
+  /* Analysis stack: section order in the current HTML is stable here:
+     9 = Technical Analysis, 10 = Trade Setup, 11 = Trade Plan. */
+  #home > .setup:nth-of-type(9),
+  #home > .setup:nth-of-type(10),
+  #home > .trade-plan-card {
+    grid-column: 9 / 13;
+  }
+  #home > .decision { grid-column: 9 / 13; }
+  #home > .future-events-card { grid-column: 1 / -1; }
+
+  /* Bottom dashboard row: 14 = Paper Trading, 15 = Trader Level. */
+  #home > .setup:nth-of-type(14) { grid-column: 1 / 7; }
+  #home > .setup:nth-of-type(15) { grid-column: 7 / 13; }
+  #home > .trade-history-card { grid-column: 1 / -1; }
+
+  .quick-actions-grid,
+  .master-grid,
+  .snapshot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .master-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .search input { font-size: 15px; }
+
+  /* Other screens use the same wide canvas instead of a 520px-looking column. */
+  #trade,
+  #arcade,
+  #world,
+  #profile {
+    width: 100%;
+    max-width: none;
+  }
+
+  #trade > .setup,
+  #trade > .section-title,
+  #arcade > .setup,
+  #arcade > .money,
+  #world > .setup,
+  #world > .section-title,
+  #profile > .setup,
+  #profile > .section-title,
+  #profile > .profile-card {
+    min-width: 0;
+  }
+
+  #trade {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  #trade > .section-title { grid-column: 1 / -1; }
+  #trade > .setup:nth-of-type(1) { grid-column: 1 / 7; }
+  #trade > .setup:nth-of-type(2) { grid-column: 7 / 13; }
+  #trade > .market-board-card { grid-column: 1 / -1; }
+  #trade > .setup:nth-of-type(4) { grid-column: 1 / 5; }
+  #trade > .setup:nth-of-type(5) { grid-column: 5 / 9; }
+  #trade > .setup:nth-of-type(6) { grid-column: 9 / 13; }
+  #trade > .setup:nth-of-type(7) { grid-column: 1 / -1; }
+
+  #arcade,
+  #world,
+  #profile {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  #arcade > .section-title,
+  #world > .section-title,
+  #profile > .section-title { grid-column: 1 / -1; }
+  #arcade > *:not(.section-title) { grid-column: span 6; }
+  #world > *:not(.section-title) { grid-column: span 6; }
+  #profile > .profile-card { grid-column: 1 / 5; }
+  #profile > .setup { grid-column: span 4; }
+  #profile > .asset-customizer { grid-column: 1 / -1; }
+
+  .bot-grid,
+  .game-grid,
+  .world-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .asset-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .background-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+
+  .bottom-nav { display: none !important; }
+}
+
+/* Large desktop: give the dashboard more breathing room. */
+@media (min-width: 1200px) {
+  .app { padding-left: 36px; padding-right: 36px; }
+  #home { gap: 16px; }
+  #home > .chart-card #chart { height: 470px; }
+}
+
+/* Tablet / narrow desktop: collapse the 12-column dashboard cleanly. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  #home { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  #home > .quick-actions-home { grid-column: 1 / 3; }
+  #home > .market-snapshot-card { grid-column: 3 / 5; }
+  #home > .master-command-card { grid-column: 5 / 7; }
+  #home > .price-card { grid-column: 1 / 3; }
+  #home > .grid { grid-column: 3 / 7; }
+  #home > .chart-card { grid-column: 1 / -1; }
+  #home > .setup:nth-of-type(9),
+  #home > .setup:nth-of-type(10),
+  #home > .trade-plan-card,
+  #home > .decision { grid-column: 1 / -1; }
+}
+
+/* =========================================================
+   BUNMONEY DESKTOP DASHBOARD — FINAL OVERRIDE
+   ========================================================= */
+
+@media (min-width: 768px) {
+
+  html,
+  body {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .app {
+    width: 100% !important;
+    max-width: 1400px !important;
+    margin: 0 auto !important;
+    padding: 24px 32px 40px !important;
+  }
+
+  .bottom-nav {
+    display: none !important;
+  }
+
+  .main-nav {
+    width: 100%;
+    overflow: visible;
+  }
+
+  .main-nav .nav-button {
+    flex: 1 1 0;
+    text-align: center;
+  }
+
+  /* HOME DASHBOARD */
+
+  #home {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #home > .hero-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .quick-actions-home {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .market-snapshot-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .master-command-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .search {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  #home > .price-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .grid {
+    grid-column: span 8;
+    margin: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  #home > .chart-card {
+    grid-column: span 8;
+    margin: 0;
+  }
+
+  #home > .setup:nth-of-type(7) {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .setup:nth-of-type(8) {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .trade-plan-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .decision {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  #home > .future-events-card {
+    grid-column: span 8;
+    margin: 0;
+  }
+
+  #home > .setup:nth-last-of-type(3) {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .setup:nth-last-of-type(2) {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #home > .trade-history-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  /* Bigger desktop chart */
+  #chart {
+    height: 460px !important;
+  }
+
+  .chart-card {
+    min-width: 0;
+  }
+
+  /* Desktop cards */
+  .hero-card,
+  .price-card,
+  .setup,
+  .money,
+  .chart-card,
+  .reason-card,
+  .profile-card,
+  .secret-card {
+    min-width: 0;
+  }
+
+  /* Wider internal grids */
+  .master-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .quick-actions-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .snapshot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .trade-plan-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .trade-plan-checks {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* TRADE SCREEN */
+
+  #trade {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #trade > .section-title {
+    grid-column: 1 / -1;
+  }
+
+  #trade > .setup {
+    grid-column: span 6;
+    margin: 0;
+  }
+
+  #trade > .market-board-card {
+    grid-column: 1 / -1;
+  }
+
+  #trade > .broker-grid {
+    grid-column: 1 / -1;
+  }
+
+  /* ARCADE */
+
+  #arcade {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #arcade > .section-title {
+    grid-column: 1 / -1;
+  }
+
+  #arcade > .money,
+  #arcade > .setup {
+    grid-column: span 6;
+    margin: 0;
+  }
+
+  .game-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* WORLD */
+
+  #world {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #world > .section-title {
+    grid-column: 1 / -1;
+  }
+
+  #world > .setup {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .world-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* PROFILE */
+
+  #profile {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  #profile > .section-title {
+    grid-column: 1 / -1;
+  }
+
+  #profile > .profile-card {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #profile > .setup {
+    grid-column: span 4;
+    margin: 0;
+  }
+
+  #profile > .asset-customizer {
+    grid-column: 1 / -1;
+  }
+
+  #profile > .asset-customizer .asset-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  #profile > .asset-customizer .background-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+
+  /* Larger desktop typography */
+  .section-title h2 {
+    font-size: 28px;
+  }
+
+  .setup h3,
+  .chart-card h3,
+  .money h3 {
+    font-size: 17px;
+  }
+
+}
+
+/* Large monitors */
+@media (min-width: 1200px) {
+  .app {
+    max-width: 1500px !important;
+    padding-left: 40px !important;
+    padding-right: 40px !important;
+  }
+
+  #chart {
+    height: 500px !important;
+  }
+}
+/* =========================================================
+   BUNMONEY — STABLE RESPONSIVE LAYOUT PATCH
+   Keep this block last so it wins over older accumulated rules.
+========================================================= */
+html, body { width:100%; min-width:0; margin:0; overflow-x:hidden; }
+.app { width:100%; max-width:100%; margin:0 auto; padding:18px 16px 110px; }
+.main-nav, .screen { width:100%; max-width:100%; min-width:0; }
+.screen > * { min-width:0; max-width:100%; }
+img, canvas, svg, video, iframe { max-width:100%; }
+@media (min-width:768px) {
+  .app { width:min(100%,1440px); max-width:1440px !important; padding:24px 32px 48px !important; }
+  .bottom-nav { display:none !important; }
+  .main-nav { display:flex; flex-wrap:nowrap; overflow:visible; }
+  .main-nav .nav-button { flex:1 1 0; min-width:0; text-align:center; }
+  #home, #trade, #arcade, #world, #profile { width:100%; max-width:100%; }
+  #home { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:14px; align-items:start; }
+  #home > .section-title, #home > .hero-card, #home > .search, #home > .decision, #home > .future-events-card { grid-column:1 / -1; }
+  #home > .quick-actions-home, #home > .market-snapshot-card, #home > .master-command-card { grid-column:span 4; }
+  #home > .price-card { grid-column:span 4; }
+  #home > .grid { grid-column:span 8; grid-template-columns:repeat(4,minmax(0,1fr)); }
+  #home > .chart-card { grid-column:1 / 9; }
+  #home > .setup, #home > .trade-plan-card, #home > .decision { grid-column:9 / 13; }
+  #home > .trade-history-card { grid-column:1 / -1; }
+  #trade, #arcade, #world, #profile { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:14px; align-items:start; }
+  #trade > .section-title, #arcade > .section-title, #world > .section-title, #profile > .section-title { grid-column:1 / -1; }
+  #trade > *, #arcade > *, #world > *, #profile > * { min-width:0; }
+  #arcade > *:not(.section-title), #world > *:not(.section-title) { grid-column:span 6; }
+  #profile > .profile-card, #profile > .setup { grid-column:span 4; }
+  #profile > .asset-customizer { grid-column:1 / -1; }
+}
+@media (min-width:1200px) { .app { padding-left:40px !important; padding-right:40px !important; } #home { gap:16px; } #home > .chart-card #chart { height:470px !important; } }
+@media (max-width:767px) { #home, #trade, #arcade, #world, #profile { display:block; } .app { max-width:520px; } }
