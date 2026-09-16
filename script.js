@@ -12,7 +12,12 @@ const MARKET_ENGINE_URL = "https://legendary-zebra-rqjgrgvwjxfp4j6-3000.app.gith
 async function marketEngineRequest(endpoint, params = {}) {
   const query = new URLSearchParams(params).toString();
   if (MARKET_ENGINE_URL) {
-    const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${query}`);
+    const backendEndpoint =
+      endpoint === "/time_series" ? "/api/time-series" :
+      endpoint === "/price" || endpoint === "/quote" ? "/api/quote" :
+      endpoint;
+
+    const response = await fetch(`${MARKET_ENGINE_URL}${backendEndpoint}?${query}`);
     const data = await response.json();
     if (!response.ok || data.status === "error") throw new Error(data.message || "Market engine request failed");
     return data;
