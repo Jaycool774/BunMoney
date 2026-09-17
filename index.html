@@ -39,7 +39,7 @@
 <button class="nav-button" data-screen="arcade" onclick="showScreen('arcade')">🎮 Arcade</button>
 <button class="nav-button" data-screen="world" onclick="showScreen('world')">🌎 World</button>
 <button class="nav-button" data-screen="profile" onclick="showScreen('profile')">👤 Profile</button>
-</nav>
+<button class="nav-button" data-screen="paper" onclick="showScreen('paper')">💵 Paper Trading</button><button class="nav-button" data-screen="arena" onclick="showScreen('arena')">⚔️ Arena</button><button class="nav-button" data-screen="brokerage" onclick="showScreen('brokerage')">🔗 Brokerage</button><button class="nav-button" data-screen="rank" onclick="showScreen('rank')">🏆 Rank</button><button class="nav-button" data-screen="games" onclick="showScreen('games')">🎮 Games</button></nav>
 <main class="screen active" id="home">
 <section class="hero-card">
 <div class="character-display">
@@ -103,11 +103,8 @@
 <button class="master-tile" onclick="showScreen('profile')"><span>👑</span><div><strong>Profile</strong><small>Level &amp; cosmetics</small></div></button>
 </div>
 </section>
-<section class="search search-with-suggestions">
-<div class="ticker-search-wrap">
-<input aria-label="Search ticker or company" autocomplete="off" id="ticker" placeholder="Search ticker or company" spellcheck="false" type="text" value="SOUN"/>
-<div class="ticker-suggestions" hidden="" id="tickerSuggestions"></div>
-</div>
+<section class="search">
+<input id="ticker" placeholder="Enter ticker" type="text" value="SOUN"/>
 <button onclick="analyze()">ANALYZE</button>
 </section>
 <section class="price-card">
@@ -190,15 +187,17 @@
 <p class="trade-plan-note" id="tradePlanNote">Analyze a market to build a trade plan.</p>
 </section>
 <div class="decision wait" id="decision">WAITING FOR ANALYSIS</div>
-<section class="setup future-events-card">
-<div class="future-events-title-row">
-<div>
-<h3>📅 What's Next</h3>
-<p>Scheduled events that could move markets, with the reason they matter.</p>
+<section class="setup">
+<h3>🚨 Market Alerts</h3>
+<div id="alerts">
+<div class="alert empty">No alerts yet.</div>
 </div>
-<span class="future-events-pill">UPCOMING</span>
-</div>
-<div id="futureEvents" class="future-events-list"></div>
+</section>
+<section class="setup">
+<h3>🛡️ Risk Guardian</h3>
+<div class="risk-meter"><div id="riskBar"></div></div>
+<div class="row"><span>Risk</span><strong id="riskText">—</strong></div>
+<p id="riskMessage">Waiting for analysis.</p>
 </section>
 <section class="reason-card bunai-home-card">
 <div class="bunai-title-row">
@@ -220,31 +219,33 @@
 </div>
 <p aria-live="polite" class="bunai-reply" id="bunAiReply"></p>
 </section>
-
-<section class="setup">
-<h3>💵 Paper Trading</h3>
-<div class="row"><span>Balance</span><strong id="tradingBalance">$10.00</strong></div>
-<div class="row"><span>Position</span><strong id="position">NONE</strong></div>
-<div class="row"><span>Current Price</span><strong id="paperCurrentPrice">$—</strong></div>
-<div class="row"><span>Paper P/L</span><strong id="paperPL">$0.00</strong></div>
-<div class="row"><span>Move</span><strong id="paperPLPercent">0.00%</strong></div>
-<div class="paper-pl-message" id="paperPLMessage">No open position.</div>
-<div class="button-row">
-<button class="buy-button" onclick="paperBuy()">BUY</button>
-<button class="sell-button" onclick="paperSell()">SELL</button>
+<section class="setup readiness-card">
+<div class="readiness-title-row">
+<div>
+<h3>🧩 Trade Readiness</h3>
+<p>Quick confirmation checklist before you act.</p>
+</div>
+<span id="readinessScore">0/4</span>
+</div>
+<div class="readiness-list">
+<div class="readiness-item" id="readyTrend"><span>•</span><strong>Trend</strong><small>Waiting for analysis</small></div>
+<div class="readiness-item" id="readyLevel"><span>•</span><strong>Key level</strong><small>Waiting for support/resistance</small></div>
+<div class="readiness-item" id="readyVolume"><span>•</span><strong>Volume</strong><small>Waiting for volume check</small></div>
+<div class="readiness-item" id="readyRisk"><span>•</span><strong>Risk</strong><small>Waiting for risk check</small></div>
 </div>
 </section>
 <section class="setup">
-<h3>🏆 Trader Level</h3>
-<div class="row"><span>Level</span><strong id="level">Rookie</strong></div>
-<div class="xp-track"><div id="xpProgress"></div></div>
-<div class="row"><span>XP</span><strong id="xp">0 XP</strong></div>
-</section>
-<section class="setup trade-history-card">
-<div class="section-title"><div><h3>🧾 Paper Trade History</h3><p>Your closed practice trades.</p></div><button class="mini-btn" onclick="exportPaperTrades()">Export</button></div>
-<div class="trade-history-list" id="tradeHistoryList"><div class="alert empty">No paper trades yet.</div></div>
+<h3>🎯 Trader Confidence</h3>
+<div class="confidence"><div class="confidence-bar" id="confidenceBar"></div></div>
+<div class="row"><span>Confidence</span><strong id="confidenceText">50%</strong></div>
 </section>
 
+
+
+<section class="reason-card">
+<h3>💬 Bun Quote</h3>
+<p id="quote">Think first. Trade second.</p>
+</section>
 </main>
 <main class="screen" id="trade">
 <div class="section-title">
@@ -255,40 +256,6 @@
 <h3>🔎 Market Scanner</h3>
 <div id="scanner"><div class="alert empty">Scanner ready.</div></div>
 <button onclick="scanMarket()">Scan Watchlist</button>
-</section>
-<section class="setup scanner-v2-card">
-<div class="section-title">
-<div><h3>🧠 Setup Scanner 2.0</h3><p>Ranks your watchlist by setup quality. It does not place trades.</p></div>
-<span class="trade-plan-status neutral" id="scannerStatus">READY</span>
-</div>
-<div class="scanner-v2-list" id="scannerV2">
-<div class="alert empty">Run the scanner to rank SOUN, GRAB and BBAI.</div>
-</div>
-</section>
-<section class="setup market-board-card">
-<div class="market-board-head">
-<div>
-<h3>💹 Live Market Board</h3>
-<p>Pick a market instead of guessing a ticker. Ranked by current percentage move.</p>
-</div>
-<span class="trade-plan-status neutral" id="marketBoardStatus">READY</span>
-</div>
-<div class="market-board-controls">
-<label>Amount to compare
-          <div class="market-amount-wrap"><span>$</span><input id="marketAmount" min="0.01" step="0.01" type="number" value="10"/></div>
-</label>
-<button onclick="refreshMarketBoard()">↻ Refresh</button>
-</div>
-<div class="market-category-row">
-<button class="market-cat active" data-market-cat="stocks" onclick="setMarketCategory('stocks')">📈 Stocks</button>
-<button class="market-cat" data-market-cat="etfs" onclick="setMarketCategory('etfs')">📊 ETFs</button>
-<button class="market-cat" data-market-cat="crypto" onclick="setMarketCategory('crypto')">₿ Crypto</button>
-<button class="market-cat" data-market-cat="forex" onclick="setMarketCategory('forex')">💱 Forex</button>
-</div>
-<div class="market-board-list" id="marketBoard">
-<div class="alert empty">Loading live market choices…</div>
-</div>
-<p class="market-board-note">Dollar result is a simple percentage calculation on the amount entered. It is not a guaranteed return and excludes spreads, fees, taxes, and slippage.</p>
 </section>
 <section class="setup">
 <h3>🤖 AI Bots</h3>
@@ -304,26 +271,15 @@
 <p id="botMessage">Balanced market analysis and risk awareness.</p>
 </div>
 </section>
-<section class="setup">
-<h3>⚔️ Trading Arena</h3>
-<div class="arena-score">
-<div><span>You</span><strong id="playerScore">0</strong></div>
-<div><span>AI</span><strong id="aiScore">0</strong></div>
-</div>
-<div class="row"><span>Status</span><strong id="arenaStatus">READY</strong></div>
-<button onclick="startArena()">Start Arena Match</button>
-</section>
-<section class="setup">
-<h3>🔗 Brokerage Connections</h3>
-<p style="color:var(--muted);font-size:11px;margin-bottom:10px">BunMoney is designed to connect to supported brokerages while your money stays at the brokerage.</p>
-<div class="broker-grid">
-<div class="broker-card"><div class="broker-info"><strong>📊 Brokerage Connection</strong><small id="brokerStatus">Not connected</small></div><button onclick="connectBroker('Brokerage Account')">Connect</button></div>
-<div class="broker-card"><div class="broker-info"><strong>👀 View-only mode</strong><small>Balance, positions &amp; P/L</small></div><button onclick="brokerPreview('View-only')">Preview</button></div>
-<div class="broker-card"><div class="broker-info"><strong>✋ Approved orders</strong><small>Every real order requires your approval</small></div><button onclick="brokerPreview('Trade approval')">Preview</button></div>
-</div>
-<p class="broker-disclaimer">Prototype only: no real brokerage credentials or orders are handled by this front-end.</p>
-</section>
 
+
+<section class="setup real-trading">
+<h3>💳 Real Trading</h3>
+<div class="locked-box">
+<strong>🔒 Coming Later</strong>
+<p>Connect a supported brokerage through the secure BunMoney backend. Your money stays at your brokerage.</p>
+</div>
+</section>
 </main>
 <main class="screen" id="arcade">
 <div class="section-title">
@@ -335,15 +291,7 @@
 <div class="bank-balance" id="bankBalance">0.00</div>
 <button onclick="transferArcadeMoney()">Transfer to Paper Balance</button>
 </section>
-<section class="setup">
-<h3>🎮 Games</h3>
-<div class="game-grid">
-<button onclick="playArcade('coin')">🪙 Coin Grab</button>
-<button onclick="playArcade('runner')">🏃 Bun Runner</button>
-<button onclick="playArcade('target')">🎯 Bullseye</button>
-<button onclick="playArcade('memory')">🧠 Market Memory</button>
-</div>
-</section>
+
 <section class="money">
 <h3>⭐ Rewards</h3>
 <strong id="rewardPoints">0</strong>
@@ -375,7 +323,11 @@
 </div>
 <div class="chat-input-row"><input id="chatInput" placeholder="Say something..."/><button onclick="sendChat()">Send</button></div>
 </section>
-
+<section class="secret-card">
+<h3>🔮 Secret Area</h3>
+<p>A locked destination for future BunMoney content.</p>
+<button onclick="openFeature('secret')">Enter</button>
+</section>
 </main>
 <main class="screen" id="profile">
 <div class="section-title">
@@ -385,7 +337,7 @@
 <section class="profile-card">
 <div class="profile-avatar" id="profileAvatar">
 <img alt="" aria-label="Bun profile avatar" id="profileAvatarImage" onerror="this.onerror=null;this.src='https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png';" src="https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png"/>
-<img alt="" aria-hidden="true" class="profile-frame-image" id="profileFrameImage" onerror="this.style.display='none';" src="assets/frame_default.webp"/>
+<img alt="" aria-hidden="true" class="profile-frame-image" id="profileFrameImage" onerror="this.style.display='none';" src="assets/frame_default.png"/>
 </div>
 <h2 id="profileLevel">Rookie</h2>
 <strong id="profileRank">BRONZE</strong>
@@ -393,17 +345,8 @@
 <div class="row"><span>Trades</span><strong id="profileTrades">0</strong></div>
 <div class="row"><span>Win Rate</span><strong id="profileWinRate">0%</strong></div>
 </section>
-<section class="setup">
-<h3>🏅 Rank</h3>
-<div class="rank-display">
-<span id="rankIcon"><img alt="Bronze Bun rank" src="assets/rank_bronze.webp"/></span>
-<strong id="rankName">BRONZE</strong>
-</div>
-</section>
-<section class="setup">
-<h3>🏆 Achievements</h3>
-<div id="achievements"></div>
-</section>
+
+
 <section class="setup">
 <h3>🎨 Customization</h3>
 <div class="bot-grid">
@@ -419,37 +362,37 @@
 <div class="asset-group">
 <strong>Profile vibes</strong>
 <div class="asset-grid">
-<button onclick="setPfpAsset('happy')"><img alt="Happy Bun" src="assets/pfs_happy.webp"/><span>Happy</span></button>
-<button onclick="setPfpAsset('serious')"><img alt="Serious Bun" src="assets/pfs_serious.webp"/><span>Serious</span></button>
-<button onclick="setPfpAsset('chill')"><img alt="Chill Bun" src="assets/pfs_chill.webp"/><span>Chill</span></button>
-<button onclick="setPfpAsset('focused')"><img alt="Focused Bun" src="assets/pfs_focused.webp"/><span>Focused</span></button>
-<button onclick="setPfpAsset('confident')"><img alt="Confident Bun" src="assets/pfs_confident.webp"/><span>Confident</span></button>
-<button onclick="setPfpAsset('rich')"><img alt="Rich Mode Bun" src="assets/pfs_rich.webp"/><span>Rich Mode</span></button>
+<button onclick="setPfpAsset('happy')"><img alt="Happy Bun" src="assets/pfs_happy.png"/><span>Happy</span></button>
+<button onclick="setPfpAsset('serious')"><img alt="Serious Bun" src="assets/pfs_serious.png"/><span>Serious</span></button>
+<button onclick="setPfpAsset('chill')"><img alt="Chill Bun" src="assets/pfs_chill.png"/><span>Chill</span></button>
+<button onclick="setPfpAsset('focused')"><img alt="Focused Bun" src="assets/pfs_focused.png"/><span>Focused</span></button>
+<button onclick="setPfpAsset('confident')"><img alt="Confident Bun" src="assets/pfs_confident.png"/><span>Confident</span></button>
+<button onclick="setPfpAsset('rich')"><img alt="Rich Mode Bun" src="assets/pfs_rich.png"/><span>Rich Mode</span></button>
 </div>
 </div>
 <div class="asset-group">
 <strong>Profile frames</strong>
 <div class="asset-grid frame-grid">
-<button onclick="setFrameAsset('default')"><img alt="Default frame" src="assets/frame_default.webp"/><span>Default</span></button>
-<button onclick="setFrameAsset('glow')"><img alt="Glow frame" src="assets/frame_glow.webp"/><span>Glow</span></button>
-<button onclick="setFrameAsset('neon')"><img alt="Neon frame" src="assets/frame_neon.webp"/><span>Neon</span></button>
-<button onclick="setFrameAsset('animated')"><img alt="Animated frame" src="assets/frame_animated.webp"/><span>Animated</span></button>
-<button onclick="setFrameAsset('streak')"><img alt="Streak frame" src="assets/frame_streak.webp"/><span>Streak</span></button>
-<button onclick="setFrameAsset('elite')"><img alt="Elite frame" src="assets/frame_elite.webp"/><span>Elite</span></button>
-<button onclick="setFrameAsset('legendary')"><img alt="Legendary frame" src="assets/frame_legendary.webp"/><span>Legendary</span></button>
+<button onclick="setFrameAsset('default')"><img alt="Default frame" src="assets/frame_default.png"/><span>Default</span></button>
+<button onclick="setFrameAsset('glow')"><img alt="Glow frame" src="assets/frame_glow.png"/><span>Glow</span></button>
+<button onclick="setFrameAsset('neon')"><img alt="Neon frame" src="assets/frame_neon.png"/><span>Neon</span></button>
+<button onclick="setFrameAsset('animated')"><img alt="Animated frame" src="assets/frame_animated.png"/><span>Animated</span></button>
+<button onclick="setFrameAsset('streak')"><img alt="Streak frame" src="assets/frame_streak.png"/><span>Streak</span></button>
+<button onclick="setFrameAsset('elite')"><img alt="Elite frame" src="assets/frame_elite.png"/><span>Elite</span></button>
+<button onclick="setFrameAsset('legendary')"><img alt="Legendary frame" src="assets/frame_legendary.png"/><span>Legendary</span></button>
 </div>
 </div>
 <div class="asset-group">
 <strong>PFP backgrounds</strong>
 <div class="asset-grid background-grid">
-<button onclick="setPfpBackground('charts')"><img alt="Charts background" src="assets/bg_charts.webp"/><span>Charts</span></button>
-<button onclick="setPfpBackground('city')"><img alt="City background" src="assets/bg_city.webp"/><span>City</span></button>
-<button onclick="setPfpBackground('money')"><img alt="Money background" src="assets/bg_money.webp"/><span>Money</span></button>
-<button onclick="setPfpBackground('neon')"><img alt="Neon background" src="assets/bg_neon.webp"/><span>Neon</span></button>
-<button onclick="setPfpBackground('abstract')"><img alt="Abstract background" src="assets/bg_abstract.webp"/><span>Abstract</span></button>
-<button onclick="setPfpBackground('graffiti')"><img alt="Graffiti background" src="assets/bg_graffiti.webp"/><span>Graffiti</span></button>
-<button onclick="setPfpBackground('nature')"><img alt="Nature background" src="assets/bg_nature.webp"/><span>Nature</span></button>
-<button onclick="setPfpBackground('black')"><img alt="Black background" src="assets/bg_black.webp"/><span>Black</span></button>
+<button onclick="setPfpBackground('charts')"><img alt="Charts background" src="assets/bg_charts.png"/><span>Charts</span></button>
+<button onclick="setPfpBackground('city')"><img alt="City background" src="assets/bg_city.png"/><span>City</span></button>
+<button onclick="setPfpBackground('money')"><img alt="Money background" src="assets/bg_money.png"/><span>Money</span></button>
+<button onclick="setPfpBackground('neon')"><img alt="Neon background" src="assets/bg_neon.png"/><span>Neon</span></button>
+<button onclick="setPfpBackground('abstract')"><img alt="Abstract background" src="assets/bg_abstract.png"/><span>Abstract</span></button>
+<button onclick="setPfpBackground('graffiti')"><img alt="Graffiti background" src="assets/bg_graffiti.png"/><span>Graffiti</span></button>
+<button onclick="setPfpBackground('nature')"><img alt="Nature background" src="assets/bg_nature.png"/><span>Nature</span></button>
+<button onclick="setPfpBackground('black')"><img alt="Black background" src="assets/bg_black.png"/><span>Black</span></button>
 </div>
 </div>
 </section>
@@ -458,12 +401,117 @@
 <div class="settings-row"><div><strong>Paper mode</strong><small style="display:block;color:var(--muted)">Real trading stays locked in this prototype.</small></div><span class="status-pill">● ON</span></div>
 <div class="settings-row" style="margin-top:8px"><div><strong>Local progress</strong><small style="display:block;color:var(--muted)">Your prototype progress is saved on this device.</small></div><button onclick="clearLocalProgress()">Reset</button></div>
 </section>
-
-
-
-
+<section class="setup">
+<h3>💎 Membership</h3>
+<div class="membership-grid">
+<div class="membership-card">
+<strong>Free</strong>
+<p>Basic BunAI, paper trading and customization.</p>
+<button class="example-btn" onclick="toggleMembershipExample('freeExample')">👀 See Examples</button>
+<div class="membership-example" id="freeExample"><div class="mockup">Basic BunAI + Paper Trading preview</div></div>
+</div>
+<div class="membership-card">
+<strong>Pro</strong>
+<p>Advanced analysis, more bots and custom alerts.</p>
+<button class="example-btn" onclick="toggleMembershipExample('proExample')">👀 See Examples</button>
+<div class="membership-example" id="proExample"><div class="mockup">Advanced alerts + expanded AI tools preview</div></div>
+</div>
+<div class="membership-card">
+<strong>Elite</strong>
+<p>Advanced scanners, statistics and premium tools.</p>
+<button class="example-btn" onclick="toggleMembershipExample('eliteExample')">👀 See Examples</button>
+<div class="membership-example" id="eliteExample"><div class="mockup">Advanced scanner + statistics preview</div></div>
+</div>
+<div class="membership-card">
+<strong>Legend</strong>
+<p>Premium Arena and exclusive BunMoney features.</p>
+<button class="example-btn" onclick="toggleMembershipExample('legendExample')">👀 See Examples</button>
+<div class="membership-example" id="legendExample"><div class="mockup">Premium Arena + exclusive cosmetics preview</div></div>
+</div>
+</div>
+</section>
+<section class="setup account-card">
+<div class="section-title"><div><h3>🪪 Demo Account</h3><p>Local-only profile for testing the prototype.</p></div><span id="accountMode">LOCAL</span></div>
+<div class="account-row"><input id="demoUsername" maxlength="20" placeholder="Choose a username"/><button onclick="saveDemoProfile()">Save</button></div>
+<div class="row"><span>Profile status</span><strong id="demoProfileStatus">Guest</strong></div>
+<div class="account-actions"><button onclick="exportBunMoneyData()">📤 Export Data</button><button onclick="importBunMoneyData()">📥 Import Data</button></div>
+<p class="tiny-note">This demo account never sends credentials to a server.</p>
+</section>
+<section class="setup">
+<div class="section-title"><div><h3>🧪 Prototype Lab</h3><p>Test BunMoney without spending money.</p></div></div>
+<div class="lab-grid">
+<button onclick="toggleDemoMarket()"><span>📡</span><strong id="demoMarketButton">Demo Market: ON</strong><small>Use simulated prices when live data is unavailable</small></button>
+<button onclick="runPrototypeDiagnostics()"><span>🩺</span><strong>Run Diagnostics</strong><small>Check core UI systems</small></button>
+<button onclick="showDataPrivacy()"><span>🔐</span><strong>Privacy</strong><small>See what stays on this device</small></button>
+<button onclick="showKeyboardHelp()"><span>⌨️</span><strong>Shortcuts</strong><small>Speed up the app</small></button>
+</div>
+<div class="diagnostics" hidden="" id="diagnostics"></div>
+</section>
+<section class="setup marketplace-card">
+<div class="section-title"><div><h3>🛍️ Cosmetic Marketplace</h3><p>Visual-only items for the prototype.</p></div></div>
+<div class="cosmetic-grid">
+<button onclick="previewCosmetic('Lime Crown Frame')">👑<strong>Lime Crown Frame</strong><small>Profile frame</small></button>
+<button onclick="previewCosmetic('Diamond Aura')">💎<strong>Diamond Aura</strong><small>Rank effect</small></button>
+<button onclick="previewCosmetic('Night City')">🌃<strong>Night City</strong><small>Profile background</small></button>
+<button onclick="previewCosmetic('Golden Chart')">📈<strong>Golden Chart</strong><small>Chart theme</small></button>
+</div>
+</section>
 </main>
-<div aria-hidden="true" class="mini-games-overlay hidden" id="chartFavoritesOverlay">
+<main class="screen dedicated-screen" id="paper"><div class="section-title"><h2>💵 Paper Trading</h2><p>Practice trades with virtual funds and review your history.</p></div><section class="setup">
+<h3>💵 Paper Trading</h3>
+<div class="row"><span>Balance</span><strong id="tradingBalance">$10.00</strong></div>
+<div class="row"><span>Position</span><strong id="position">NONE</strong></div>
+<div class="row"><span>Current Price</span><strong id="paperCurrentPrice">$—</strong></div>
+<div class="row"><span>Paper P/L</span><strong id="paperPL">$0.00</strong></div>
+<div class="row"><span>Move</span><strong id="paperPLPercent">0.00%</strong></div>
+<div class="paper-pl-message" id="paperPLMessage">No open position.</div>
+<div class="button-row">
+<button class="buy-button" onclick="paperBuy()">BUY</button>
+<button class="sell-button" onclick="paperSell()">SELL</button>
+</div>
+</section><section class="setup trade-history-card">
+<div class="section-title"><div><h3>🧾 Paper Trade History</h3><p>Your closed practice trades.</p></div><button class="mini-btn" onclick="exportPaperTrades()">Export</button></div>
+<div class="trade-history-list" id="tradeHistoryList"><div class="alert empty">No paper trades yet.</div></div>
+</section></main><main class="screen dedicated-screen" id="arena"><div class="section-title"><h2>⚔️ Trading Arena</h2><p>Compete against AI bots in a simulated arena.</p></div><section class="setup">
+<h3>⚔️ Trading Arena</h3>
+<div class="arena-score">
+<div><span>You</span><strong id="playerScore">0</strong></div>
+<div><span>AI</span><strong id="aiScore">0</strong></div>
+</div>
+<div class="row"><span>Status</span><strong id="arenaStatus">READY</strong></div>
+<button onclick="startArena()">Start Arena Match</button>
+</section></main><main class="screen dedicated-screen" id="brokerage"><div class="section-title"><h2>🔗 Brokerage Connections</h2><p>Review supported brokerage connection options.</p></div><section class="setup">
+<h3>🔗 Brokerage Connections</h3>
+<p style="color:var(--muted);font-size:11px;margin-bottom:10px">BunMoney is designed to connect to supported brokerages while your money stays at the brokerage.</p>
+<div class="broker-grid">
+<div class="broker-card"><div class="broker-info"><strong>📊 Brokerage Connection</strong><small id="brokerStatus">Not connected</small></div><button onclick="connectBroker('Brokerage Account')">Connect</button></div>
+<div class="broker-card"><div class="broker-info"><strong>👀 View-only mode</strong><small>Balance, positions &amp; P/L</small></div><button onclick="brokerPreview('View-only')">Preview</button></div>
+<div class="broker-card"><div class="broker-info"><strong>✋ Approved orders</strong><small>Every real order requires your approval</small></div><button onclick="brokerPreview('Trade approval')">Preview</button></div>
+</div>
+<p class="broker-disclaimer">Prototype only: no real brokerage credentials or orders are handled by this front-end.</p>
+</section></main><main class="screen dedicated-screen" id="rank"><div class="section-title"><h2>🏆 Rank &amp; Progress</h2><p>Track your level, XP, rank, and achievements.</p></div><section class="setup">
+<h3>🏆 Trader Level</h3>
+<div class="row"><span>Level</span><strong id="level">Rookie</strong></div>
+<div class="xp-track"><div id="xpProgress"></div></div>
+<div class="row"><span>XP</span><strong id="xp">0 XP</strong></div>
+</section><section class="setup">
+<h3>🏅 Rank</h3>
+<div class="rank-display">
+<span id="rankIcon"><img alt="Bronze Bun rank" src="assets/rank_bronze.png"/></span>
+<strong id="rankName">BRONZE</strong>
+</div>
+</section><section class="setup">
+<h3>🏆 Achievements</h3>
+<div id="achievements"></div>
+</section></main><main class="screen dedicated-screen" id="games"><div class="section-title"><h2>🎮 Games</h2><p>Play games and earn BunMoney reward points.</p></div><section class="setup">
+<h3>🎮 Games</h3>
+<div class="game-grid">
+<button onclick="playArcade('coin')">🪙 Coin Grab</button>
+<button onclick="playArcade('runner')">🏃 Bun Runner</button>
+<button onclick="playArcade('target')">🎯 Bullseye</button>
+<button onclick="playArcade('memory')">🧠 Market Memory</button>
+</div>
+</section></main><div aria-hidden="true" class="mini-games-overlay hidden" id="chartFavoritesOverlay">
 <div class="mini-games-modal favorites-modal">
 <div class="mini-games-head"><div><strong>⭐ Your Favorites</strong><small>Markets you manually added</small></div><button onclick="closeChartFavorites()">✕</button></div>
 <div class="favorites-add"><input id="favoriteInput" maxlength="10" placeholder="Add ticker..." type="text"/><button onclick="addFavorite()">+ Add</button></div>

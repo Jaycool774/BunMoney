@@ -5,19 +5,13 @@
 
 const API_KEY = "";
 // Production: set MARKET_ENGINE_URL to your secure backend. Leave blank for CodePen prototype mode.
-const MARKET_ENGINE_URL = "https://legendary-zebra-rqjgrgvwjxfp4j6-3000.app.github.dev";
-
+const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protocol !== "file:" && !/codepen\.io$/i.test(location.hostname) ? "/api/market" : "");
 // Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
 
 async function marketEngineRequest(endpoint, params = {}) {
   const query = new URLSearchParams(params).toString();
   if (MARKET_ENGINE_URL) {
-    const backendEndpoint =
-      endpoint === "/time_series" ? "/api/time-series" :
-      endpoint === "/price" || endpoint === "/quote" ? "/api/quote" :
-      endpoint;
-
-    const response = await fetch(`${MARKET_ENGINE_URL}${backendEndpoint}?${query}`);
+    const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${query}`);
     const data = await response.json();
     if (!response.ok || data.status === "error") throw new Error(data.message || "Market engine request failed");
     return data;
@@ -43,7 +37,6 @@ let arenaRunning = false;
 let arenaTimer = null;
 let lastAnalysis = null;
 let lastMarketDataTime = 0;
-let lastLivePrice = null;
 
 window.lastCandles = [];
 window.lastSupport = undefined;
@@ -83,42 +76,36 @@ function closePopup() {
 }
 
 function showScreen(screenName) {
-  const screens = document.querySelectorAll(".screen");
+  const target = document.getElementById(screenName);
+  if (!target) return;
 
-  screens.forEach(screen => {
+  document.querySelectorAll(".screen").forEach(screen => {
     screen.classList.toggle("active", screen.id === screenName);
   });
 
-  const buttons = document.querySelectorAll(".nav-button");
-
-  buttons.forEach(button => {
-    button.classList.toggle(
-      "active",
-      button.dataset.screen === screenName
-    );
+  document.querySelectorAll(".nav-button").forEach(button => {
+    button.classList.toggle("active", button.dataset.screen === screenName);
   });
 
-  const target = document.getElementById(screenName);
-
-  if (target) {
-    target.scrollIntoView({
-      behavior: "smooth",
-      block: "start"
-    });
-  }
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setTimeframe(timeframe) {
   selectedTimeframe = timeframe;
   document.querySelectorAll(".timeframes button").forEach(button => {
     button.classList.remove("active");
-    const buttonTimeframe = button.dataset.timeframe;
-    if (buttonTimeframe === timeframe) button.classList.add("active");
+    const text = button.textContent.toLowerCase().replace(/\s/g, "");
+    if (
+      text === "1m" && timeframe === "1min" ||
+      text === "5m" && timeframe === "5min" ||
+      text === "15m" && timeframe === "15min" ||
+      text === "1h" && timeframe === "1h" ||
+      text === "4h" && timeframe === "4h" ||
+      text === "1d" && timeframe === "1day" ||
+      text === "1w" && timeframe === "1week" ||
+      text === "1m" && timeframe === "1month" ||
+      text === "max" && timeframe === "max"
+    ) button.classList.add("active");
   });
   analyze();
 }
@@ -155,156 +142,10 @@ function calculateRSI(values, period = 14) {
   return rsi;
 }
 
-/* ===== SMART TICKER SEARCH ===== */
-const TICKER_DIRECTORY = [
-  ["AAPL","Apple","Technology"],["ABNB","Airbnb","Travel"],["AMD","Advanced Micro Devices","Technology"],
-  ["AMZN","Amazon","Consumer"],["BA","Boeing","Industrial"],["BBAI","BigBear.ai","AI / Defense"],
-  ["COIN","Coinbase","Crypto / Finance"],["CRM","Salesforce","Technology"],["DIS","Disney","Entertainment"],
-  ["F","Ford","Auto"],["GOLD","Gold.com","Precious Metals"],["GOOG","Alphabet Class C","Technology"],
-  ["GOOGL","Alphabet Class A","Technology"],["GRAB","Grab Holdings","Technology"],["INTC","Intel","Technology"],
-  ["IWM","iShares Russell 2000 ETF","ETF"],["JNJ","Johnson & Johnson","Healthcare"],["JPM","JPMorgan Chase","Finance"],
-  ["KO","Coca-Cola","Consumer"],["META","Meta Platforms","Technology"],["MSFT","Microsoft","Technology"],
-  ["MSTR","Strategy","Bitcoin / Finance"],["NFLX","Netflix","Entertainment"],["NIO","NIO","Auto"],
-  ["NVDA","NVIDIA","Technology"],["ORCL","Oracle","Technology"],["PLTR","Palantir Technologies","AI / Defense"],
-  ["QQQ","Invesco QQQ Trust","ETF"],["RIVN","Rivian","Auto"],["ROKU","Roku","Technology"],
-  ["SHOP","Shopify","Technology"],["SMCI","Super Micro Computer","Technology"],["SOFI","SoFi Technologies","Finance"],
-  ["SOUN","SoundHound AI","AI / Technology"],["SPY","SPDR S&P 500 ETF","ETF"],["T","AT&T","Telecom"],
-  ["TSLA","Tesla","Auto / Technology"],["TQQQ","ProShares UltraPro QQQ","ETF"],["UBER","Uber","Technology"],
-  ["V","Visa","Finance"],["WMT","Walmart","Consumer"],["XLE","Energy Select Sector SPDR","ETF"],
-  ["XLF","Financial Select Sector SPDR","ETF"],["XOM","Exxon Mobil","Energy"],["XYZ","Block","Finance / Technology"],
-  ["GME","GameStop","Retail"],["AMC","AMC Entertainment","Entertainment"],["RKLB","Rocket Lab","Aerospace"],
-  ["IONQ","IonQ","Quantum"],["RGTI","Rigetti Computing","Quantum"],["QBTS","D-Wave Quantum","Quantum"],
-  ["MU","Micron Technology","Semiconductors"],["ARM","Arm Holdings","Semiconductors"],["AVGO","Broadcom","Semiconductors"],
-  ["CRWD","CrowdStrike","Cybersecurity"],["SNOW","Snowflake","Technology"],["SOXL","Direxion Semiconductor Bull 3X","ETF"],
-  ["SQQQ","ProShares UltraPro Short QQQ","ETF"],["GLD","SPDR Gold Shares","Gold ETF"]
-].map(([symbol,name,category]) => ({symbol,name,category}));
-
-let tickerSearchTimer = null;
-let tickerSuggestionIndex = -1;
-
-function normalizeTickerQuery(value) {
-  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
-}
-
-function getTickerSuggestions(query) {
-  const q = normalizeTickerQuery(query);
-  if (!q) return TICKER_DIRECTORY.slice(0, 8);
-  return TICKER_DIRECTORY.filter(item =>
-    item.symbol.startsWith(q) || item.name.toUpperCase().includes(q) || item.category.toUpperCase().includes(q)
-  ).sort((a,b) => {
-    const as = a.symbol === q ? 0 : a.symbol.startsWith(q) ? 1 : a.name.toUpperCase().startsWith(q) ? 2 : 3;
-    const bs = b.symbol === q ? 0 : b.symbol.startsWith(q) ? 1 : b.name.toUpperCase().startsWith(q) ? 2 : 3;
-    return as - bs || a.symbol.localeCompare(b.symbol);
-  }).slice(0, 7);
-}
-
-function hideTickerSuggestions() {
-  const box = document.getElementById("tickerSuggestions");
-  if (box) { box.hidden = true; box.innerHTML = ""; }
-  tickerSuggestionIndex = -1;
-}
-
-function selectTickerSuggestion(symbol, action = "fill") {
-  const input = document.getElementById("ticker");
-  if (!input) return;
-  input.value = symbol;
-  hideTickerSuggestions();
-  if (action === "analyze") analyze(true);
-  else input.focus();
-}
-
-function addTickerSuggestionFavorite(symbol) {
-  const input = document.getElementById("ticker");
-  if (input) input.value = symbol;
-  hideTickerSuggestions();
-  if (typeof addFavorite === "function") {
-    const favoriteInput = document.getElementById("favoriteInput");
-    if (favoriteInput) favoriteInput.value = symbol;
-    addFavorite();
-  }
-}
-
-function renderTickerSuggestions(query) {
-  const box = document.getElementById("tickerSuggestions");
-  if (!box) return;
-  const q = normalizeTickerQuery(query);
-  const suggestions = getTickerSuggestions(q);
-  if (!q) {
-    box.innerHTML = `<div class="ticker-search-status">🔎 Search a ticker or company name</div>` +
-      suggestions.map(item => tickerSuggestionMarkup(item)).join("");
-  } else if (!suggestions.length) {
-    box.innerHTML = `<div class="ticker-search-status">No local match for <strong>${escapeHtml(q)}</strong>. Press Analyze to verify it with market data.</div>`;
-  } else {
-    box.innerHTML = suggestions.map(item => tickerSuggestionMarkup(item)).join("");
-  }
-  box.hidden = false;
-  tickerSuggestionIndex = -1;
-}
-
-function tickerSuggestionMarkup(item) {
-  return `<button type="button" class="ticker-suggestion" data-ticker="${escapeHtml(item.symbol)}">
-    <span class="ticker-suggestion-main"><span class="ticker-suggestion-symbol">${escapeHtml(item.symbol)}</span><span class="ticker-suggestion-name">${escapeHtml(item.name)} · ${escapeHtml(item.category)}</span></span>
-    <span class="ticker-suggestion-action">Analyze →</span>
-  </button>`;
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[ch]));
-}
-
-function initTickerSearch() {
-  const input = document.getElementById("ticker");
-  const box = document.getElementById("tickerSuggestions");
-  if (!input || !box || input.dataset.smartSearchReady) return;
-  input.dataset.smartSearchReady = "1";
-  input.addEventListener("input", () => {
-    clearTimeout(tickerSearchTimer);
-    const raw = input.value;
-    tickerSearchTimer = setTimeout(() => renderTickerSuggestions(raw), 80);
-  });
-  input.addEventListener("focus", () => renderTickerSuggestions(input.value));
-  input.addEventListener("keydown", event => {
-    const buttons = [...box.querySelectorAll(".ticker-suggestion")];
-    if (event.key === "Escape") { hideTickerSuggestions(); return; }
-    if (event.key === "ArrowDown" && buttons.length) {
-      event.preventDefault(); tickerSuggestionIndex = Math.min(tickerSuggestionIndex + 1, buttons.length - 1);
-      buttons.forEach((b,i) => b.style.outline = i === tickerSuggestionIndex ? "2px solid var(--lime)" : "none");
-    }
-    if (event.key === "ArrowUp" && buttons.length) {
-      event.preventDefault(); tickerSuggestionIndex = Math.max(tickerSuggestionIndex - 1, 0);
-      buttons.forEach((b,i) => b.style.outline = i === tickerSuggestionIndex ? "2px solid var(--lime)" : "none");
-    }
-    if (event.key === "Enter" && tickerSuggestionIndex >= 0 && buttons[tickerSuggestionIndex]) {
-      event.preventDefault(); buttons[tickerSuggestionIndex].click();
-    }
-  });
-  box.addEventListener("click", event => {
-    const button = event.target.closest(".ticker-suggestion");
-    if (button) selectTickerSuggestion(button.dataset.ticker, "analyze");
-  });
-  document.addEventListener("click", event => {
-    if (!event.target.closest(".ticker-search-wrap")) hideTickerSuggestions();
-  });
-}
-
-function smartSearchContextActions(symbol) {
-  const box = document.getElementById("tickerSuggestions");
-  if (!box) return;
-  const safe = escapeHtml(normalizeTickerQuery(symbol));
-  if (!safe) return;
-  box.innerHTML = `<div class="ticker-search-status"><strong>${safe}</strong> selected</div><div class="ticker-context">
-    <button type="button" onclick="selectTickerSuggestion('${safe}','analyze')">📊 Analyze</button>
-    <button type="button" onclick="addTickerSuggestionFavorite('${safe}')">⭐ Add favorite</button>
-    <button type="button" onclick="showScreen('trade'); hideTickerSuggestions()">🎯 Trade Lab</button>
-  </div>`;
-  box.hidden = false;
-}
-
 async function analyze(force = false) {
   const tickerElement = document.getElementById("ticker");
   if (!tickerElement) return;
-  const ticker = normalizeTickerQuery(tickerElement.value);
-  tickerElement.value = ticker;
+  const ticker = tickerElement.value.toUpperCase().trim();
   if (!ticker) { setText("reason", "Enter a ticker symbol first."); return; }
   setText("symbol", ticker);
   setText("decision", "LOADING MARKET DATA...");
@@ -411,11 +252,7 @@ async function analyze(force = false) {
     if (decision === "WAIT") reason += "There is not enough confirmation yet, so waiting is safer.";
     else reason += "This is an analysis signal, not a guaranteed prediction.";
 
-    lastLivePrice = currentPrice;
-    window.lastLivePrice = currentPrice;
     setText("price", formatMoney(currentPrice));
-    setText("paperCurrentPrice", formatMoney(currentPrice));
-    updatePaperPL(currentPrice);
     setText("change", `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`);
     setText("trend", trend);
     setText("volume", currentVolume ? currentVolume.toLocaleString() : "—");
@@ -459,6 +296,8 @@ async function analyze(force = false) {
     window.lastSma20 = sma20Values;
 
     drawChart(candles, support, resistance, entry, stop, target, breakoutIndex, retestIndex, sma10Values, sma20Values);
+    checkAlerts();
+    updateRiskGuardian();
     updateMarketSnapshot();
     mascotReaction(decision === "WAIT" ? "Bun says wait for confirmation. 🐰" : decision.includes("LONG") ? "Bun sees bullish potential. 🐰📈" : "Bun sees bearish pressure. 🐰📉");
 
@@ -514,19 +353,6 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
     ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
   }
 
-  // Price scale: show readable numeric levels on the right side of the chart.
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  ctx.font = "10px Arial";
-  for (let i = 0; i <= 5; i++) {
-    const ratio = i / 5;
-    const priceLevel = maxPrice - ratio * range;
-    const y = padding + ratio * (height - padding * 2);
-    ctx.fillStyle = "rgba(255,255,255,.62)";
-    ctx.fillText(formatMoney(priceLevel), width - 4, y);
-  }
-  ctx.textAlign = "left";
-
   visible.forEach((candle, i) => {
     const open = Number(candle.open), close = Number(candle.close), high = Number(candle.high), low = Number(candle.low);
     const x = xPosition(i);
@@ -561,22 +387,6 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   drawLevel(ctx, width, yPosition(entry), "rgba(255,255,255,.75)", "ENTRY");
   drawLevel(ctx, width, yPosition(stop), "rgba(239,68,68,.9)", "STOP");
   drawLevel(ctx, width, yPosition(target), "rgba(132,204,22,.9)", "TARGET");
-
-  const currentPrice = Number(window.lastLivePrice);
-  if (Number.isFinite(currentPrice) && currentPrice >= minPrice && currentPrice <= maxPrice) {
-    const y = yPosition(currentPrice);
-    ctx.strokeStyle = "rgba(255,255,255,.45)";
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(width - 20, y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(17,21,30,.95)";
-    ctx.fillRect(width - 76, y - 10, 70, 20);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 10px Arial";
-    ctx.textAlign = "right";
-    ctx.fillText("NOW " + formatMoney(currentPrice), width - 10, y);
-    ctx.textAlign = "left";
-  }
 
   if (breakoutIndex !== null && breakoutIndex !== undefined) {
     const localIndex = breakoutIndex - start;
@@ -634,17 +444,13 @@ function startLivePrice() {
     if (!tickerElement) return;
     const ticker = tickerElement.value.toUpperCase().trim();
     if (!ticker) return;
-    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") && !demoMarketEnabled) return;
+    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) return;
     try {
       const data = await marketEngineRequest("/price", { symbol: ticker });
       if (data.price && Number.isFinite(Number(data.price))) {
         const newPrice = Number(data.price);
-        lastLivePrice = newPrice;
-        window.lastLivePrice = newPrice;
         setText("price", formatMoney(newPrice));
-        setText("paperCurrentPrice", formatMoney(newPrice));
         updatePaperPL(newPrice);
-        if (window.lastCandles?.length) drawChart(window.lastCandles, window.lastSupport, window.lastResistance, window.lastEntry, window.lastStop, window.lastTarget, window.lastBreakoutIndex, window.lastRetestIndex, window.lastSma10, window.lastSma20);
       }
     } catch (error) { console.log("Live price unavailable."); }
   }, 60000);
@@ -678,65 +484,56 @@ async function askBunAI(message, context = {}) {
   return data;
 }
 
-function getDisplayedPrice() {
-  const text = document.getElementById("price")?.textContent || "";
-  const parsed = Number(text.replace(/[$,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function paperBuy() {
   if (position) { setText("reason", "You already have an open paper position."); return; }
-  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
+  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
+  const price = Number(priceText);
   if (!Number.isFinite(price)) { setText("reason", "Analyze a market before opening a paper trade."); return; }
-  position = { side: "LONG", entry: price, amount: tradingBalance, symbol: document.getElementById("symbol")?.textContent || "" };
-  setText("position", `LONG @ ${formatMoney(price)}`);
-  setText("paperCurrentPrice", formatMoney(price));
-  updatePaperPL(price);
-  setText("reason", "Paper long opened. Bun is tracking your gain/loss as the market moves. 🐰📊");
+  position = { side: "LONG", entry: price, amount: tradingBalance };
+  setText("position", "LONG @ " + formatMoney(price));
+  setText("reason", "Paper long opened. Bun is tracking the position. 🐰");
   mascotReaction("Position opened. Protect the bag. 🐰💰");
-  saveGameState();
 }
-
 function paperSell() {
   if (!position) { setText("reason", "There is no open paper position."); return; }
-  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
+  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
+  const price = Number(priceText);
   if (!Number.isFinite(price)) return;
   const percentageMove = (price - position.entry) / position.entry;
   const profit = position.amount * percentageMove;
   tradingBalance += profit;
-  tradeHistory.push({ side: position.side, symbol: position.symbol || document.getElementById("symbol")?.textContent || "", entry: position.entry, exit: price, profit, time: new Date().toLocaleString() });
+  tradeHistory.push({ side: position.side, entry: position.entry, exit: price, profit: profit, time: new Date().toLocaleString() });
   position = null;
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
-  setText("paperCurrentPrice", formatMoney(price));
   setText("paperPL", formatMoney(profit));
-  setText("paperPLPercent", `${profit >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%`);
-  setText("paperPLMessage", `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`);
   rewardPoints += profit > 0 ? 25 : 5;
-  updateLevel(); updateRewards();
-  setText("reason", `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%).`);
+  updateConfidence(); updateLevel(); updateRewards();
+  setText("reason", `Paper trade closed with ${profit >= 0 ? "a profit" : "a loss"} of ${formatMoney(Math.abs(profit))}.`);
   mascotReaction(profit >= 0 ? "Nice trade! Stack those wins. 🐰📈" : "Loss taken. Learn from it and protect the next trade. 🐰");
-  saveGameState();
-  renderTradeHistory();
 }
 
 function updatePaperPL(price) {
-  if (!Number.isFinite(Number(price))) return;
-  setText("paperCurrentPrice", formatMoney(Number(price)));
-  if (!position) {
-    setText("paperPL", "$0.00");
-    setText("paperPLPercent", "0.00%");
-    setText("paperPLMessage", "No open position.");
-    return;
-  }
-  const current = Number(price);
-  const move = (current - position.entry) / position.entry;
+  if (!position) return;
+  const move = (price - position.entry) / position.entry;
   const pl = position.amount * move;
-  setText("paperPL", `${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))}`);
-  setText("paperPLPercent", `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`);
-  setText("paperPLMessage", `${pl >= 0 ? "You're up" : "You're down"} ${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%) right now.`);
+  setText("paperPL", formatMoney(pl));
 }
 
+function updateConfidence() {
+  if (!tradeHistory.length) {
+    setText("confidenceText", "50%");
+    const bar = document.getElementById("confidenceBar");
+    if (bar) bar.style.width = "50%";
+    return;
+  }
+  const wins = tradeHistory.filter(trade => trade.profit > 0).length;
+  const winRate = wins / tradeHistory.length;
+  const confidence = Math.max(10, Math.min(95, Math.round(40 + winRate * 55)));
+  setText("confidenceText", confidence + "%");
+  const bar = document.getElementById("confidenceBar");
+  if (bar) bar.style.width = confidence + "%";
+}
 
 function updateLevel() {
   xp = tradeHistory.length * 25;
@@ -765,32 +562,51 @@ function updateRank() {
   const rankIcon = document.getElementById("rankIcon");
   if (rankIcon) {
     const icons = { BRONZE: "🥉", SILVER: "🥈", GOLD: "🥇", PLATINUM: "💎", DIAMOND: "💠" };
-    const img = rankIcon.querySelector("img");
-    if (img) { img.src = `assets/rank_${rank.toLowerCase()}.png`; img.alt = `${rank} Bun rank`; }
-    else rankIcon.textContent = icons[rank];
-  }
-  const profileImg = document.getElementById("profileAvatarImage");
-  if (profileImg && !localStorage.getItem("bunmoney_pfp_asset")) {
-    profileImg.src = DEFAULT_PFP_URL;
+    rankIcon.textContent = icons[rank];
   }
 }
 function updateRewards() { setText("rewardPoints", rewardPoints); }
 
-const BUNMONEY_FUTURE_EVENTS = [
-  { date: "2026-09-15", dateLabel: "Sep 15–16, 2026", title: "FOMC meeting", category: "Rates", codes: ["XAUUSD", "EURUSD", "USDJPY", "SPY", "QQQ"], why: "The Federal Reserve reviews monetary policy. Rate and guidance changes can quickly move stocks, bonds, the dollar and gold." },
-  { date: "2026-09-16", dateLabel: "Sep 16, 2026 · 8:30 AM ET", title: "U.S. Import & Export Price Indexes", category: "Inflation", codes: ["XAUUSD", "DXY", "EURUSD"], why: "Trade-price data helps show imported inflation and pricing pressure, which can influence expectations for Fed policy and interest rates." },
-  { date: "2026-09-18", dateLabel: "Sep 18, 2026 · 10:00 AM ET", title: "State Employment & Unemployment", category: "Jobs", codes: ["SPY", "QQQ", "DXY", "XAUUSD"], why: "State labor-market data gives a more detailed look at employment conditions and can add context to the national jobs picture." },
-  { date: "2026-09-29", dateLabel: "Sep 29, 2026 · 10:00 AM ET", title: "JOLTS Job Openings", category: "Jobs", codes: ["SPY", "QQQ", "DXY", "XAUUSD"], why: "Job openings help measure labor demand. A stronger or weaker labor market can change expectations for future Fed policy." },
-  { date: "2026-09-30", dateLabel: "Sep 30, 2026 · 10:00 AM ET", title: "Metropolitan Employment & Unemployment", category: "Jobs", codes: ["SPY", "QQQ", "DXY", "XAUUSD"], why: "Local labor data can reveal regional employment trends and help traders gauge how broadly the labor market is changing." },
-  { date: "2026-10-07", dateLabel: "Oct 7, 2026 · 2:00 PM ET", title: "FOMC minutes", category: "Rates", codes: ["XAUUSD", "EURUSD", "USDJPY", "SPY", "QQQ"], why: "The minutes give more detail on what Fed officials discussed at the September meeting, which can shift expectations even after the decision." },
-  { date: "2026-10-27", dateLabel: "Oct 27–28, 2026", title: "FOMC meeting", category: "Rates", codes: ["XAUUSD", "EURUSD", "USDJPY", "SPY", "QQQ"], why: "Another scheduled Fed policy meeting. Traders will watch the decision, statement and press conference for clues about the path of rates." }
-];
-function renderFutureEvents() {
-  const el = document.getElementById("futureEvents");
-  if (!el) return;
-  const now = new Date();
-  const upcoming = BUNMONEY_FUTURE_EVENTS.filter(e => new Date(e.date + "T23:59:59") >= now).slice(0, 6);
-  el.innerHTML = upcoming.map(e => `<article class="future-event"><div class="future-event-date">${e.dateLabel}</div><div class="future-event-main"><div class="future-event-codes">${(e.codes || []).map(code => `<span>${code}</span>`).join("")}</div><div class="future-event-head"><strong>${e.title}</strong><span>${e.category}</span></div><p>${e.why}</p></div></article>`).join("") || `<div class="alert empty">No scheduled events in the current list.</div>`;
+function updateRiskGuardian() {
+  if (!lastAnalysis) return;
+  let risk = 50;
+  if (lastAnalysis.rr >= 2) risk -= 15;
+  if (lastAnalysis.volumeRatio >= 1.5) risk -= 10;
+  if (lastAnalysis.rsi > 75 || lastAnalysis.rsi < 25) risk += 15;
+  if (lastAnalysis.decision === "WAIT") risk += 15;
+  risk = Math.max(5, Math.min(95, risk));
+  setText("riskText", risk + "%");
+  const bar = document.getElementById("riskBar");
+  if (bar) bar.style.width = risk + "%";
+  setText("riskMessage", risk >= 70
+    ? "High-risk setup. Wait for stronger confirmation."
+    : risk >= 45
+      ? "Moderate risk. Manage position size carefully."
+      : "Risk conditions look relatively controlled.");
+}
+
+function checkAlerts() {
+  const container = document.getElementById("alerts");
+  if (!container || !lastAnalysis) return;
+  const alerts = [];
+  if (lastAnalysis.volumeRatio >= 2) alerts.push({ type: "good", text: "🔥 Volume spike detected." });
+  if (lastAnalysis.breakout === "POSSIBLE BREAKOUT") alerts.push({ type: "good", text: "🚀 Price is pushing through recent resistance." });
+  if (lastAnalysis.retest === "RETEST AREA") alerts.push({ type: "warning", text: "🎯 Retest area detected. Watch price reaction." });
+  if (lastAnalysis.rsi > 75) alerts.push({ type: "danger", text: "⚠️ RSI is highly elevated." });
+  if (lastAnalysis.rsi < 25) alerts.push({ type: "warning", text: "⚠️ RSI is deeply oversold." });
+  if (!alerts.length) {
+    container.innerHTML = `<div class="alert empty">No major alerts right now.</div>`;
+    return;
+  }
+  container.innerHTML = alerts.map(alert => `<div class="alert ${alert.type}">${alert.text}</div>`).join("");
+}
+
+function startAlertMonitor() {
+  setInterval(() => {
+    if (lastAnalysis && Date.now() - lastAnalysis.timestamp < 120000) {
+      checkAlerts(); updateRiskGuardian();
+    }
+  }, 30000);
 }
 
 function startArcadeBank() {
@@ -821,12 +637,18 @@ const bots = {
   SniperBot: { name: "SniperBot", message: "Waits for precise breakout and retest conditions." },
   ScalperBot: { name: "ScalperBot", message: "Focused on short-term price movement." },
   MoonBot: { name: "MoonBot", message: "Aggressive speculative analysis. High risk." },
+  EmperorBunny: { name: "👑 Emperor Bunny", message: "Owner-only intelligence system. Backend connection required." }
 };
 function selectBot(botName) {
   if (!bots[botName]) return;
   activeBot = botName;
   const bot = bots[botName];
   setText("activeBot", bot.name); setText("botMessage", bot.message);
+  if (botName === "EmperorBunny") {
+    showPopup("👑 Emperor Bunny", "Emperor Bunny is owner-only and requires the secure BunMoney backend before its advanced capabilities can be activated.");
+    mascotReaction("The Emperor is waiting for his throne room. 👑🐰");
+    return;
+  }
   showPopup(bot.name, bot.message);
 }
 
@@ -904,49 +726,6 @@ function escapeHTML(text) {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
-const DEFAULT_PFP_URL = "https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png";
-
-const BUN_ASSETS = {
-  pfp: { happy: "assets/pfs_happy.webp", serious: "assets/pfs_serious.webp", chill: "assets/pfs_chill.webp", focused: "assets/pfs_focused.webp", confident: "assets/pfs_confident.webp", rich: "assets/pfs_rich.webp" },
-  frame: { default: "assets/frame_default.webp", glow: "assets/frame_glow.webp", neon: "assets/frame_neon.webp", animated: "assets/frame_animated.webp", streak: "assets/frame_streak.webp", elite: "assets/frame_elite.webp", legendary: "assets/frame_legendary.webp" },
-  background: { charts: "assets/bg_charts.webp", city: "assets/bg_city.webp", money: "assets/bg_money.webp", neon: "assets/bg_neon.webp", abstract: "assets/bg_abstract.webp", graffiti: "assets/bg_graffiti.webp", nature: "assets/bg_nature.webp", black: "assets/bg_black.webp" }
-};
-function setPfpAsset(name) {
-  const src = BUN_ASSETS.pfp[name]; if (!src) return;
-  const img = document.getElementById("profileAvatarImage");
-  if (img) {
-    img.onerror = () => { img.onerror = null; img.src = DEFAULT_PFP_URL; };
-    img.src = src;
-  }
-  localStorage.setItem("bunmoney_pfp_asset", name);
-  showPopup("🐰 PFP Updated", `${name.replaceAll("_", " ")} Bun is now your profile vibe.`);
-}
-function setFrameAsset(name) {
-  const src = BUN_ASSETS.frame[name]; if (!src) return;
-  const frame = document.getElementById("profileFrameImage"); if (frame) frame.src = src;
-  localStorage.setItem("bunmoney_frame_asset", name);
-}
-function setPfpBackground(name) {
-  const src = BUN_ASSETS.background[name]; if (!src) return;
-  const avatar = document.getElementById("profileAvatar"); if (!avatar) return;
-  avatar.style.backgroundImage = `url("${src}")`; avatar.style.backgroundSize = "cover"; avatar.style.backgroundPosition = "center";
-  localStorage.setItem("bunmoney_bg_asset", name);
-}
-function restoreBunAssets() {
-  const pfp = localStorage.getItem("bunmoney_pfp_asset");
-  const profileImg = document.getElementById("profileAvatarImage");
-  if (profileImg) {
-    profileImg.onerror = () => { profileImg.onerror = null; profileImg.src = DEFAULT_PFP_URL; };
-    profileImg.src = (pfp && BUN_ASSETS.pfp[pfp]) ? BUN_ASSETS.pfp[pfp] : DEFAULT_PFP_URL;
-  }
-  const avatar = document.getElementById("profileAvatar");
-  const frame = localStorage.getItem("bunmoney_frame_asset");
-  const bg = localStorage.getItem("bunmoney_bg_asset");
-  const frameImg = document.getElementById("profileFrameImage");
-  if (frameImg && frame && BUN_ASSETS.frame[frame]) frameImg.src = BUN_ASSETS.frame[frame];
-  if (avatar && bg && BUN_ASSETS.background[bg]) { avatar.style.backgroundImage=`url("${BUN_ASSETS.background[bg]}")`; avatar.style.backgroundSize="cover"; avatar.style.backgroundPosition="center"; }
-}
-
 function setTheme(theme) {
   const root = document.documentElement;
   const themes = {
@@ -964,36 +743,16 @@ function setTheme(theme) {
 function setMascot(emoji) {
   document.querySelectorAll(".bun-character").forEach(element => {
     const image = element.querySelector("#bunCharacterImage");
-
     if (image) {
-      image.src = DEFAULT_PFP_URL;
-      image.alt = "";
-      image.setAttribute("aria-label", "BunMoney Bun");
-      image.onerror = () => {
-        image.onerror = null;
-        image.src = DEFAULT_PFP_URL;
-      };
-
+      image.style.filter = "drop-shadow(0 0 8px rgba(163,230,53,.28))";
       element.dataset.mascot = emoji;
+    } else {
+      element.textContent = emoji;
     }
   });
-
-  document.querySelectorAll(".profile-avatar").forEach(element => {
-    const image = element.querySelector("#profileAvatarImage");
-
-    if (image) {
-      image.alt = "";
-      image.setAttribute("aria-label", "Bun profile avatar");
-      image.onerror = () => {
-        image.onerror = null;
-        image.src = DEFAULT_PFP_URL;
-      };
-    }
-  });
-
+  document.querySelectorAll(".profile-avatar").forEach(element => { element.textContent = emoji; });
   localStorage.setItem("bunmoney_mascot", emoji);
 }
-
 function openFeature(feature) {
   const screens = { home: "home", trade: "trade", arcade: "arcade", world: "world", profile: "profile" };
   if (screens[feature]) { showScreen(screens[feature]); return; }
@@ -1006,38 +765,24 @@ function openFeature(feature) {
   };
   showPopup("BunMoney", messages[feature] || "Feature coming soon.");
 }
+const quotes = [
+  "Patience is a position too.", "Think first. Trade second.", "Small wins stack up.", "Protect the bag.",
+  "The market doesn't care about your feelings.", "Your next trade isn't your last trade.", "Don't chase the candle.",
+  "Wait for confirmation.", "Risk management comes first.", "Bun says: protect the bag. 🐰"
+];
+function rotateQuote() {
+  const quote = quotes[Math.floor(Math.random() * quotes.length)];
+  setText("quote", quote);
+}
 function mascotReaction(message) {
   setText("mascotMessage", message);
-
   const mascot = document.querySelector(".bun-character");
-  const image = document.getElementById("bunCharacterImage");
-
-  // Keep the official hosted Bun PFP as the permanent image.
-  // Do not swap it for local reaction assets that CodePen may not have.
-  if (image) {
-    image.src = DEFAULT_PFP_URL;
-    image.alt = "";
-    image.setAttribute("aria-label", "BunMoney Bun");
-
-    // If anything ever breaks the image, immediately restore it.
-    image.onerror = () => {
-      image.onerror = null;
-      image.src = DEFAULT_PFP_URL;
-    };
-  }
-
-  // Wiggle the existing PFP instead of replacing the image.
   if (mascot) {
     mascot.classList.remove("react");
     void mascot.offsetWidth;
     mascot.classList.add("react");
-
-    setTimeout(() => {
-      mascot.classList.remove("react");
-    }, 900);
   }
 }
-
 function updateProfile() {
   setText("profileBalance", formatMoney(tradingBalance));
   setText("profileTrades", tradeHistory.length);
@@ -1082,14 +827,16 @@ document.addEventListener("DOMContentLoaded", () => {
   loadGameState();
   startArcadeBank();
   startLivePrice();
+  startAlertMonitor();
+  rotateQuote();
+  setInterval(rotateQuote, 15000);
   updateArcadeBank();
+  updateConfidence();
   updateLevel();
   updateRank();
   updateRewards();
-  renderFutureEvents();
   updateProfile();
   updateAchievements();
-  restoreBunAssets();
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("arenaStatus", "READY");
@@ -1127,20 +874,6 @@ function saveFavorites() {
   try { localStorage.setItem(BUN_FAVORITES_KEY, JSON.stringify(bunFavorites)); }
   catch (error) { console.log("Could not save favorites."); }
 }
-function openChartFavorites() {
-  const overlay = document.getElementById("chartFavoritesOverlay");
-  if (!overlay) return;
-  renderFavorites();
-  overlay.classList.remove("hidden");
-  overlay.setAttribute("aria-hidden", "false");
-}
-function closeChartFavorites() {
-  const overlay = document.getElementById("chartFavoritesOverlay");
-  if (!overlay) return;
-  overlay.classList.add("hidden");
-  overlay.setAttribute("aria-hidden", "true");
-}
-
 function createFavoritesScreen() {
   if (document.getElementById("favoritesScreen")) return;
   const screen = document.createElement("section");
@@ -1217,7 +950,7 @@ function openFavorite(symbol) {
   analyze(true);
 }
 function renderFavorites() {
-  const container = document.getElementById("chartFavoritesList") || document.getElementById("favoritesList");
+  const container = document.getElementById("favoritesList");
   if (!container) return;
   if (!bunFavorites.length) {
     container.innerHTML = `<div class="alert empty">No favorite markets yet.</div>`; return;
@@ -1348,6 +1081,47 @@ function updateBunAIHome() {
   risk.textContent = Number.isFinite(riskScore) ? `RISK ${Math.round(riskScore)}%` : "RISK —";
   risk.classList.add(riskScore >= 70 ? "bad" : riskScore >= 45 ? "warn" : "good");
 }
+function updateTradeReadiness() {
+  const items = [
+    document.getElementById("readyTrend"),
+    document.getElementById("readyLevel"),
+    document.getElementById("readyVolume"),
+    document.getElementById("readyRisk")
+  ];
+  const scoreEl = document.getElementById("readinessScore");
+  if (!items.every(Boolean) || !scoreEl) return;
+
+  items.forEach(item => item.classList.remove("ready", "caution", "blocked"));
+  if (!lastAnalysis) {
+    scoreEl.textContent = "0/4";
+    return;
+  }
+
+  const a = lastAnalysis;
+  const trendOK = a.trend === "BULLISH" || a.trend === "BEARISH";
+  const levelOK = Number.isFinite(Number(a.support)) && Number.isFinite(Number(a.resistance));
+  const volumeOK = Number(a.volumeRatio) >= 1.05;
+  const riskScore = Number(document.getElementById("riskBar")?.style.width?.replace("%", ""));
+  const riskOK = Number.isFinite(riskScore) && riskScore < 70;
+  const checks = [trendOK, levelOK, volumeOK, riskOK];
+  const details = [
+    trendOK ? `${a.trend} trend detected` : "No clear trend",
+    levelOK ? `${formatMoney(a.support)} support / ${formatMoney(a.resistance)} resistance` : "Key levels unavailable",
+    volumeOK ? `${Number(a.volumeRatio).toFixed(2)}x average volume` : "Volume is not confirming",
+    riskOK ? "Risk is within guardian range" : "Risk is elevated — slow down"
+  ];
+  const labels = ["readyTrend", "readyLevel", "readyVolume", "readyRisk"];
+
+  checks.forEach((ok, i) => {
+    const item = items[i];
+    item.classList.add(ok ? "ready" : (i === 3 && riskScore >= 70 ? "blocked" : "caution"));
+    item.querySelector("span").textContent = ok ? "✓" : "!";
+    item.querySelector("small").textContent = details[i];
+  });
+  scoreEl.textContent = `${checks.filter(Boolean).length}/4`;
+}
+
+
 function updateTradePlan() {
   const status = document.getElementById("tradePlanStatus");
   const direction = document.getElementById("tradePlanDirection");
@@ -1445,72 +1219,6 @@ function quickCharacterReaction(action) {
     ? "Paper buy opened. Keep an eye on the stop and reaction."
     : "Paper position closed. Review what price did next.";
 }
-let miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
-function openMiniGames() {
-  const overlay = document.getElementById("miniGamesOverlay");
-  if (!overlay) return;
-  clearMiniGameTimer();
-  miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
-  const mode = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
-  if (mode) mode.hidden = false;
-  if (content) content.innerHTML = "<p class='mini-games-hint'>Pick a mode. Your chart stays open behind this mini-screen.</p>";
-  overlay.classList.remove("hidden"); overlay.setAttribute("aria-hidden", "false");
-}
-function closeMiniGames() {
-  clearMiniGameTimer();
-  const overlay = document.getElementById("miniGamesOverlay");
-  if (overlay) { overlay.classList.add("hidden"); overlay.setAttribute("aria-hidden", "true"); }
-}
-function clearMiniGameTimer() { if (miniGameState.timer) clearInterval(miniGameState.timer); miniGameState.timer = null; }
-function chooseMiniGameMode(mode) {
-  miniGameState.mode = mode;
-  const modeEl = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
-  if (!modeEl || !content) return;
-  modeEl.hidden = true;
-  if (mode === "single") {
-    content.innerHTML = `<div class="mini-game-selection"><h4>Single-player</h4><button onclick="startMiniGame('reaction')">⚡ Reaction Rush<small>Tap the target as fast as you can.</small></button><button onclick="startMiniGame('price')">🎯 Price Guess<small>Guess whether the next simulated tick goes up or down.</small></button></div>`;
-  } else {
-    content.innerHTML = `<div class="mini-game-selection"><h4>Online</h4><p class="mini-games-hint">Online matchmaking is a prototype lobby for now. Real multiplayer needs the future backend.</p><button onclick="startMiniGame('duel')">⚔️ 1v1 Reaction Duel<small>Play against a simulated opponent.</small></button><button onclick="startMiniGame('co-op')">🤝 Co-op Challenge<small>Team with a simulated player to reach a target.</small></button></div>`;
-  }
-}
-function startMiniGame(game) {
-  clearMiniGameTimer();
-  miniGameState.game = game; miniGameState.score = 0;
-  const content = document.getElementById("miniGamesContent");
-  if (!content) return;
-  if (game === "reaction" || game === "duel") {
-    miniGameState.target = Math.floor(Math.random()*1000)+600;
-    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Score <strong id="miniScore">0</strong></div><button id="reactionTarget" class="reaction-target" onclick="hitReactionTarget()">TAP!</button><p id="miniGameStatus">Hit the button 10 times.</p><button class="mini-back" onclick="chooseMiniGameMode('${miniGameState.mode}')">← Back</button></div>`;
-  } else if (game === "price") {
-    miniGameState.target = Math.random() > .5 ? 1 : -1;
-    content.innerHTML = `<div class="mini-game-play"><h4>Next tick?</h4><p class="mini-price-symbol">${document.getElementById("symbol")?.textContent || "MARKET"}</p><div class="mini-choice-row"><button onclick="makePriceGuess(1)">📈 UP</button><button onclick="makePriceGuess(-1)">📉 DOWN</button></div><p id="miniGameStatus">Make your call.</p><button class="mini-back" onclick="chooseMiniGameMode('single')">← Back</button></div>`;
-  } else {
-    miniGameState.target = 10;
-    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Team progress <strong id="miniScore">0</strong>/10</div><button class="reaction-target coop-target" onclick="coOpTap()">HELP TEAM</button><p id="miniGameStatus">Tap to help your teammate reach 10.</p><button class="mini-back" onclick="chooseMiniGameMode('online')">← Back</button></div>`;
-  }
-}
-function hitReactionTarget() {
-  miniGameState.score++;
-  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus"), target = document.getElementById("reactionTarget");
-  if (score) score.textContent = miniGameState.score;
-  if (target) { target.style.transform = `translate(${Math.floor(Math.random()*70)-35}px,${Math.floor(Math.random()*40)-20}px)`; setTimeout(()=>{if(target) target.style.transform=""},120); }
-  if (miniGameState.score >= 10) { if(status) status.textContent = miniGameState.game === "duel" ? `You won the prototype duel! 🐰 Score ${miniGameState.score}.` : "Clean run! 🐰⚡"; return; }
-  if (status) status.textContent = miniGameState.game === "duel" ? `Your turn — keep going. Opponent score: ${Math.min(9, Math.floor(miniGameState.score*.8)+Math.floor(Math.random()*2))}.` : `${10-miniGameState.score} more hits.`;
-}
-function makePriceGuess(guess) {
-  const actual = Math.random() > .5 ? 1 : -1, status = document.getElementById("miniGameStatus");
-  if (!status) return;
-  if (guess === actual) { miniGameState.score++; status.textContent = `Correct! +1 point. Total: ${miniGameState.score}. Play again?`; }
-  else status.textContent = `Not this time — it moved ${actual > 0 ? "UP 📈" : "DOWN 📉"}. Total: ${miniGameState.score}.`;
-}
-function coOpTap() {
-  miniGameState.score++;
-  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus");
-  if (score) score.textContent = miniGameState.score;
-  if (miniGameState.score >= 10) { if(status) status.textContent = "Team challenge complete! 🤝🐰"; return; }
-  if (status) status.textContent = `Keep helping — ${10-miniGameState.score} left. Your teammate is covering the rest.`;
-}
-
 function startFavoritesMonitor() {
   if (favoritesTimer) clearInterval(favoritesTimer);
   favoritesTimer = setInterval(() => { updateFavorites(false); }, 900000);
@@ -1525,6 +1233,7 @@ function connectFavoritesToAnalysis() {
       updateFavoriteFromAnalysis(lastAnalysis.ticker, lastAnalysis);
       updateChartCopilot();
       updateBunAIHome();
+      updateTradeReadiness();
       updateTradePlan();
       updateMarketSnapshot();
       renderFavorites();
@@ -1532,7 +1241,6 @@ function connectFavoritesToAnalysis() {
   };
 }
 function initializeBunMoneyUpgrade() {
-  initTickerSearch();
   loadFavorites();
   createFavoritesScreen();
   createFavoritesNav();
@@ -1540,9 +1248,9 @@ function initializeBunMoneyUpgrade() {
   createQuickTradeButtons();
   updateChartCopilot();
   updateBunAIHome();
+  updateTradeReadiness();
   updateTradePlan();
   updateMarketSnapshot();
-  renderFutureEvents();
   renderFavorites();
   updateFavorites(true);
   startFavoritesMonitor();
@@ -1609,6 +1317,11 @@ function brokerPreview(mode) {
     ? "Future supported connections can show balances, positions, P/L and transactions without moving money."
     : "Future supported connections can prepare an order for you to review. You approve every consequential real-money action.");
 }
+function toggleMembershipExample(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle("show");
+}
 function toggleChatSetting(id) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1673,16 +1386,6 @@ function demoCandles(symbol, interval = "5min", count = 80) {
   return { status: "ok", meta: { symbol, interval }, values: candles };
 }
 
-function demoLivePrice(symbol) {
-  const base = DEMO_MARKET_BASE[symbol] || 25;
-  const now = Date.now() / 1000;
-  const seed = demoSeed(symbol);
-  const waveA = Math.sin(now / 19 + seed) * 0.006;
-  const waveB = Math.sin(now / 47 + seed * 0.7) * 0.0035;
-  const drift = Math.sin(now / 180 + seed * 0.13) * 0.004;
-  return base * (1 + waveA + waveB + drift);
-}
-
 const originalMarketEngineRequest = window.marketEngineRequest || marketEngineRequest;
 window.marketEngineRequest = async function(endpoint, params = {}) {
   try {
@@ -1692,7 +1395,9 @@ window.marketEngineRequest = async function(endpoint, params = {}) {
     const symbol = String(params.symbol || "SOUN").toUpperCase();
     if (endpoint === "/time_series") return demoCandles(symbol, params.interval || "5min", Math.min(Number(params.outputsize || 80), 100));
     if (endpoint === "/price") {
-      return { status: "ok", symbol, price: demoLivePrice(symbol).toFixed(4), demo: true };
+      const candles = demoCandles(symbol, "5min", 3).values;
+      const latest = candles[candles.length - 1];
+      return { status: "ok", symbol, price: latest.close, demo: true };
     }
     throw error;
   }
@@ -1701,6 +1406,24 @@ window.marketEngineRequest = async function(endpoint, params = {}) {
 /* Replace the analysis request reference so analyze/other callers use the demo fallback. */
 marketEngineRequest = window.marketEngineRequest;
 
+function saveDemoProfile() {
+  const input = document.getElementById("demoUsername");
+  const username = String(input?.value || "").trim().replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 20);
+  demoProfile.username = username || "Guest";
+  demoProfile.createdAt = demoProfile.createdAt || Date.now();
+  localStorage.setItem("bunmoney_profile", JSON.stringify(demoProfile));
+  updateDemoProfileUI();
+  showPopup("🪪 Profile Saved", `Your local demo profile is ${demoProfile.username}.`);
+}
+function loadDemoProfile() {
+  try { demoProfile = { ...demoProfile, ...(JSON.parse(localStorage.getItem("bunmoney_profile")) || {}) }; } catch (_) {}
+  updateDemoProfileUI();
+}
+function updateDemoProfileUI() {
+  setText("demoProfileStatus", demoProfile.username || "Guest");
+  const input = document.getElementById("demoUsername");
+  if (input && !input.value) input.value = demoProfile.username === "Guest" ? "" : demoProfile.username;
+}
 function toggleDemoMarket() {
   demoMarketEnabled = !demoMarketEnabled;
   localStorage.setItem("bunmoney_demo_market", String(demoMarketEnabled));
@@ -1773,12 +1496,32 @@ function importBunMoneyData() {
   input.click();
 }
 
+function previewCosmetic(name) {
+  showPopup("🛍️ Cosmetic Preview", `${name} is a visual-only prototype item. No purchase is charged and no real money is involved.`);
+}
 function showDataPrivacy() {
   showPopup("🔐 Prototype Privacy", "This version keeps demo profile, favorites, paper trades, XP, themes, and settings in this browser's local storage. No real brokerage credentials are stored here.");
 }
 function showKeyboardHelp() {
   showPopup("⌨️ Shortcuts", "/ = focus analyzer · A = analyze · H = Home · T = Trade. Input fields ignore these shortcuts.");
 }
+function runPrototypeDiagnostics() {
+  const box = document.getElementById("diagnostics");
+  if (!box) return;
+  const checks = [
+    ["Navigation", document.querySelectorAll(".screen").length >= 5],
+    ["Analyzer", typeof analyze === "function"],
+    ["Paper trading", typeof paperBuy === "function" && typeof paperSell === "function"],
+    ["Chart", Boolean(document.getElementById("chart")?.getContext)],
+    ["BunAI", typeof askBunAI === "function"],
+    ["Local storage", (() => { try { localStorage.setItem("bunmoney_diag", "1"); localStorage.removeItem("bunmoney_diag"); return true; } catch (_) { return false; } })()],
+    ["Demo market", demoMarketEnabled],
+    ["PWA shell", Boolean(document.querySelector('link[rel="manifest"]'))]
+  ];
+  box.hidden = false;
+  box.innerHTML = checks.map(([name, pass]) => `<div class="diag-row"><span>${name}</span><strong class="${pass ? "diag-pass" : "diag-warn"}">${pass ? "PASS" : "CHECK"}</strong></div>`).join("");
+}
+
 /* Safer chat moderation for the local prototype. */
 const blockedChatTerms = ["kill yourself", "kys", "racial slur"];
 const originalSendChatBase = window.sendChat;
@@ -1799,11 +1542,14 @@ window.sendChat = function() {
 
 /* Keep the UI in sync after the existing initialization routines run. */
 document.addEventListener("DOMContentLoaded", () => {
+  loadDemoProfile();
+  loadDemoSettings();
   renderTradeHistory();
   updateProfile();
   updateAchievements();
   updateRewards();
   updateLevel();
+  rotateQuote();
   setTimeout(() => { if (!lastAnalysis) analyze(false).catch(() => {}); }, 250);
 });
 
@@ -1824,925 +1570,3 @@ window.clearLocalProgress = function() {
   originalClearLocalProgress();
 };
 clearLocalProgress = window.clearLocalProgress;
-
-/* =========================================================
-   BUNMONEY — TRADING COPILOT V2 UPGRADE
-   Adds stronger confirmation logic, risk-based sizing,
-   long/short paper trading, richer scanner + BunAI,
-   and a cleaner approval-first workflow.
-========================================================= */
-
-(function installTradingCopilotV2() {
-  const originalAnalyzeV2 = analyze;
-
-  function pct(value) {
-    return Number.isFinite(Number(value)) ? Number(value) : 0;
-  }
-
-  function money(value) {
-    return formatMoney(Number(value));
-  }
-
-  function getAccountRiskBudget(balance) {
-    // Educational default: risk no more than 1% of paper balance per idea.
-    return Math.max(0.01, Number(balance || 0) * 0.01);
-  }
-
-  function buildEnhancedAnalysis(a) {
-    if (!a) return a;
-
-    const candles = window.lastCandles || [];
-    const last = candles[candles.length - 1];
-    const prior = candles[candles.length - 2];
-
-    const close = Number(a.currentPrice);
-    const open = Number(last?.open);
-    const high = Number(last?.high);
-    const low = Number(last?.low);
-    const priorHigh = Number(prior?.high);
-    const priorLow = Number(prior?.low);
-
-    const body = Math.abs(close - open);
-    const upperWick = Number.isFinite(high) ? high - Math.max(open, close) : 0;
-    const lowerWick = Number.isFinite(low) ? Math.min(open, close) - low : 0;
-
-    const bullishRejection = Number.isFinite(lowerWick) && lowerWick > Math.max(body * 1.5, close * 0.002);
-    const bearishRejection = Number.isFinite(upperWick) && upperWick > Math.max(body * 1.5, close * 0.002);
-
-    const nearResistance = Math.abs(close - Number(a.resistance)) <= close * 0.012;
-    const nearSupport = Math.abs(close - Number(a.support)) <= close * 0.012;
-
-    const bullishMomentum = a.trend === "BULLISH" && Number(a.rsi) >= 50 && Number(a.rsi) < 72;
-    const bearishMomentum = a.trend === "BEARISH" && Number(a.rsi) <= 50 && Number(a.rsi) > 28;
-    const volumeConfirmed = Number(a.volumeRatio) >= 1.15;
-
-    let longScore = 0;
-    let shortScore = 0;
-
-    if (a.trend === "BULLISH") longScore += 2;
-    if (a.trend === "BEARISH") shortScore += 2;
-    if (bullishMomentum) longScore += 1;
-    if (bearishMomentum) shortScore += 1;
-    if (bullishRejection && nearSupport) longScore += 2;
-    if (bearishRejection && nearResistance) shortScore += 2;
-    if (a.breakout === "POSSIBLE BREAKOUT" && volumeConfirmed) longScore += 2;
-    if (a.retest === "RETEST AREA" && volumeConfirmed) longScore += 2;
-    if (volumeConfirmed) {
-      if (a.trend === "BULLISH") longScore += 1;
-      if (a.trend === "BEARISH") shortScore += 1;
-    }
-
-    const resistanceBreak = Number.isFinite(priorHigh) && close > priorHigh;
-    const supportBreak = Number.isFinite(priorLow) && close < priorLow;
-
-    if (resistanceBreak && volumeConfirmed) longScore += 1;
-    if (supportBreak && volumeConfirmed) shortScore += 1;
-
-    const preferredDirection = longScore > shortScore ? "LONG" : shortScore > longScore ? "SHORT" : "NONE";
-
-    let confirmation = "WAITING";
-    if (preferredDirection === "LONG") {
-      if (longScore >= 6 && volumeConfirmed && (a.breakout === "POSSIBLE BREAKOUT" || bullishRejection || a.retest === "RETEST AREA")) {
-        confirmation = "CONFIRMED LONG WATCH";
-      } else if (longScore >= 3) {
-        confirmation = "FORMING LONG";
-      }
-    } else if (preferredDirection === "SHORT") {
-      if (shortScore >= 6 && volumeConfirmed && (supportBreak || bearishRejection)) {
-        confirmation = "CONFIRMED SHORT WATCH";
-      } else if (shortScore >= 3) {
-        confirmation = "FORMING SHORT";
-      }
-    }
-
-    let direction = "NONE";
-    if (confirmation.includes("LONG")) direction = "LONG";
-    if (confirmation.includes("SHORT")) direction = "SHORT";
-
-    let entry = close;
-    let stop = close;
-    let target = close;
-
-    if (direction === "LONG") {
-      stop = Math.min(Number(a.support), close * 0.985);
-      if (!Number.isFinite(stop) || stop >= close) stop = close * 0.985;
-      const riskDistance = Math.max(close - stop, close * 0.005);
-      target = close + riskDistance * 2.25;
-    } else if (direction === "SHORT") {
-      stop = Math.max(Number(a.resistance), close * 1.015);
-      if (!Number.isFinite(stop) || stop <= close) stop = close * 1.015;
-      const riskDistance = Math.max(stop - close, close * 0.005);
-      target = Math.max(0.01, close - riskDistance * 2.25);
-    } else {
-      stop = close * 0.985;
-      target = close * 1.03;
-    }
-
-    const riskDistance = Math.abs(entry - stop);
-    const rewardDistance = Math.abs(target - entry);
-    const rr = riskDistance > 0 ? rewardDistance / riskDistance : 0;
-    const riskBudget = getAccountRiskBudget(tradingBalance);
-    const riskBasedShares = riskDistance > 0 ? riskBudget / riskDistance : 0;
-    const maxLoss = riskDistance * riskBasedShares;
-    const notional = entry * riskBasedShares;
-
-    let decision = "WAIT";
-    if (direction === "LONG" && confirmation === "CONFIRMED LONG WATCH" && rr >= 2) decision = "WATCH FOR LONG";
-    else if (direction === "SHORT" && confirmation === "CONFIRMED SHORT WATCH" && rr >= 2) decision = "WATCH FOR SHORT";
-    else if (direction !== "NONE") decision = direction === "LONG" ? "FORMING LONG" : "FORMING SHORT";
-
-    const confidence = Math.max(5, Math.min(95, Math.round(
-      45 + Math.max(longScore, shortScore) * 7 + (volumeConfirmed ? 6 : 0) + (rr >= 2 ? 7 : 0)
-    )));
-
-    const setupQuality = confidence >= 78 ? "HIGH" : confidence >= 60 ? "MODERATE" : "LOW";
-
-    let trigger = "Wait for a clean price-action trigger.";
-    if (direction === "LONG") {
-      trigger = a.breakout === "POSSIBLE BREAKOUT"
-        ? "Wait for a breakout close and/or successful retest above resistance."
-        : bullishRejection && nearSupport
-          ? "Watch for buyers to defend support after the rejection candle."
-          : "Wait for buyers to reclaim a key level with volume."
-    } else if (direction === "SHORT") {
-      trigger = bearishRejection && nearResistance
-        ? "Watch for sellers to defend resistance after the rejection candle."
-        : "Wait for a breakdown/rejection with volume before considering the short."
-    }
-
-    let reason = `Trend: ${String(a.trend || "SIDEWAYS").toLowerCase()}. `;
-    reason += `RSI: ${Number.isFinite(Number(a.rsi)) ? Number(a.rsi).toFixed(1) : "—"}. `;
-    reason += `Volume: ${Number(a.volumeRatio || 0).toFixed(2)}x average. `;
-    if (bullishRejection && nearSupport) reason += "Bullish rejection near support. ";
-    if (bearishRejection && nearResistance) reason += "Bearish rejection near resistance. ";
-    if (a.breakout === "POSSIBLE BREAKOUT") reason += "Price is testing a breakout. ";
-    if (a.retest === "RETEST AREA") reason += "A retest is developing. ";
-    reason += decision === "WAIT" ? "No clean confirmation yet — patience wins here." : `${trigger}`;
-
-    return {
-      ...a,
-      entry,
-      stop,
-      target,
-      rr,
-      decision,
-      setupQuality,
-      confidence,
-      confirmation,
-      trigger,
-      direction,
-      longScore,
-      shortScore,
-      bullishRejection,
-      bearishRejection,
-      nearSupport,
-      nearResistance,
-      volumeConfirmed,
-      riskBudget,
-      riskBasedShares,
-      positionSizeShares: riskBasedShares,
-      positionNotional: notional,
-      maxLoss,
-      potentialReward: rewardDistance * riskBasedShares,
-      enhanced: true,
-      reason
-    };
-  }
-
-
-  function setupType(a) {
-    if (!a) return "NO SETUP";
-    if (a.breakout === "POSSIBLE BREAKOUT" && a.volumeConfirmed) return "BREAKOUT / RETEST";
-    if (a.bullishRejection && a.nearSupport) return "SUPPORT BOUNCE";
-    if (a.bearishRejection && a.nearResistance) return "RESISTANCE REJECTION";
-    if (a.direction === "LONG") return "BULLISH CONTINUATION";
-    if (a.direction === "SHORT") return "BEARISH CONTINUATION";
-    return "NO CLEAN SETUP";
-  }
-
-  function renderTradingIntelligenceV2(a) {
-    let card = document.getElementById("tradingIntelligenceV2");
-    const decision = document.getElementById("decision");
-    if (!card && decision?.parentNode) {
-      card = document.createElement("section");
-      card.id = "tradingIntelligenceV2";
-      card.className = "setup ti2-card";
-      decision.parentNode.insertBefore(card, decision.nextSibling);
-    }
-    if (!card || !a) return;
-
-    const dir = a.direction || "NONE";
-    const setup = setupType(a);
-    const score = Math.max(0, Math.min(100, Number(a.confidence || 0)));
-    const risk = Math.abs(a.entry - a.stop);
-    const tp1 = dir === "LONG" ? a.entry + risk * 1.5 : dir === "SHORT" ? Math.max(0.01, a.entry - risk * 1.5) : a.entry;
-    const tp2 = dir === "LONG" ? a.entry + risk * 2.25 : dir === "SHORT" ? Math.max(0.01, a.entry - risk * 2.25) : a.entry;
-    const entryLow = dir === "LONG" ? Math.min(a.entry, a.entry - risk * 0.25) : dir === "SHORT" ? a.entry : a.entry - risk * 0.25;
-    const entryHigh = dir === "SHORT" ? Math.max(a.entry, a.entry + risk * 0.25) : dir === "LONG" ? a.entry : a.entry + risk * 0.25;
-    const approvalKey = `${a.ticker}:${a.timestamp}`;
-    const approved = sessionStorage.getItem("bunmoney_ti2_approved") === approvalKey;
-    const checks = [
-      [a.trend === "BULLISH" || a.trend === "BEARISH", "Trend has a direction"],
-      [Number(a.rsi) >= 45 && Number(a.rsi) <= 75, "Momentum is not extreme"],
-      [Boolean(a.volumeConfirmed), "Volume confirmation"],
-      [a.rr >= 2, "Risk/reward ≥ 2:1"],
-      [a.confirmation && a.confirmation !== "WAITING", "Price-action confirmation"]
-    ];
-    const checkHtml = checks.map(([ok, label]) => `<div class="ti2-check"><span>${ok ? "✓" : "•"}</span><small>${label}</small></div>`).join("");
-
-    card.innerHTML = `
-      <div class="section-title"><div><h3>🧠 Trading Intelligence 2.0</h3><p>Setup analysis, not an order.</p></div><strong class="ti2-score">${score}/100</strong></div>
-      <div class="ti2-grid">
-        <div><small>Bias</small><strong>${dir === "NONE" ? "NEUTRAL" : dir}</strong></div>
-        <div><small>Setup</small><strong>${setup}</strong></div>
-        <div><small>Confirmation</small><strong>${a.confirmation || "WAITING"}</strong></div>
-        <div><small>R:R</small><strong>${a.rr ? a.rr.toFixed(2) + ":1" : "—"}</strong></div>
-      </div>
-      <div class="ti2-levels">
-        <div><small>Entry zone</small><strong>${money(entryLow)} – ${money(entryHigh)}</strong></div>
-        <div><small>Invalidation / SL</small><strong>${money(a.stop)}</strong></div>
-        <div><small>TP1 (1.5R)</small><strong>${money(tp1)}</strong></div>
-        <div><small>TP2 (2.25R)</small><strong>${money(tp2)}</strong></div>
-      </div>
-      <div class="ti2-checks">${checkHtml}</div>
-      <p class="trade-plan-note">🐰 Trigger: ${a.trigger || "Wait for confirmation."}</p>
-      <div class="ti2-gate ${approved ? "approved" : ""}">
-        <strong>${approved ? "✓ SETUP APPROVED FOR YOUR REVIEW" : "🔐 MANUAL APPROVAL REQUIRED"}</strong>
-        <small>${approved ? "BunMoney still does not place a real order." : "Review the levels and your risk before taking any action."}</small>
-        <button class="mini-btn" id="ti2ApproveBtn">${approved ? "REVOKE APPROVAL" : "I REVIEWED THIS SETUP"}</button>
-      </div>`;
-
-    const btn = document.getElementById("ti2ApproveBtn");
-    if (btn) btn.onclick = () => {
-      if (sessionStorage.getItem("bunmoney_ti2_approved") === approvalKey) sessionStorage.removeItem("bunmoney_ti2_approved");
-      else sessionStorage.setItem("bunmoney_ti2_approved", approvalKey);
-      renderTradingIntelligenceV2(a);
-    };
-  }
-
-  async function enhancedAnalyze(force = false) {
-    await originalAnalyzeV2(force);
-    if (!lastAnalysis || !window.lastCandles?.length) return;
-
-    const enhanced = buildEnhancedAnalysis(lastAnalysis);
-    lastAnalysis = enhanced;
-
-    window.lastEntry = enhanced.entry;
-    window.lastStop = enhanced.stop;
-    window.lastTarget = enhanced.target;
-
-    setText("entry", money(enhanced.entry));
-    setText("stop", money(enhanced.stop));
-    setText("target", money(enhanced.target));
-    setText("rr", enhanced.rr ? enhanced.rr.toFixed(2) + ":1" : "—");
-    setText("decision", enhanced.decision);
-    setText("setupQuality", enhanced.setupQuality);
-    setText("reason", enhanced.reason);
-    setText("marketOutlook", enhanced.confirmation);
-    const decisionElement = document.getElementById("decision");
-    if (decisionElement) {
-      decisionElement.classList.remove("long", "short", "wait");
-      decisionElement.classList.add(enhanced.direction === "LONG" ? "long" : enhanced.direction === "SHORT" ? "short" : "wait");
-    }
-
-    updateTradePlanV2();
-    updateMarketSnapshot();
-    updateBunAIHome();
-    updateChartCopilot();
-    updatePositionSizerUI();
-    renderTradingIntelligenceV2(enhanced);
-
-    drawChart(
-      window.lastCandles,
-      window.lastSupport,
-      window.lastResistance,
-      enhanced.entry,
-      enhanced.stop,
-      enhanced.target,
-      window.lastBreakoutIndex,
-      window.lastRetestIndex,
-      window.lastSma10,
-      window.lastSma20
-    );
-
-    try {
-      localStorage.setItem("bunmoney_last_analysis", JSON.stringify(enhanced));
-    } catch (_) {}
-  }
-
-  analyze = enhancedAnalyze;
-  window.analyze = enhancedAnalyze;
-
-  function updatePositionSizerUI() {
-    if (!lastAnalysis) return;
-    let card = document.getElementById("positionSizerCard");
-    const anchor = document.querySelector(".trade-plan-card") || document.querySelector(".readiness-card");
-    if (!card && anchor) {
-      card = document.createElement("section");
-      card.id = "positionSizerCard";
-      card.className = "setup position-sizer-card";
-      anchor.parentNode.insertBefore(card, anchor.nextSibling);
-    }
-    if (!card) return;
-
-    const a = lastAnalysis;
-    card.innerHTML = `
-      <div class="section-title">
-        <div><h3>🛡️ Risk-Based Position Size</h3><p>Educational sizing using a 1% paper-account risk budget.</p></div>
-      </div>
-      <div class="trade-plan-grid">
-        <div class="trade-plan-stat"><small>Risk Budget</small><strong>${money(a.riskBudget)}</strong></div>
-        <div class="trade-plan-stat"><small>Shares</small><strong>${Number(a.positionSizeShares).toFixed(4)}</strong></div>
-        <div class="trade-plan-stat"><small>Notional</small><strong>${money(a.positionNotional)}</strong></div>
-        <div class="trade-plan-stat"><small>Max Loss</small><strong>${money(a.maxLoss)}</strong></div>
-      </div>
-      <p class="trade-plan-note">Sizing is based on the distance to the stop, not a promise of profit. Paper trading only.</p>
-    `;
-  }
-
-  function updateTradePlanV2() {
-    if (!lastAnalysis) return;
-    const a = lastAnalysis;
-    const status = document.getElementById("tradePlanStatus");
-    const direction = document.getElementById("tradePlanDirection");
-    const entry = document.getElementById("tradePlanEntry");
-    const stop = document.getElementById("tradePlanStop");
-    const target = document.getElementById("tradePlanTarget");
-    const confirmation = document.getElementById("planConfirmation");
-    const reward = document.getElementById("planReward");
-    const note = document.getElementById("tradePlanNote");
-    if (![status, direction, entry, stop, target, confirmation, reward, note].every(Boolean)) return;
-
-    const long = a.direction === "LONG";
-    const short = a.direction === "SHORT";
-    const confirmed = String(a.confirmation || "").includes("CONFIRMED");
-    const rrGood = Number(a.rr) >= 2;
-    const ready = confirmed && rrGood;
-
-    direction.textContent = long ? "LONG WATCH" : short ? "SHORT WATCH" : "NO DIRECTION";
-    direction.className = long ? "good" : short ? "bad" : "warn";
-    entry.textContent = money(a.entry);
-    stop.textContent = money(a.stop);
-    target.textContent = money(a.target);
-    status.textContent = ready ? "READY TO WATCH" : (long || short) ? "FORMING" : "WAIT";
-    status.className = `trade-plan-status ${ready ? "good" : (long || short) ? "warn" : "neutral"}`;
-
-    confirmation.classList.remove("ready", "caution", "blocked");
-    confirmation.classList.add(confirmed ? "ready" : "caution");
-    confirmation.querySelector("span").textContent = confirmed ? "✓" : "!";
-    confirmation.querySelector("small").textContent = confirmed ? a.confirmation : a.trigger;
-
-    reward.classList.remove("ready", "caution", "blocked");
-    reward.classList.add(rrGood ? "ready" : "caution");
-    reward.querySelector("span").textContent = rrGood ? "✓" : "!";
-    reward.querySelector("small").textContent = rrGood
-      ? `${Number(a.rr).toFixed(2)}:1 reward-to-risk.`
-      : "Below the preferred 2:1 reward-to-risk threshold.";
-
-    note.textContent = ready
-      ? `Multiple confirmations are present. ${a.trigger}`
-      : `No automatic trade is placed. ${a.trigger}`;
-  }
-
-
-
-  const originalPaperBuyV2 = paperBuy;
-  const originalPaperSellV2 = paperSell;
-
-  function openPaperPosition(side) {
-    if (position) {
-      if (position.side === side) {
-        setText("reason", `You already have a ${side === "LONG" ? "long" : "short"} paper position.`);
-        return;
-      }
-      closePaperPositionV2();
-      return;
-    }
-
-    const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
-    if (!Number.isFinite(price)) {
-      setText("reason", "Analyze a market before opening a paper trade.");
-      return;
-    }
-
-    const symbol = document.getElementById("symbol")?.textContent || "";
-    position = {
-      side,
-      entry: price,
-      amount: Math.max(0.01, tradingBalance),
-      symbol,
-      openedAt: Date.now(),
-      plannedStop: lastAnalysis?.stop ?? null,
-      plannedTarget: lastAnalysis?.target ?? null
-    };
-
-    updatePaperPL(price);
-    updatePositionUIV2();
-    setText("reason", `${side === "LONG" ? "Paper long" : "Paper short"} opened at ${money(price)}. Bun is tracking it.`);
-    mascotReaction(side === "LONG" ? "Long opened. Let buyers prove it. 🐰📈" : "Short opened. Let sellers prove it. 🐰📉");
-    saveGameState();
-  }
-
-  function paperBuyV2() {
-    if (position?.side === "SHORT") return closePaperPositionV2();
-    openPaperPosition("LONG");
-  }
-
-  function paperSellV2() {
-    if (position?.side === "LONG") return closePaperPositionV2();
-    openPaperPosition("SHORT");
-  }
-
-  function closePaperPositionV2() {
-    if (!position) {
-      setText("reason", "There is no open paper position.");
-      return;
-    }
-
-    const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
-    if (!Number.isFinite(price)) return;
-
-    const rawMove = (price - position.entry) / position.entry;
-    const move = position.side === "SHORT" ? -rawMove : rawMove;
-    const profit = position.amount * move;
-
-    tradingBalance += profit;
-    tradeHistory.push({
-      side: position.side,
-      symbol: position.symbol || "",
-      entry: position.entry,
-      exit: price,
-      profit,
-      time: new Date().toLocaleString()
-    });
-
-    position = null;
-    rewardPoints += profit > 0 ? 25 : 5;
-    updateRewards();
-    updateLevel();
-    updateProfile();
-    setText("tradingBalance", money(tradingBalance));
-    setText("paperCurrentPrice", money(price));
-    setText("paperPL", `${profit >= 0 ? "+" : "-"}${money(Math.abs(profit))}`);
-    setText("paperPLPercent", `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`);
-    setText("paperPLMessage", `${profit >= 0 ? "You gained" : "You lost"} ${money(Math.abs(profit))} on this paper trade.`);
-    setText("reason", `Paper ${position?.side || "trade"} closed: ${profit >= 0 ? "+" : "-"}${money(Math.abs(profit))}.`);
-    mascotReaction(profit >= 0 ? "Winning trade. Stack those wins. 🐰📈" : "Loss taken. Learn and protect the next trade. 🐰");
-    renderTradeHistory();
-    updatePositionUIV2();
-    saveGameState();
-  }
-
-  function updatePaperPLV2(price) {
-    if (!Number.isFinite(Number(price))) return;
-    const current = Number(price);
-    setText("paperCurrentPrice", money(current));
-    if (!position) {
-      setText("paperPL", "$0.00");
-      setText("paperPLPercent", "0.00%");
-      setText("paperPLMessage", "No open position.");
-      updatePositionUIV2();
-      return;
-    }
-    const rawMove = (current - position.entry) / position.entry;
-    const move = position.side === "SHORT" ? -rawMove : rawMove;
-    const pl = position.amount * move;
-    setText("paperPL", `${pl >= 0 ? "+" : "-"}${money(Math.abs(pl))}`);
-    setText("paperPLPercent", `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`);
-    setText("paperPLMessage", `${pl >= 0 ? "You're up" : "You're down"} ${money(Math.abs(pl))} (${(move * 100).toFixed(2)}%) right now.`);
-    updatePositionUIV2();
-  }
-
-  function updatePositionUIV2() {
-    const positionEl = document.getElementById("position");
-    if (!positionEl) return;
-    positionEl.textContent = position
-      ? `${position.side} @ ${money(position.entry)}`
-      : "NONE";
-
-    let close = document.getElementById("closePaperButton");
-    const buttonRow = document.querySelector(".setup .button-row");
-    if (!close && buttonRow) {
-      close = document.createElement("button");
-      close.id = "closePaperButton";
-      close.className = "close-paper-button";
-      close.textContent = "CLOSE POSITION";
-      close.onclick = closePaperPositionV2;
-      buttonRow.appendChild(close);
-    }
-    if (close) close.hidden = !position;
-  }
-
-  paperBuy = paperBuyV2;
-  paperSell = paperSellV2;
-  window.paperBuy = paperBuyV2;
-  window.paperSell = paperSellV2;
-  window.closePaperPosition = closePaperPositionV2;
-
-  function getBunReplyV2(message) {
-    const text = String(message || "").toLowerCase();
-    const a = lastAnalysis;
-    if (!a) return "Give me a ticker and analyze it first. I'll read the trend, levels, volume, confirmation, and risk.";
-
-    if (text.includes("buy") || text.includes("enter")) {
-      if (a.direction === "LONG" && String(a.confirmation).includes("CONFIRMED")) {
-        return `LONG WATCH on ${a.ticker}. ${a.trigger} Entry ${money(a.entry)}, stop ${money(a.stop)}, target ${money(a.target)}, R/R ${a.rr.toFixed(2)}:1. This is not a guarantee.`;
-      }
-      return `I would WAIT on ${a.ticker}. ${a.trigger} Right now the setup is ${a.setupQuality.toLowerCase()}, not a confirmed entry.`;
-    }
-    if (text.includes("short") || text.includes("sell")) {
-      if (a.direction === "SHORT" && String(a.confirmation).includes("CONFIRMED")) {
-        return `SHORT WATCH on ${a.ticker}. ${a.trigger} Entry ${money(a.entry)}, stop ${money(a.stop)}, target ${money(a.target)}, R/R ${a.rr.toFixed(2)}:1. You still approve the trade.`;
-      }
-      return `I would WAIT on the short. ${a.trigger} Sellers need to prove control before you act.`;
-    }
-    if (text.includes("risk") || text.includes("stop")) {
-      return `Risk check: ${a.riskBudget ? money(a.riskBudget) : "—"} educational risk budget, about ${Number(a.positionSizeShares || 0).toFixed(4)} shares by stop-distance sizing. Stop: ${money(a.stop)}.`;
-    }
-    if (text.includes("why")) return `${a.reason} Confidence is ${a.confidence}%.`;
-    if (text.includes("rsi")) return `RSI is ${Number(a.rsi).toFixed(1)}. Use it with price action and volume — never as a standalone buy/sell trigger.`;
-    if (text.includes("volume")) return `Volume is ${Number(a.volumeRatio).toFixed(2)}x its recent average. ${a.volumeConfirmed ? "That helps confirmation." : "That is not strong enough for my confirmation rule yet."}`;
-    return `BunAI read: ${a.ticker} is ${a.trend.toLowerCase()}, setup ${a.setupQuality.toLowerCase()}, confirmation ${a.confirmation.toLowerCase()}. ${a.trigger}`;
-  }
-
-  getBunReply = getBunReplyV2;
-
-  const originalScanMarketV2 = scanMarket;
-
-  function scannerSetupScore(candles, closes, volumes, price, sma10, sma20, rsi) {
-    const last = candles[candles.length - 1] || {};
-    const prev = candles[candles.length - 2] || {};
-    const recent = candles.slice(-20);
-    const resistance = Math.max(...recent.map(c => Number(c.high || c.close)).filter(Number.isFinite));
-    const support = Math.min(...recent.map(c => Number(c.low || c.close)).filter(Number.isFinite));
-    const avgVol = average(volumes.slice(-20, -1));
-    const volumeRatio = avgVol ? Number(volumes[volumes.length - 1]) / avgVol : 0;
-    const trend = price > sma10 && sma10 > sma20 ? "BULLISH" : price < sma10 && sma10 < sma20 ? "BEARISH" : "SIDEWAYS";
-    const range = Math.max(0.000001, resistance - support);
-    const nearSupport = Math.abs(price - support) / Math.max(price, 0.000001) <= 0.015;
-    const nearResistance = Math.abs(price - resistance) / Math.max(price, 0.000001) <= 0.015;
-    const breakout = price >= resistance * 0.995 && price >= Number(prev.high || price);
-    const breakdown = price <= support * 1.005 && price <= Number(prev.low || price);
-    let direction = "NONE";
-    if (trend === "BULLISH" && (breakout || nearSupport || rsi >= 50)) direction = "LONG";
-    if (trend === "BEARISH" && (breakdown || nearResistance || rsi <= 50)) direction = "SHORT";
-    let score = 0;
-    score += trend === "SIDEWAYS" ? 8 : 25;
-    score += direction === "LONG" || direction === "SHORT" ? 15 : 4;
-    score += (rsi >= 45 && rsi <= 70) || (rsi <= 55 && rsi >= 30) ? 18 : 8;
-    score += volumeRatio >= 1.25 ? 20 : volumeRatio >= 0.9 ? 10 : 3;
-    score += breakout || breakdown ? 18 : nearSupport || nearResistance ? 13 : 6;
-    score = Math.max(0, Math.min(100, Math.round(score)));
-    const setup = breakout || breakdown ? "BREAKOUT WATCH" : nearSupport ? "SUPPORT TEST" : nearResistance ? "RESISTANCE TEST" : direction === "LONG" ? "BULLISH CONTINUATION" : direction === "SHORT" ? "BEARISH CONTINUATION" : "NO CLEAN SETUP";
-    const change = closes.length > 1 ? ((price - closes[closes.length - 2]) / closes[closes.length - 2]) * 100 : 0;
-    const risk = direction === "LONG" ? Math.max(0.0001, price - support) : direction === "SHORT" ? Math.max(0.0001, resistance - price) : Math.max(0.0001, range * 0.25);
-    const entry = price;
-    const stop = direction === "LONG" ? Math.min(price - risk, support) : direction === "SHORT" ? Math.max(price + risk, resistance) : price - risk;
-    const target = direction === "LONG" ? price + risk * 2 : direction === "SHORT" ? Math.max(0.01, price - risk * 2) : price;
-    const rr = risk > 0 && direction !== "NONE" ? Math.abs(target - entry) / risk : 0;
-    const reason = direction === "NONE"
-      ? "No clear directional edge; wait for price action to break the range."
-      : `${trend.toLowerCase()} trend, RSI ${rsi.toFixed(1)}, volume ${volumeRatio.toFixed(2)}x. ${breakout || breakdown ? "Price is testing a range edge." : "No decisive breakout yet."}`;
-    return { price, change, trend, direction, score, setup, rsi, volumeRatio, support, resistance, entry, stop, target, rr, reason };
-  }
-
-  async function scanMarketV2() {
-    const container = document.getElementById("scannerV2");
-    const status = document.getElementById("scannerStatus");
-    if (!container) return;
-    container.innerHTML = `<div class="alert empty">Scanning watchlist…</div>`;
-    if (status) status.textContent = "SCANNING";
-    const symbols = ["GRAB", "SOUN", "BBAI"];
-    const results = [];
-
-    for (const symbol of symbols) {
-      try {
-        const data = await marketEngineRequest("/time_series", { symbol, interval: selectedTimeframe === "max" ? "1day" : selectedTimeframe, outputsize: 60 });
-        if (!data?.values?.length) continue;
-        const candles = [...data.values].reverse();
-        const closes = candles.map(c => Number(c.close)).filter(Number.isFinite);
-        const volumes = candles.map(c => Number(c.volume || 0));
-        if (closes.length < 20) continue;
-        const price = closes.at(-1);
-        const sma10 = calculateSMA(closes, 10).at(-1);
-        const sma20 = calculateSMA(closes, 20).at(-1);
-        const rsi = calculateRSI(closes, 14).at(-1);
-        results.push({ symbol, ...scannerSetupScore(candles, closes, volumes, price, sma10, sma20, rsi) });
-      } catch (error) {
-        console.log("Scanner error:", symbol, error);
-      }
-    }
-
-    if (!results.length) {
-      container.innerHTML = `<div class="alert empty">Scanner unavailable right now. Check market data and try again.</div>`;
-      if (status) status.textContent = "ERROR";
-      return;
-    }
-
-    results.sort((a, b) => b.score - a.score);
-    container.innerHTML = results.map((r, i) => {
-      const bias = r.direction === "LONG" ? "LONG WATCH" : r.direction === "SHORT" ? "SHORT WATCH" : "WAIT";
-      const scoreLabel = r.score >= 80 ? "HIGH-QUALITY" : r.score >= 65 ? "WATCH" : r.score >= 45 ? "DEVELOPING" : "LOW SETUP";
-      return `<button class="scanner-v2-item" onclick="analyzeTicker('${r.symbol}')">
-        <div class="scanner-v2-top"><span class="scanner-v2-symbol">${i + 1}. ${r.symbol}</span><span class="scanner-v2-score">${r.score}/100</span></div>
-        <div class="scanner-v2-meta"><span class="scanner-v2-chip">${bias}</span><span class="scanner-v2-chip">${scoreLabel}</span><span class="scanner-v2-chip">${r.setup}</span><span class="scanner-v2-chip">RSI ${r.rsi.toFixed(1)}</span><span class="scanner-v2-chip">Vol ${r.volumeRatio.toFixed(2)}x</span></div>
-        <div class="scanner-v2-bar"><span style="width:${r.score}%"></span></div>
-        <p class="scanner-v2-reason">${r.reason}</p>
-      </button>`;
-    }).join("");
-    if (status) status.textContent = `${results[0].symbol} LEADS`;
-  }
-
-  window.scanMarket = scanMarketV2;
-
-  // Replace the quick chart controls with explicit LONG / SHORT / CLOSE behavior.
-  function refreshQuickTradeButtonsV2() {
-    const canvas = document.getElementById("chart");
-    if (!canvas) return;
-    const chartCard = canvas.closest(".chart-card");
-    if (!chartCard) return;
-    let controls = document.getElementById("chartQuickTrade");
-    if (!controls) {
-      controls = document.createElement("div");
-      controls.id = "chartQuickTrade";
-      controls.className = "chart-quick-trade";
-      chartCard.appendChild(controls);
-    }
-    controls.innerHTML = `
-      <button class="quick-buy" onclick="paperBuy()">🐰 ↑ LONG</button>
-      <button class="quick-sell" onclick="paperSell()">↓ SHORT 🐰</button>
-      <button class="quick-close" id="chartClosePosition" onclick="closePaperPosition()" ${position ? "" : "disabled"}>✋ CLOSE</button>
-    `;
-  }
-
-  const originalUpdatePaperPLV2 = updatePaperPL;
-  updatePaperPL = updatePaperPLV2;
-  window.updatePaperPL = updatePaperPLV2;
-
-  // Rebuild controls once the DOM is ready, and refresh after each analysis/price update.
-  function bootV2() {
-    refreshQuickTradeButtonsV2();
-    updatePositionSizerUI();
-    updatePositionUIV2();
-    if (lastAnalysis) {
-      const enhanced = buildEnhancedAnalysis(lastAnalysis);
-      lastAnalysis = enhanced;
-      updatePositionSizerUI();
-      updateTradePlanV2();
-      }
-  }
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootV2);
-  else bootV2();
-
-  // Keep chart controls and paper P/L in sync with live/demo price updates.
-  setInterval(() => {
-    refreshQuickTradeButtonsV2();
-    updatePositionUIV2();
-    if (Number.isFinite(lastLivePrice)) updatePaperPLV2(lastLivePrice);
-  }, 2000);
-
-  window.BunMoneyV2 = {
-    buildEnhancedAnalysis,
-    updatePositionSizerUI,
-    updateTradePlanV2,
-  };
-})();
-
-/* ================= BunMoney 3.0 Command Center ================= */
-(function BunMoney30(){
-  'use strict';
-  const LSJ='bunmoney_trade_journal_v1', LSA='bunmoney_price_alerts_v1';
-  const $=id=>document.getElementById(id);
-  const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-  const money=v=>Number.isFinite(Number(v))?'$'+Number(v).toFixed(2):'—';
-  const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
-  const write=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-  let journal=read(LSJ,[]), alerts=read(LSA,[]);
-
-  function currentSnapshot(){
-    const ticker=($('ticker')?.value||$('symbol')?.textContent||'').trim().toUpperCase();
-    const price=Number(window.lastLivePrice), entry=Number(window.lastEntry), stop=Number(window.lastStop), target=Number(window.lastTarget);
-    const decision=$('decision')?.textContent||'WAIT';
-    return {ticker,price,entry,stop,target,decision,trend:$('trend')?.textContent||'—',rsi:$('rsi')?.textContent||'—',rr:$('rr')?.textContent||'—',time:new Date().toISOString()};
-  }
-  function ensurePanel(){
-    if($('bm30Panel')) return $('bm30Panel');
-    const trade=$('trade'); if(!trade) return null;
-    const panel=document.createElement('section'); panel.id='bm30Panel'; panel.className='bm3-card';
-    panel.innerHTML=`<div class="bm3-head"><div><h3>🐰 BunMoney Command Center</h3><p class="bm3-sub">Plan, risk, journal and alerts — still manual approval only.</p></div><span class="bm3-pill" id="bm30DataBadge">NO ANALYSIS</span></div>
-      <div class="bm3-grid">
-        <div class="bm3-stat"><small>Current setup</small><strong id="bm30Decision">WAIT</strong></div>
-        <div class="bm3-stat"><small>Data source</small><strong id="bm30Source">Waiting</strong></div>
-        <div class="bm3-stat"><small>Entry → Stop</small><strong id="bm30RiskLine">—</strong></div>
-        <div class="bm3-stat"><small>Entry → Target</small><strong id="bm30RewardLine">—</strong></div>
-      </div>
-      <div class="bm3-actions"><button class="primary" onclick="bm30RefreshPlan()">🔄 Refresh Plan</button><button onclick="bm30SaveJournal()">📓 Save to Journal</button><button onclick="bm30OpenJournal()">📚 Journal</button><button onclick="bm30OpenAlerts()">🔔 Alerts</button></div>
-      <div class="bm3-form"><label>Account $<input id="bm30Account" type="number" min="0" step="0.01" value="10"></label><label>Risk %<input id="bm30RiskPct" type="number" min="0.1" max="10" step="0.1" value="1"></label><label>Max loss<input id="bm30MaxLoss" type="text" readonly value="$0.10"></label></div>
-      <div id="bm30RiskOutput" class="bm3-list"></div>`;
-    const scanner=$('scannerV2');
-    if(scanner?.parentNode) scanner.parentNode.insertBefore(panel,scanner.nextSibling); else trade.appendChild(panel);
-    ['bm30Account','bm30RiskPct'].forEach(id=>$(id)?.addEventListener('input',bm30RefreshPlan));
-    return panel;
-  }
-  function bm30RefreshPlan(){
-    ensurePanel(); const s=currentSnapshot(); const account=Math.max(0,Number($('bm30Account')?.value||10)); const pct=Math.max(0,Number($('bm30RiskPct')?.value||1)); const maxLoss=account*pct/100;
-    if($('bm30MaxLoss')) $('bm30MaxLoss').value=money(maxLoss);
-    const risk=Math.abs(s.entry-s.stop), shares=risk>0?maxLoss/risk:0, reward=Math.abs(s.target-s.entry), rr=risk>0?reward/risk:0;
-    $('bm30Decision').textContent=s.decision||'WAIT';
-    const has=Number.isFinite(s.price)&&s.price>0;
-    $('bm30Source').textContent=has?'LIVE / CONNECTED':'Waiting'; $('bm30DataBadge').textContent=has?'LIVE DATA':'NO ANALYSIS';
-    $('bm30RiskLine').textContent=has?`${money(s.entry)} → ${money(s.stop)}`:'—'; $('bm30RewardLine').textContent=has?`${money(s.entry)} → ${money(s.target)}`:'—';
-    $('bm30RiskOutput').innerHTML=has?`<div class="bm3-row"><span><small>Risk distance</small><br><strong>${money(risk)}</strong></span><span><small>Max loss</small><br><strong>${money(maxLoss)}</strong></span><span><small>Size</small><br><strong>${shares.toFixed(4)} shares</strong></span><span><small>R:R</small><br><strong>${rr?rr.toFixed(2)+':1':'—'}</strong></span></div>`:'<div class="alert empty">Analyze a real ticker to calculate position sizing.</div>';
-  }
-  window.bm30RefreshPlan=bm30RefreshPlan;
-  window.bm30SaveJournal=function(){
-    const s=currentSnapshot(); if(!s.ticker||!Number.isFinite(s.price)){bm30Toast('Analyze a ticker before saving a journal entry.');return;}
-    journal.unshift({...s,id:Date.now()}); journal=journal.slice(0,50); write(LSJ,journal); bm30Toast(`Saved ${s.ticker} to your trade journal.`);
-  };
-  window.bm30OpenJournal=function(){
-    const modal=ensureModal('bm30JournalModal','📓 Trade Journal'); const body=$('bm30JournalBody');
-    body.innerHTML=journal.length?journal.slice(0,20).map(x=>`<div class="bm3-row"><span><strong>${esc(x.ticker)}</strong> · ${esc(x.decision)}<br><small>${new Date(x.time).toLocaleString()} · Price ${money(x.price)}</small></span><span>${money(x.entry)} / ${money(x.stop)} / ${money(x.target)}</span></div>`).join(''):'<p>No saved setups yet.</p>'; modal.hidden=false;
-  };
-  window.bm30OpenAlerts=function(){
-    const modal=ensureModal('bm30AlertsModal','🔔 Price Alerts'); const body=$('bm30AlertsBody');
-    const s=currentSnapshot();
-    body.innerHTML=`<div class="bm3-form"><label>Symbol<input id="bm30AlertSymbol" value="${esc(s.ticker)}"></label><label>Price<input id="bm30AlertPrice" type="number" step="0.01" value="${Number.isFinite(s.price)?s.price.toFixed(2):''}"></label><label>Condition<select id="bm30AlertCondition"><option value="above">Above</option><option value="below">Below</option></select></label></div><div class="bm3-actions"><button class="primary" onclick="bm30AddAlert()">🔔 Add Alert</button><button onclick="bm30ClearAlerts()">Clear All</button></div><div class="bm3-list">${alerts.length?alerts.map(a=>`<div class="bm3-row"><span><strong>${esc(a.symbol)}</strong> ${esc(a.condition)} ${money(a.price)}<br><small>${a.active?'Active':'Triggered'}</small></span></div>`).join(''):'<p>No alerts set.</p>'}</div>`; modal.hidden=false;
-  };
-  window.bm30AddAlert=function(){const symbol=String($('bm30AlertSymbol')?.value||'').trim().toUpperCase();const price=Number($('bm30AlertPrice')?.value);const condition=$('bm30AlertCondition')?.value;if(!symbol||!Number.isFinite(price)){bm30Toast('Enter a symbol and valid price.');return;} alerts.push({id:Date.now(),symbol,price,condition,active:true});write(LSA,alerts);bm30OpenAlerts();bm30Toast(`Alert set for ${symbol}.`)};
-  window.bm30ClearAlerts=function(){alerts=[];write(LSA,alerts);bm30OpenAlerts()};
-  function ensureModal(id,title){let m=$(id);if(m)return m; m=document.createElement('div');m.id=id;m.className='bm3-modal';m.hidden=true;m.innerHTML=`<div class="bm3-modal-card"><div class="bm3-head"><h3>${title}</h3><button onclick="document.getElementById('${id}').hidden=true">✕</button></div><div id="${id.replace('Modal','Body')}"></div></div>`;document.body.appendChild(m);return m;}
-  function bm30Toast(msg){let t=$('bm30Toast');if(!t){t=document.createElement('div');t.id='bm30Toast';t.className='bm3-alert';document.body.appendChild(t)}t.textContent=msg;t.hidden=false;clearTimeout(t._timer);t._timer=setTimeout(()=>t.hidden=true,3200)}
-  function checkAlerts(){const price=Number(window.lastLivePrice);if(!Number.isFinite(price))return;let changed=false;alerts.forEach(a=>{if(!a.active||!a.symbol)return;const current=String($('symbol')?.textContent||$('ticker')?.value||'').toUpperCase();if(current!==a.symbol)return;const hit=a.condition==='above'?price>=a.price:price<=a.price;if(hit){a.active=false;changed=true;bm30Toast(`🔔 ${a.symbol} crossed ${money(a.price)}.`)}});if(changed)write(LSA,alerts)}
-  function boot(){ensurePanel();bm30RefreshPlan();setInterval(()=>{ensurePanel();bm30RefreshPlan();checkAlerts()},2000)}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-  // =========================================================
-  // LIVE MARKET BOARD — ranked choices + dollar move calculator
-  // =========================================================
-  const MARKET_BOARD_GROUPS = {
-    stocks: [["NVDA","NVIDIA","AI / Semiconductors"],["TSLA","Tesla","EV / Technology"],["AAPL","Apple","Technology"],["AMZN","Amazon","Consumer / Cloud"],["META","Meta Platforms","Technology"],["MSFT","Microsoft","Technology"],["GOOGL","Alphabet","Technology"],["SOUN","SoundHound AI","AI / Technology"]],
-    etfs: [["SPY","SPDR S&P 500 ETF","US Large Cap"],["QQQ","Invesco QQQ","Nasdaq-100"],["IWM","iShares Russell 2000 ETF","Small Cap"],["DIA","SPDR Dow Jones ETF","Dow Jones"],["XLK","Technology Select Sector SPDR","Technology"],["XLF","Financial Select Sector SPDR","Financials"]],
-    crypto: [["BTC/USD","Bitcoin","Crypto"],["ETH/USD","Ethereum","Crypto"],["SOL/USD","Solana","Crypto"],["XRP/USD","XRP","Crypto"],["DOGE/USD","Dogecoin","Crypto"],["ADA/USD","Cardano","Crypto"]],
-    forex: [["EUR/USD","Euro / US Dollar","Forex"],["GBP/USD","British Pound / US Dollar","Forex"],["USD/JPY","US Dollar / Japanese Yen","Forex"],["AUD/USD","Australian Dollar / US Dollar","Forex"],["USD/CAD","US Dollar / Canadian Dollar","Forex"],["USD/CHF","US Dollar / Swiss Franc","Forex"]]
-  };
-  let marketBoardCategory = "stocks", marketBoardBusy = false;
-  function marketBoardAmount(){const n=Number(document.getElementById("marketAmount")?.value);return Number.isFinite(n)&&n>0?n:10}
-  function marketQuotePercent(d){for(const v of [d?.percent_change,d?.change_percent,d?.changePct]){const n=Number(String(v??"").replace("%",""));if(Number.isFinite(n))return n}const p=Number(d?.close??d?.price),q=Number(d?.previous_close??d?.previousClose);return Number.isFinite(p)&&Number.isFinite(q)&&q!==0?(p-q)/q*100:null}
-  function marketPrice(symbol,p){if(!Number.isFinite(p))return "—";return symbol.includes("/")?p.toLocaleString(undefined,{maximumFractionDigits:5}):formatMoney(p)}
-  async function fetchMarketBoardQuote(item){const symbol=item[0],d=await marketEngineRequest("/quote",{symbol}),price=Number(d?.close??d?.price),pct=marketQuotePercent(d);if(!Number.isFinite(price)||!Number.isFinite(pct))throw new Error("Incomplete quote");return{symbol,name:item[1],category:item[2],price,pct}}
-  function renderMarketBoard(results,errors=0){const c=document.getElementById("marketBoard"),status=document.getElementById("marketBoardStatus");if(!c)return;const amount=marketBoardAmount();results.sort((a,b)=>b.pct-a.pct);if(!results.length){c.innerHTML='<div class="alert empty">No live quotes returned. Check your API/backend and try again.</div>';if(status)status.textContent="NO DATA";return}c.innerHTML=results.map((r,i)=>{const dollars=amount*r.pct/100,sign=dollars>=0?"+":"−",ps=r.pct>=0?"+":"",cls=r.pct>=0?"up":"down",safe=r.symbol.replace(/'/g,"\\'");return `<button class="market-row ${cls}" onclick="selectMarketFromBoard('${safe}')"><span class="market-rank">${i+1}</span><span class="market-main"><strong>${r.symbol}</strong><small>${r.name} · ${r.category} · ${marketPrice(r.symbol,r.price)}</small></span><span class="market-right"><span class="market-pct">${ps}${r.pct.toFixed(2)}%</span><span class="market-dollar">${sign}$${Math.abs(dollars).toFixed(2)} on $${amount.toFixed(2)}</span></span></button>`}).join("");if(status)status.textContent=errors?`${results.length} LIVE · ${errors} MISSED`:`${results.length} LIVE`}
-  async function refreshMarketBoard(){if(marketBoardBusy)return;const c=document.getElementById("marketBoard"),status=document.getElementById("marketBoardStatus");if(!c)return;marketBoardBusy=true;if(status)status.textContent="LOADING";c.innerHTML=`<div class="market-loading">🐰 Pulling live ${marketBoardCategory} quotes…</div>`;const items=MARKET_BOARD_GROUPS[marketBoardCategory]||MARKET_BOARD_GROUPS.stocks,results=[];let errors=0;for(const item of items){try{results.push(await fetchMarketBoardQuote(item))}catch(_){errors++}}renderMarketBoard(results,errors);marketBoardBusy=false}
-  function setMarketCategory(category){if(!MARKET_BOARD_GROUPS[category])return;marketBoardCategory=category;document.querySelectorAll(".market-cat").forEach(b=>b.classList.toggle("active",b.dataset.marketCat===category));refreshMarketBoard()}
-  function selectMarketFromBoard(symbol){const input=document.getElementById("ticker");if(input)input.value=symbol;showScreen("trade");analyze(true).catch(()=>{})}
-  window.refreshMarketBoard=refreshMarketBoard;window.setMarketCategory=setMarketCategory;window.selectMarketFromBoard=selectMarketFromBoard;
-  function bootMarketBoard(){refreshMarketBoard();const amount=document.getElementById("marketAmount");if(amount)amount.addEventListener("change",()=>refreshMarketBoard())}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootMarketBoard);else bootMarketBoard();
-
-
-  // =========================================================
-  // FLOATING BUNAI COPILOT
-  // Replaces the large permanent Copilot card with a compact,
-  // draggable assistant that stays visible while the user browses.
-  // =========================================================
-  function createFloatingCopilot(){
-    if(document.getElementById("bmFloatingCopilot")) return;
-    const el=document.createElement("div");
-    el.id="bmFloatingCopilot";
-    el.className="bm-float-copilot";
-    el.innerHTML=`
-      <div class="bm-float-bubble" role="dialog" aria-label="BunAI Copilot">
-        <div class="bm-float-head"><strong>🐰 BunAI</strong><span class="bm-float-status" id="bmFloatStatus">READY</span></div>
-        <p class="bm-float-msg" id="bmFloatMsg">I'm here while you browse. Tap Analyze to check the current ticker.</p>
-        <div class="bm-float-row"><input id="bmFloatInput" maxlength="240" placeholder="Ask BunAI…" type="text"><button id="bmFloatAsk">Ask</button></div>
-        <div class="bm-float-actions"><button id="bmFloatAnalyze">📊 Analyze</button><button id="bmFloatClose">Minimize</button></div>
-      </div>
-      <button class="bm-float-btn" id="bmFloatBtn" aria-label="Open BunAI Copilot" title="BunAI Copilot">
-        <img src="assets/pfs_happy.webp" alt="BunAI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-        <span style="display:none">🐰</span>
-        <i class="bm-float-dot"></i>
-      </button>`;
-    document.body.appendChild(el);
-    const btn=el.querySelector("#bmFloatBtn"), bubble=el.querySelector(".bm-float-bubble"), input=el.querySelector("#bmFloatInput");
-    btn.addEventListener("click",()=>{if(el.dataset.moved==="1"){el.dataset.moved="0";return;}el.classList.toggle("open");el.classList.remove("has-update");if(el.classList.contains("open"))setTimeout(()=>input?.focus(),50)});
-    el.querySelector("#bmFloatClose")?.addEventListener("click",()=>el.classList.remove("open"));
-    el.querySelector("#bmFloatAnalyze")?.addEventListener("click",()=>{
-      const ticker=String(document.getElementById("ticker")?.value||"").trim().toUpperCase();
-      if(!ticker){setFloatingCopilotMessage("Enter a ticker first, then I can analyze it.","WAITING");return;}
-      el.classList.remove("open");
-      showScreen("trade");
-      if(typeof window.analyze==="function")window.analyze(true).catch(()=>{});
-    });
-    el.querySelector("#bmFloatAsk")?.addEventListener("click",floatingAsk);
-    input?.addEventListener("keydown",e=>{if(e.key==="Enter")floatingAsk()});
-    function floatingAsk(){
-      const q=String(input?.value||"").trim();
-      if(!q)return;
-      const msg=document.getElementById("bmFloatMsg"),status=document.getElementById("bmFloatStatus");
-      if(status)status.textContent="THINKING";
-      if(msg)msg.textContent="BunAI is thinking…";
-      const fn=window.askBunAI||askBunAI;
-      Promise.resolve(fn(q,lastAnalysis||{})).then(data=>{
-        if(msg)msg.textContent=data?.text||"BunAI has no response right now.";
-        if(status)status.textContent="READY";
-        el.classList.add("has-update");
-      }).catch(err=>{
-        if(msg)msg.textContent=err?.message||"BunAI is unavailable right now.";
-        if(status)status.textContent="OFFLINE";
-      });
-    }
-    let dragging=false,startX=0,startY=0,startLeft=0,startTop=0;
-    const start=e=>{
-      if(e.target.closest(".bm-float-bubble"))return;
-      dragging=true;el.classList.add("dragging");el.dataset.moved="0";
-      const p=e.touches?e.touches[0]:e;startX=p.clientX;startY=p.clientY;
-      const r=el.getBoundingClientRect();startLeft=r.left;startTop=r.top;
-      el.style.left=startLeft+"px";el.style.top=startTop+"px";el.style.right="auto";el.style.bottom="auto";
-      e.preventDefault?.();
-    };
-    const move=e=>{if(!dragging)return;const p=e.touches?e.touches[0]:e;const dx=p.clientX-startX,dy=p.clientY-startY;if(Math.abs(dx)+Math.abs(dy)>8)el.dataset.moved="1";const maxX=Math.max(6,innerWidth-el.offsetWidth-6),maxY=Math.max(6,innerHeight-el.offsetHeight-6);el.style.left=Math.min(maxX,Math.max(6,startLeft+dx))+"px";el.style.top=Math.min(maxY,Math.max(6,startTop+dy))+"px";e.preventDefault?.()};
-    const end=()=>{dragging=false;el.classList.remove("dragging")};
-    btn.addEventListener("pointerdown",start);window.addEventListener("pointermove",move,{passive:false});window.addEventListener("pointerup",end);
-    btn.addEventListener("touchstart",start,{passive:false});window.addEventListener("touchmove",move,{passive:false});window.addEventListener("touchend",end);
-  }
-  function setFloatingCopilotMessage(message,status="READY"){
-    const msg=document.getElementById("bmFloatMsg"),st=document.getElementById("bmFloatStatus"),el=document.getElementById("bmFloatingCopilot");
-    if(msg)msg.textContent=message;if(st)st.textContent=status;if(el){el.classList.add("has-update");}
-  }
-  function updateFloatingCopilot(){
-    const el=document.getElementById("bmFloatingCopilot");if(!el)return;
-    if(!lastAnalysis){setFloatingCopilotMessage("I'm here while you browse. Analyze a ticker when you're ready.","READY");return;}
-    const a=lastAnalysis;
-    const bias=a.trend||"NEUTRAL", setup=a.setupQuality||"NO SETUP";
-    const message=`${a.ticker||"Market"}: ${bias.toLowerCase()}, ${setup.toLowerCase()} setup. ${a.trigger||"Waiting for a clean confirmation."}`;
-    setFloatingCopilotMessage(message,"WATCHING");
-  }
-  window.createFloatingCopilot=createFloatingCopilot;
-  window.updateFloatingCopilot=updateFloatingCopilot;
-  window.setFloatingCopilotMessage=setFloatingCopilotMessage;
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{createFloatingCopilot();updateFloatingCopilot()});else{createFloatingCopilot();updateFloatingCopilot()}
-
-})();
-
-// ============================================
-// BUNMONEY MULTI-PAGE SECTION ORGANIZER
-// ============================================
-
-function setupDedicatedScreens() {
-  const screenConfigs = [
-    {
-      id: "paper",
-      title: "💵 Paper Trading",
-      description: "Practice trades with virtual funds.",
-      sourceHeadings: ["💵 Paper Trading", "🧾 Paper Trade History"]
-    },
-    {
-      id: "arena",
-      title: "⚔️ Trading Arena",
-      description: "Compete against AI trading bots.",
-      sourceHeadings: ["⚔️ Trading Arena"]
-    },
-    {
-      id: "brokerage",
-      title: "🔗 Brokerage Connections",
-      description: "Manage supported brokerage connections.",
-      sourceHeadings: ["🔗 Brokerage Connections"]
-    },
-    {
-      id: "rank",
-      title: "🏆 Rank & Progress",
-      description: "Track your trader level and XP.",
-      sourceHeadings: ["🏆 Trader Level", "🏅 Rank"]
-    }
-  ];
-
-  screenConfigs.forEach(config => {
-    if (document.getElementById(config.id)) return;
-
-    const screen = document.createElement("main");
-    screen.className = "screen";
-    screen.id = config.id;
-
-    const header = document.createElement("div");
-    header.className = "section-title";
-    header.innerHTML = `
-      <h2>${config.title}</h2>
-      <p>${config.description}</p>
-    `;
-
-    screen.appendChild(header);
-    document.querySelector("main")?.parentElement?.appendChild(screen);
-
-    config.sourceHeadings.forEach(headingText => {
-      document.querySelectorAll("section").forEach(section => {
-        const heading = section.querySelector("h3");
-        if (!heading) return;
-
-        if (heading.textContent.trim() === headingText) {
-          screen.appendChild(section);
-        }
-      });
-    });
-  });
-}
-
-document.addEventListener("DOMContentLoaded", setupDedicatedScreens);
