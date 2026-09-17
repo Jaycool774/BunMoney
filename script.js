@@ -83,16 +83,34 @@ function closePopup() {
 }
 
 function showScreen(screenName) {
-  document.querySelectorAll(".screen").forEach(screen => screen.classList.remove("active"));
-  const target = document.getElementById(screenName);
-  if (target) target.classList.add("active");
-  document.querySelectorAll(".nav-button").forEach(button => {
-    button.classList.remove("active");
-    if (button.dataset.screen === screenName || button.getAttribute("data-screen") === screenName) {
-      button.classList.add("active");
-    }
+  const screens = document.querySelectorAll(".screen");
+
+  screens.forEach(screen => {
+    screen.classList.toggle("active", screen.id === screenName);
   });
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  const buttons = document.querySelectorAll(".nav-button");
+
+  buttons.forEach(button => {
+    button.classList.toggle(
+      "active",
+      button.dataset.screen === screenName
+    );
+  });
+
+  const target = document.getElementById(screenName);
+
+  if (target) {
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 function setTimeframe(timeframe) {
