@@ -2664,3 +2664,67 @@ clearLocalProgress = window.clearLocalProgress;
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{createFloatingCopilot();updateFloatingCopilot()});else{createFloatingCopilot();updateFloatingCopilot()}
 
 })();
+
+// ============================================
+// BUNMONEY MULTI-PAGE SECTION ORGANIZER
+// ============================================
+
+function setupDedicatedScreens() {
+  const screenConfigs = [
+    {
+      id: "paper",
+      title: "💵 Paper Trading",
+      description: "Practice trades with virtual funds.",
+      sourceHeadings: ["💵 Paper Trading", "🧾 Paper Trade History"]
+    },
+    {
+      id: "arena",
+      title: "⚔️ Trading Arena",
+      description: "Compete against AI trading bots.",
+      sourceHeadings: ["⚔️ Trading Arena"]
+    },
+    {
+      id: "brokerage",
+      title: "🔗 Brokerage Connections",
+      description: "Manage supported brokerage connections.",
+      sourceHeadings: ["🔗 Brokerage Connections"]
+    },
+    {
+      id: "rank",
+      title: "🏆 Rank & Progress",
+      description: "Track your trader level and XP.",
+      sourceHeadings: ["🏆 Trader Level", "🏅 Rank"]
+    }
+  ];
+
+  screenConfigs.forEach(config => {
+    if (document.getElementById(config.id)) return;
+
+    const screen = document.createElement("main");
+    screen.className = "screen";
+    screen.id = config.id;
+
+    const header = document.createElement("div");
+    header.className = "section-title";
+    header.innerHTML = `
+      <h2>${config.title}</h2>
+      <p>${config.description}</p>
+    `;
+
+    screen.appendChild(header);
+    document.querySelector("main")?.parentElement?.appendChild(screen);
+
+    config.sourceHeadings.forEach(headingText => {
+      document.querySelectorAll("section").forEach(section => {
+        const heading = section.querySelector("h3");
+        if (!heading) return;
+
+        if (heading.textContent.trim() === headingText) {
+          screen.appendChild(section);
+        }
+      });
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", setupDedicatedScreens);
