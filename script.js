@@ -1787,11 +1787,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadDemoProfile();
   loadDemoSettings();
   renderTradeHistory();
-  updateProfile();
-  updateAchievements();
-  updateRewards();
-  updateLevel();
-  rotateQuote();
   setTimeout(() => { if (!lastAnalysis) analyze(false).catch(() => {}); }, 250);
 });
 
