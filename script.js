@@ -531,26 +531,53 @@ function paperBuy() {
 }
 
 function paperSell() {
-  if (!position) { setText("reason", "There is no open paper position."); return; }
-  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
-  if (!Number.isFinite(price)) return;
+  if (!position) {
+    setText("reason", "There is no open paper position.");
+    return;
+  }
+
+  const price = getCurrentPrice();
+  if (!Number.isFinite(price)) {
+    setText("reason", "Current market price is unavailable.");
+    return;
+  }
+
   const percentageMove = (price - position.entry) / position.entry;
   const profit = position.amount * percentageMove;
+
+  // Realize the paper-trading P/L into the simulated balance.
   tradingBalance += profit;
-  tradeHistory.push({ side: position.side, symbol: position.symbol || document.getElementById("symbol")?.textContent || "", entry: position.entry, exit: price, profit, time: new Date().toLocaleString() });
+
+  tradeHistory.push({
+    side: position.side,
+    symbol: position.symbol || document.getElementById("symbol")?.textContent || "",
+    entry: position.entry,
+    exit: price,
+    profit,
+    time: new Date().toLocaleString()
+  });
+
   position = null;
+
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("paperCurrentPrice", formatMoney(price));
-  setText("paperPL", formatMoney(profit));
-  setText("paperPLPercent", `${profit >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%`);
-  setText("paperPLMessage", `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`);
-  rewardPoints += profit > 0 ? 25 : 5;
-  updateConfidence(); updateLevel(); updateRewards();
-  setText("reason", `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%).`);
-  mascotReaction(profit >= 0 ? "Nice trade! Stack those wins. 🐰📈" : "Loss taken. Learn from it and protect the next trade. 🐰");
-  saveGameState();
+  setText("paperPL", `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`);
+  setText(
+    "paperPLPercent",
+    `${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%`
+  );
+  setText(
+    "paperPLMessage",
+    `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`
+  );
+  setText(
+    "reason",
+    `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
+  );
+
   renderTradeHistory();
+  saveGameState();
 }
 
 function updatePaperPL(price) {
