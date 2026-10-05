@@ -6,6 +6,7 @@
 const API_KEY = "";
 // Production: set MARKET_ENGINE_URL to your secure backend. Leave blank for CodePen prototype mode.
 const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protocol !== "file:" && !/codepen\.io$/i.test(location.hostname) ? "/api/market" : "");
+
 // Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
 
 async function marketEngineRequest(endpoint, params = {}) {
@@ -37,6 +38,7 @@ let arenaRunning = false;
 let arenaTimer = null;
 let lastAnalysis = null;
 let lastMarketDataTime = 0;
+let lastLivePrice = null;
 
 window.lastCandles = [];
 window.lastSupport = undefined;
@@ -76,17 +78,15 @@ function closePopup() {
 }
 
 function showScreen(screenName) {
+  document.querySelectorAll(".screen").forEach(screen => screen.classList.remove("active"));
   const target = document.getElementById(screenName);
-  if (!target) return;
-
-  document.querySelectorAll(".screen").forEach(screen => {
-    screen.classList.toggle("active", screen.id === screenName);
-  });
-
+  if (target) target.classList.add("active");
   document.querySelectorAll(".nav-button").forEach(button => {
-    button.classList.toggle("active", button.dataset.screen === screenName);
+    button.classList.remove("active");
+    if (button.dataset.screen === screenName || button.getAttribute("data-screen") === screenName) {
+      button.classList.add("active");
+    }
   });
-
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -94,18 +94,8 @@ function setTimeframe(timeframe) {
   selectedTimeframe = timeframe;
   document.querySelectorAll(".timeframes button").forEach(button => {
     button.classList.remove("active");
-    const text = button.textContent.toLowerCase().replace(/\s/g, "");
-    if (
-      text === "1m" && timeframe === "1min" ||
-      text === "5m" && timeframe === "5min" ||
-      text === "15m" && timeframe === "15min" ||
-      text === "1h" && timeframe === "1h" ||
-      text === "4h" && timeframe === "4h" ||
-      text === "1d" && timeframe === "1day" ||
-      text === "1w" && timeframe === "1week" ||
-      text === "1m" && timeframe === "1month" ||
-      text === "max" && timeframe === "max"
-    ) button.classList.add("active");
+    const buttonTimeframe = button.dataset.timeframe;
+    if (buttonTimeframe === timeframe) button.classList.add("active");
   });
   analyze();
 }
@@ -252,7 +242,11 @@ async function analyze(force = false) {
     if (decision === "WAIT") reason += "There is not enough confirmation yet, so waiting is safer.";
     else reason += "This is an analysis signal, not a guaranteed prediction.";
 
+    lastLivePrice = currentPrice;
+    window.lastLivePrice = currentPrice;
     setText("price", formatMoney(currentPrice));
+    setText("paperCurrentPrice", formatMoney(currentPrice));
+    updatePaperPL(currentPrice);
     setText("change", `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`);
     setText("trend", trend);
     setText("volume", currentVolume ? currentVolume.toLocaleString() : "—");
@@ -353,6 +347,19 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
     ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
   }
 
+  // Price scale: show readable numeric levels on the right side of the chart.
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.font = "10px Arial";
+  for (let i = 0; i <= 5; i++) {
+    const ratio = i / 5;
+    const priceLevel = maxPrice - ratio * range;
+    const y = padding + ratio * (height - padding * 2);
+    ctx.fillStyle = "rgba(255,255,255,.62)";
+    ctx.fillText(formatMoney(priceLevel), width - 4, y);
+  }
+  ctx.textAlign = "left";
+
   visible.forEach((candle, i) => {
     const open = Number(candle.open), close = Number(candle.close), high = Number(candle.high), low = Number(candle.low);
     const x = xPosition(i);
@@ -387,6 +394,22 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   drawLevel(ctx, width, yPosition(entry), "rgba(255,255,255,.75)", "ENTRY");
   drawLevel(ctx, width, yPosition(stop), "rgba(239,68,68,.9)", "STOP");
   drawLevel(ctx, width, yPosition(target), "rgba(132,204,22,.9)", "TARGET");
+
+  const currentPrice = Number(window.lastLivePrice);
+  if (Number.isFinite(currentPrice) && currentPrice >= minPrice && currentPrice <= maxPrice) {
+    const y = yPosition(currentPrice);
+    ctx.strokeStyle = "rgba(255,255,255,.45)";
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(width - 20, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(17,21,30,.95)";
+    ctx.fillRect(width - 76, y - 10, 70, 20);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "right";
+    ctx.fillText("NOW " + formatMoney(currentPrice), width - 10, y);
+    ctx.textAlign = "left";
+  }
 
   if (breakoutIndex !== null && breakoutIndex !== undefined) {
     const localIndex = breakoutIndex - start;
@@ -444,13 +467,17 @@ function startLivePrice() {
     if (!tickerElement) return;
     const ticker = tickerElement.value.toUpperCase().trim();
     if (!ticker) return;
-    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) return;
+    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") && !demoMarketEnabled) return;
     try {
       const data = await marketEngineRequest("/price", { symbol: ticker });
       if (data.price && Number.isFinite(Number(data.price))) {
         const newPrice = Number(data.price);
+        lastLivePrice = newPrice;
+        window.lastLivePrice = newPrice;
         setText("price", formatMoney(newPrice));
+        setText("paperCurrentPrice", formatMoney(newPrice));
         updatePaperPL(newPrice);
+        if (window.lastCandles?.length) drawChart(window.lastCandles, window.lastSupport, window.lastResistance, window.lastEntry, window.lastStop, window.lastTarget, window.lastBreakoutIndex, window.lastRetestIndex, window.lastSma10, window.lastSma20);
       }
     } catch (error) { console.log("Live price unavailable."); }
   }, 60000);
@@ -484,40 +511,63 @@ async function askBunAI(message, context = {}) {
   return data;
 }
 
+function getDisplayedPrice() {
+  const text = document.getElementById("price")?.textContent || "";
+  const parsed = Number(text.replace(/[$,]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function paperBuy() {
   if (position) { setText("reason", "You already have an open paper position."); return; }
-  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
-  const price = Number(priceText);
+  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
   if (!Number.isFinite(price)) { setText("reason", "Analyze a market before opening a paper trade."); return; }
-  position = { side: "LONG", entry: price, amount: tradingBalance };
-  setText("position", "LONG @ " + formatMoney(price));
-  setText("reason", "Paper long opened. Bun is tracking the position. 🐰");
+  position = { side: "LONG", entry: price, amount: tradingBalance, symbol: document.getElementById("symbol")?.textContent || "" };
+  setText("position", `LONG @ ${formatMoney(price)}`);
+  setText("paperCurrentPrice", formatMoney(price));
+  updatePaperPL(price);
+  setText("reason", "Paper long opened. Bun is tracking your gain/loss as the market moves. 🐰📊");
   mascotReaction("Position opened. Protect the bag. 🐰💰");
+  saveGameState();
 }
+
 function paperSell() {
   if (!position) { setText("reason", "There is no open paper position."); return; }
-  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
-  const price = Number(priceText);
+  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
   if (!Number.isFinite(price)) return;
   const percentageMove = (price - position.entry) / position.entry;
   const profit = position.amount * percentageMove;
   tradingBalance += profit;
-  tradeHistory.push({ side: position.side, entry: position.entry, exit: price, profit: profit, time: new Date().toLocaleString() });
+  tradeHistory.push({ side: position.side, symbol: position.symbol || document.getElementById("symbol")?.textContent || "", entry: position.entry, exit: price, profit, time: new Date().toLocaleString() });
   position = null;
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
+  setText("paperCurrentPrice", formatMoney(price));
   setText("paperPL", formatMoney(profit));
+  setText("paperPLPercent", `${profit >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%`);
+  setText("paperPLMessage", `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`);
   rewardPoints += profit > 0 ? 25 : 5;
   updateConfidence(); updateLevel(); updateRewards();
-  setText("reason", `Paper trade closed with ${profit >= 0 ? "a profit" : "a loss"} of ${formatMoney(Math.abs(profit))}.`);
+  setText("reason", `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${percentageMove.toFixed(2)}%).`);
   mascotReaction(profit >= 0 ? "Nice trade! Stack those wins. 🐰📈" : "Loss taken. Learn from it and protect the next trade. 🐰");
+  saveGameState();
+  renderTradeHistory();
 }
 
 function updatePaperPL(price) {
-  if (!position) return;
-  const move = (price - position.entry) / position.entry;
+  if (!Number.isFinite(Number(price))) return;
+  setText("paperCurrentPrice", formatMoney(Number(price)));
+  if (!position) {
+    setText("paperPL", "$0.00");
+    setText("paperPLPercent", "0.00%");
+    setText("paperPLMessage", "No open position.");
+    return;
+  }
+  const current = Number(price);
+  const move = (current - position.entry) / position.entry;
   const pl = position.amount * move;
-  setText("paperPL", formatMoney(pl));
+  setText("paperPL", `${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))}`);
+  setText("paperPLPercent", `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`);
+  setText("paperPLMessage", `${pl >= 0 ? "You're up" : "You're down"} ${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%) right now.`);
 }
 
 function updateConfidence() {
@@ -562,7 +612,13 @@ function updateRank() {
   const rankIcon = document.getElementById("rankIcon");
   if (rankIcon) {
     const icons = { BRONZE: "🥉", SILVER: "🥈", GOLD: "🥇", PLATINUM: "💎", DIAMOND: "💠" };
-    rankIcon.textContent = icons[rank];
+    const img = rankIcon.querySelector("img");
+    if (img) { img.src = `assets/rank_${rank.toLowerCase()}.png`; img.alt = `${rank} Bun rank`; }
+    else rankIcon.textContent = icons[rank];
+  }
+  const profileImg = document.getElementById("profileAvatarImage");
+  if (profileImg && !localStorage.getItem("bunmoney_pfp_asset")) {
+    profileImg.src = DEFAULT_PFP_URL;
   }
 }
 function updateRewards() { setText("rewardPoints", rewardPoints); }
@@ -637,18 +693,12 @@ const bots = {
   SniperBot: { name: "SniperBot", message: "Waits for precise breakout and retest conditions." },
   ScalperBot: { name: "ScalperBot", message: "Focused on short-term price movement." },
   MoonBot: { name: "MoonBot", message: "Aggressive speculative analysis. High risk." },
-  EmperorBunny: { name: "👑 Emperor Bunny", message: "Owner-only intelligence system. Backend connection required." }
 };
 function selectBot(botName) {
   if (!bots[botName]) return;
   activeBot = botName;
   const bot = bots[botName];
   setText("activeBot", bot.name); setText("botMessage", bot.message);
-  if (botName === "EmperorBunny") {
-    showPopup("👑 Emperor Bunny", "Emperor Bunny is owner-only and requires the secure BunMoney backend before its advanced capabilities can be activated.");
-    mascotReaction("The Emperor is waiting for his throne room. 👑🐰");
-    return;
-  }
   showPopup(bot.name, bot.message);
 }
 
@@ -726,6 +776,49 @@ function escapeHTML(text) {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+const DEFAULT_PFP_URL = "https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png";
+
+const BUN_ASSETS = {
+  pfp: { happy: "assets/pfs_happy.png", serious: "assets/pfs_serious.png", chill: "assets/pfs_chill.png", focused: "assets/pfs_focused.png", confident: "assets/pfs_confident.png", rich: "assets/pfs_rich.png" },
+  frame: { default: "assets/frame_default.png", glow: "assets/frame_glow.png", neon: "assets/frame_neon.png", animated: "assets/frame_animated.png", streak: "assets/frame_streak.png", elite: "assets/frame_elite.png", legendary: "assets/frame_legendary.png" },
+  background: { charts: "assets/bg_charts.png", city: "assets/bg_city.png", money: "assets/bg_money.png", neon: "assets/bg_neon.png", abstract: "assets/bg_abstract.png", graffiti: "assets/bg_graffiti.png", nature: "assets/bg_nature.png", black: "assets/bg_black.png" }
+};
+function setPfpAsset(name) {
+  const src = BUN_ASSETS.pfp[name]; if (!src) return;
+  const img = document.getElementById("profileAvatarImage");
+  if (img) {
+    img.onerror = () => { img.onerror = null; img.src = DEFAULT_PFP_URL; };
+    img.src = src;
+  }
+  localStorage.setItem("bunmoney_pfp_asset", name);
+  showPopup("🐰 PFP Updated", `${name.replaceAll("_", " ")} Bun is now your profile vibe.`);
+}
+function setFrameAsset(name) {
+  const src = BUN_ASSETS.frame[name]; if (!src) return;
+  const frame = document.getElementById("profileFrameImage"); if (frame) frame.src = src;
+  localStorage.setItem("bunmoney_frame_asset", name);
+}
+function setPfpBackground(name) {
+  const src = BUN_ASSETS.background[name]; if (!src) return;
+  const avatar = document.getElementById("profileAvatar"); if (!avatar) return;
+  avatar.style.backgroundImage = `url("${src}")`; avatar.style.backgroundSize = "cover"; avatar.style.backgroundPosition = "center";
+  localStorage.setItem("bunmoney_bg_asset", name);
+}
+function restoreBunAssets() {
+  const pfp = localStorage.getItem("bunmoney_pfp_asset");
+  const profileImg = document.getElementById("profileAvatarImage");
+  if (profileImg) {
+    profileImg.onerror = () => { profileImg.onerror = null; profileImg.src = DEFAULT_PFP_URL; };
+    profileImg.src = (pfp && BUN_ASSETS.pfp[pfp]) ? BUN_ASSETS.pfp[pfp] : DEFAULT_PFP_URL;
+  }
+  const avatar = document.getElementById("profileAvatar");
+  const frame = localStorage.getItem("bunmoney_frame_asset");
+  const bg = localStorage.getItem("bunmoney_bg_asset");
+  const frameImg = document.getElementById("profileFrameImage");
+  if (frameImg && frame && BUN_ASSETS.frame[frame]) frameImg.src = BUN_ASSETS.frame[frame];
+  if (avatar && bg && BUN_ASSETS.background[bg]) { avatar.style.backgroundImage=`url("${BUN_ASSETS.background[bg]}")`; avatar.style.backgroundSize="cover"; avatar.style.backgroundPosition="center"; }
+}
+
 function setTheme(theme) {
   const root = document.documentElement;
   const themes = {
@@ -743,16 +836,36 @@ function setTheme(theme) {
 function setMascot(emoji) {
   document.querySelectorAll(".bun-character").forEach(element => {
     const image = element.querySelector("#bunCharacterImage");
+
     if (image) {
-      image.style.filter = "drop-shadow(0 0 8px rgba(163,230,53,.28))";
+      image.src = DEFAULT_PFP_URL;
+      image.alt = "";
+      image.setAttribute("aria-label", "BunMoney Bun");
+      image.onerror = () => {
+        image.onerror = null;
+        image.src = DEFAULT_PFP_URL;
+      };
+
       element.dataset.mascot = emoji;
-    } else {
-      element.textContent = emoji;
     }
   });
-  document.querySelectorAll(".profile-avatar").forEach(element => { element.textContent = emoji; });
+
+  document.querySelectorAll(".profile-avatar").forEach(element => {
+    const image = element.querySelector("#profileAvatarImage");
+
+    if (image) {
+      image.alt = "";
+      image.setAttribute("aria-label", "Bun profile avatar");
+      image.onerror = () => {
+        image.onerror = null;
+        image.src = DEFAULT_PFP_URL;
+      };
+    }
+  });
+
   localStorage.setItem("bunmoney_mascot", emoji);
 }
+
 function openFeature(feature) {
   const screens = { home: "home", trade: "trade", arcade: "arcade", world: "world", profile: "profile" };
   if (screens[feature]) { showScreen(screens[feature]); return; }
@@ -776,13 +889,36 @@ function rotateQuote() {
 }
 function mascotReaction(message) {
   setText("mascotMessage", message);
+
   const mascot = document.querySelector(".bun-character");
+  const image = document.getElementById("bunCharacterImage");
+
+  // Keep the official hosted Bun PFP as the permanent image.
+  // Do not swap it for local reaction assets that CodePen may not have.
+  if (image) {
+    image.src = DEFAULT_PFP_URL;
+    image.alt = "";
+    image.setAttribute("aria-label", "BunMoney Bun");
+
+    // If anything ever breaks the image, immediately restore it.
+    image.onerror = () => {
+      image.onerror = null;
+      image.src = DEFAULT_PFP_URL;
+    };
+  }
+
+  // Wiggle the existing PFP instead of replacing the image.
   if (mascot) {
     mascot.classList.remove("react");
     void mascot.offsetWidth;
     mascot.classList.add("react");
+
+    setTimeout(() => {
+      mascot.classList.remove("react");
+    }, 900);
   }
 }
+
 function updateProfile() {
   setText("profileBalance", formatMoney(tradingBalance));
   setText("profileTrades", tradeHistory.length);
@@ -837,6 +973,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateRewards();
   updateProfile();
   updateAchievements();
+  restoreBunAssets();
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("arenaStatus", "READY");
@@ -874,6 +1011,20 @@ function saveFavorites() {
   try { localStorage.setItem(BUN_FAVORITES_KEY, JSON.stringify(bunFavorites)); }
   catch (error) { console.log("Could not save favorites."); }
 }
+function openChartFavorites() {
+  const overlay = document.getElementById("chartFavoritesOverlay");
+  if (!overlay) return;
+  renderFavorites();
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+function closeChartFavorites() {
+  const overlay = document.getElementById("chartFavoritesOverlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
 function createFavoritesScreen() {
   if (document.getElementById("favoritesScreen")) return;
   const screen = document.createElement("section");
@@ -950,7 +1101,7 @@ function openFavorite(symbol) {
   analyze(true);
 }
 function renderFavorites() {
-  const container = document.getElementById("favoritesList");
+  const container = document.getElementById("chartFavoritesList") || document.getElementById("favoritesList");
   if (!container) return;
   if (!bunFavorites.length) {
     container.innerHTML = `<div class="alert empty">No favorite markets yet.</div>`; return;
@@ -1219,6 +1370,72 @@ function quickCharacterReaction(action) {
     ? "Paper buy opened. Keep an eye on the stop and reaction."
     : "Paper position closed. Review what price did next.";
 }
+let miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
+function openMiniGames() {
+  const overlay = document.getElementById("miniGamesOverlay");
+  if (!overlay) return;
+  clearMiniGameTimer();
+  miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
+  const mode = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
+  if (mode) mode.hidden = false;
+  if (content) content.innerHTML = "<p class='mini-games-hint'>Pick a mode. Your chart stays open behind this mini-screen.</p>";
+  overlay.classList.remove("hidden"); overlay.setAttribute("aria-hidden", "false");
+}
+function closeMiniGames() {
+  clearMiniGameTimer();
+  const overlay = document.getElementById("miniGamesOverlay");
+  if (overlay) { overlay.classList.add("hidden"); overlay.setAttribute("aria-hidden", "true"); }
+}
+function clearMiniGameTimer() { if (miniGameState.timer) clearInterval(miniGameState.timer); miniGameState.timer = null; }
+function chooseMiniGameMode(mode) {
+  miniGameState.mode = mode;
+  const modeEl = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
+  if (!modeEl || !content) return;
+  modeEl.hidden = true;
+  if (mode === "single") {
+    content.innerHTML = `<div class="mini-game-selection"><h4>Single-player</h4><button onclick="startMiniGame('reaction')">⚡ Reaction Rush<small>Tap the target as fast as you can.</small></button><button onclick="startMiniGame('price')">🎯 Price Guess<small>Guess whether the next simulated tick goes up or down.</small></button></div>`;
+  } else {
+    content.innerHTML = `<div class="mini-game-selection"><h4>Online</h4><p class="mini-games-hint">Online matchmaking is a prototype lobby for now. Real multiplayer needs the future backend.</p><button onclick="startMiniGame('duel')">⚔️ 1v1 Reaction Duel<small>Play against a simulated opponent.</small></button><button onclick="startMiniGame('co-op')">🤝 Co-op Challenge<small>Team with a simulated player to reach a target.</small></button></div>`;
+  }
+}
+function startMiniGame(game) {
+  clearMiniGameTimer();
+  miniGameState.game = game; miniGameState.score = 0;
+  const content = document.getElementById("miniGamesContent");
+  if (!content) return;
+  if (game === "reaction" || game === "duel") {
+    miniGameState.target = Math.floor(Math.random()*1000)+600;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Score <strong id="miniScore">0</strong></div><button id="reactionTarget" class="reaction-target" onclick="hitReactionTarget()">TAP!</button><p id="miniGameStatus">Hit the button 10 times.</p><button class="mini-back" onclick="chooseMiniGameMode('${miniGameState.mode}')">← Back</button></div>`;
+  } else if (game === "price") {
+    miniGameState.target = Math.random() > .5 ? 1 : -1;
+    content.innerHTML = `<div class="mini-game-play"><h4>Next tick?</h4><p class="mini-price-symbol">${document.getElementById("symbol")?.textContent || "MARKET"}</p><div class="mini-choice-row"><button onclick="makePriceGuess(1)">📈 UP</button><button onclick="makePriceGuess(-1)">📉 DOWN</button></div><p id="miniGameStatus">Make your call.</p><button class="mini-back" onclick="chooseMiniGameMode('single')">← Back</button></div>`;
+  } else {
+    miniGameState.target = 10;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Team progress <strong id="miniScore">0</strong>/10</div><button class="reaction-target coop-target" onclick="coOpTap()">HELP TEAM</button><p id="miniGameStatus">Tap to help your teammate reach 10.</p><button class="mini-back" onclick="chooseMiniGameMode('online')">← Back</button></div>`;
+  }
+}
+function hitReactionTarget() {
+  miniGameState.score++;
+  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus"), target = document.getElementById("reactionTarget");
+  if (score) score.textContent = miniGameState.score;
+  if (target) { target.style.transform = `translate(${Math.floor(Math.random()*70)-35}px,${Math.floor(Math.random()*40)-20}px)`; setTimeout(()=>{if(target) target.style.transform=""},120); }
+  if (miniGameState.score >= 10) { if(status) status.textContent = miniGameState.game === "duel" ? `You won the prototype duel! 🐰 Score ${miniGameState.score}.` : "Clean run! 🐰⚡"; return; }
+  if (status) status.textContent = miniGameState.game === "duel" ? `Your turn — keep going. Opponent score: ${Math.min(9, Math.floor(miniGameState.score*.8)+Math.floor(Math.random()*2))}.` : `${10-miniGameState.score} more hits.`;
+}
+function makePriceGuess(guess) {
+  const actual = Math.random() > .5 ? 1 : -1, status = document.getElementById("miniGameStatus");
+  if (!status) return;
+  if (guess === actual) { miniGameState.score++; status.textContent = `Correct! +1 point. Total: ${miniGameState.score}. Play again?`; }
+  else status.textContent = `Not this time — it moved ${actual > 0 ? "UP 📈" : "DOWN 📉"}. Total: ${miniGameState.score}.`;
+}
+function coOpTap() {
+  miniGameState.score++;
+  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus");
+  if (score) score.textContent = miniGameState.score;
+  if (miniGameState.score >= 10) { if(status) status.textContent = "Team challenge complete! 🤝🐰"; return; }
+  if (status) status.textContent = `Keep helping — ${10-miniGameState.score} left. Your teammate is covering the rest.`;
+}
+
 function startFavoritesMonitor() {
   if (favoritesTimer) clearInterval(favoritesTimer);
   favoritesTimer = setInterval(() => { updateFavorites(false); }, 900000);
@@ -1386,6 +1603,16 @@ function demoCandles(symbol, interval = "5min", count = 80) {
   return { status: "ok", meta: { symbol, interval }, values: candles };
 }
 
+function demoLivePrice(symbol) {
+  const base = DEMO_MARKET_BASE[symbol] || 25;
+  const now = Date.now() / 1000;
+  const seed = demoSeed(symbol);
+  const waveA = Math.sin(now / 19 + seed) * 0.006;
+  const waveB = Math.sin(now / 47 + seed * 0.7) * 0.0035;
+  const drift = Math.sin(now / 180 + seed * 0.13) * 0.004;
+  return base * (1 + waveA + waveB + drift);
+}
+
 const originalMarketEngineRequest = window.marketEngineRequest || marketEngineRequest;
 window.marketEngineRequest = async function(endpoint, params = {}) {
   try {
@@ -1395,9 +1622,7 @@ window.marketEngineRequest = async function(endpoint, params = {}) {
     const symbol = String(params.symbol || "SOUN").toUpperCase();
     if (endpoint === "/time_series") return demoCandles(symbol, params.interval || "5min", Math.min(Number(params.outputsize || 80), 100));
     if (endpoint === "/price") {
-      const candles = demoCandles(symbol, "5min", 3).values;
-      const latest = candles[candles.length - 1];
-      return { status: "ok", symbol, price: latest.close, demo: true };
+      return { status: "ok", symbol, price: demoLivePrice(symbol).toFixed(4), demo: true };
     }
     throw error;
   }
@@ -1570,3 +1795,65 @@ window.clearLocalProgress = function() {
   originalClearLocalProgress();
 };
 clearLocalProgress = window.clearLocalProgress;
+
+
+/* =========================================================
+   MARKET NEWS REPORT — EDUCATIONAL TICKER-AWARE DEMO
+   ========================================================= */
+(function setupMarketNewsReport() {
+  const reports = {
+    xauusd: {
+      event: "US inflation, jobs, or Fed-rate updates",
+      time: "Check the connected economic calendar",
+      impact: "USD/rates can move gold sharply",
+      explanation: "XAUUSD often reacts to the US dollar, Treasury yields, inflation data, employment releases, and Federal Reserve decisions. Stronger-than-expected US data can support the dollar and pressure gold, while weaker data or falling yields can support gold. Confirm the actual release time before trading."
+    },
+    gold: {
+      event: "US dollar and interest-rate headlines",
+      time: "Check the connected economic calendar",
+      impact: "Can increase volatility in gold",
+      explanation: "Gold commonly responds to the dollar, real yields, inflation expectations, central-bank decisions, and risk sentiment. Watch the scheduled release and compare the result with expectations rather than assuming the first candle is the final direction."
+    },
+  };
+  reports["soun"] = {
+    event: "Company earnings, guidance, and AI-sector headlines",
+    time: "Check the company calendar and live news feed",
+    impact: "Company-specific news can create gaps",
+    explanation: "SOUN is a single-company equity, so earnings, guidance, contracts, analyst changes, AI-sector sentiment, and broader technology-market moves may affect its chart. A live news/calendar connection is required to show a verified future headline and exact release time."
+  };
+
+  function getReport(ticker) {
+    const key = String(ticker || "").trim().toLowerCase().replace(/\s+/g, "");
+    if (reports[key]) return reports[key];
+    return {
+      event: "Ticker-specific headlines and scheduled releases",
+      time: "Check a live news/economic calendar",
+      impact: "Depends on the asset and event",
+      explanation: `${key.toUpperCase() || "This ticker"} needs a connected live news feed to identify the next verified event, its exact time, and the likely chart sensitivity. Review earnings, economic releases, sector news, and market-wide risk before acting.`
+    };
+  }
+
+  function updateMarketNewsReport() {
+    const input = document.getElementById("ticker");
+    const ticker = String(input?.value || document.getElementById("symbol")?.textContent || "").trim();
+    const report = getReport(ticker);
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    set("newsTicker", ticker.toUpperCase() || "—");
+    set("newsEvent", report.event);
+    set("newsTime", report.time);
+    set("newsImpact", report.impact);
+    set("newsExplanation", report.explanation);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", updateMarketNewsReport);
+  } else {
+    updateMarketNewsReport();
+  }
+
+  const input = document.getElementById("ticker");
+  if (input) input.addEventListener("input", updateMarketNewsReport);
+  const symbol = document.getElementById("symbol");
+  if (symbol) new MutationObserver(updateMarketNewsReport).observe(symbol, { childList: true, characterData: true, subtree: true });
+})();
+

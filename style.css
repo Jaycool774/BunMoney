@@ -768,207 +768,340 @@ button:active { transform: scale(.97); }
 .future-events-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.future-events-pill{font-size:11px;font-weight:800;letter-spacing:.08em;padding:6px 9px;border-radius:999px;background:rgba(128,255,0,.12);border:1px solid rgba(128,255,0,.28);white-space:nowrap}.future-events-list{display:grid;gap:10px;margin-top:12px}.future-event{display:flex;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.025)}.future-event-date{min-width:118px;font-size:11px;font-weight:800;color:#b8ff62;line-height:1.35}.future-event-main{min-width:0}.future-event-codes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}.future-event-codes span{font-size:10px;font-weight:900;letter-spacing:.04em;padding:3px 6px;border-radius:6px;background:rgba(128,255,0,.08);border:1px solid rgba(128,255,0,.2);color:#d7ff9d}.future-event-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.future-event-head strong{font-size:13px}.future-event-head span{font-size:10px;opacity:.7;border:1px solid rgba(255,255,255,.12);padding:3px 6px;border-radius:999px}.future-event p{margin:5px 0 0;font-size:12px;line-height:1.45;opacity:.78}@media(max-width:600px){.future-event{display:block}.future-event-date{margin-bottom:7px}.future-event-head{align-items:flex-start}}
 
 /* =========================================================
-   BUNMONEY DESKTOP COMMAND CENTER — 2026
-   Keeps the existing mobile layout and turns desktop into
-   a wide trading dashboard.
-========================================================= */
+   CLEAN BUNMONEY HOME LAYOUT — LAST RULES WIN
+   Uses the actual direct-child order in #home.
+   ========================================================= */
+
 @media (min-width: 768px) {
-  body { overflow-x: hidden; }
-
-  .app {
-    width: min(100%, 1440px);
-    max-width: 1440px !important;
-    margin: 0 auto;
-    padding: 24px 32px 48px;
-  }
-
-  .topbar.bun-header {
-    min-height: 74px;
-    margin-bottom: 12px;
-  }
-
-  .main-nav {
-    margin-bottom: 18px;
-    padding: 2px 0 4px;
-  }
-
-  .nav-button {
-    min-width: 104px;
-    padding: 10px 16px;
-    font-size: 12px;
-  }
-
-  /* Give the home screen an actual desktop dashboard structure. */
   #home {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
+    gap: 16px !important;
+    align-items: start !important;
   }
 
-  #home > .hero-card,
-  #home > .search,
-  #home > .decision,
-  #home > .future-events-card {
-    grid-column: 1 / -1;
+  #home > * {
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
   }
 
+  /* Existing home order: 1 hero, 2 quick, 3 snapshot, 4 command,
+     5 search, 6 quote, 7 metric grid, 8 chart, 9 analysis,
+     10 setup, 11 plan, 12 decision, 13 alerts, 14 risk,
+     15 BunAI, 16 readiness, 17 confidence, 18 paper,
+     19 level, 20 history, 21 quote. */
+  #home > :nth-child(1) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(2) { grid-column: 1 / 5 !important; }
+  #home > :nth-child(3) { grid-column: 5 / 9 !important; }
+  #home > :nth-child(4) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(5) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(6) { grid-column: 1 / 5 !important; }
+  #home > :nth-child(7) { grid-column: 5 / 13 !important; }
+  #home > :nth-child(8) { grid-column: 1 / 9 !important; }
+  #home > :nth-child(9) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(10) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(11) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(12) { grid-column: 1 / 9 !important; }
+  #home > :nth-child(13) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(14) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(15) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(16) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(17) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(18) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(19) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(20) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(21) { grid-column: 1 / -1 !important; }
+
+  #home > .chart-card { overflow: hidden !important; }
+  #home > .chart-card #chart { width: 100% !important; height: 470px !important; }
+  #home > .grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  #home .trade-plan-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #home .news-report-grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 10px !important; }
+  #home .news-report-item { min-width: 0 !important; }
+  #home .news-report-item strong { overflow-wrap: anywhere !important; }
+}
+
+@media (max-width: 767px) {
+  #home { display: block !important; }
+  #home > * { width: 100% !important; margin-bottom: 14px !important; }
+  #home > .chart-card #chart { height: 340px !important; }
+  .news-report-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+}
+
+.market-news-card { border-color: rgba(56,189,248,.25) !important; }
+.news-badge { border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; font-size: 9px; color: var(--blue); white-space: nowrap; }
+.news-report-item { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.news-report-item small { display: block; color: var(--muted); font-size: 10px; margin-bottom: 7px; }
+.news-report-item strong { display: block; font-size: 12px; line-height: 1.35; }
+.news-report-explanation { margin: 14px 0 0; color: var(--text); line-height: 1.55; }
+.news-report-disclaimer { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+
+
+/* =========================================================
+   BUNMONEY — CLEAN FINAL DESKTOP HOME LAYOUT
+   ========================================================= */
+
+#home {
+  width: 100%;
+  min-width: 0;
+}
+
+#home > * {
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+
+  /* Main dashboard grid */
+  #home {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 14px !important;
+    align-items: start !important;
+    grid-auto-flow: row !important;
+  }
+
+  #home > * {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide the old dashboard filler cards */
   #home > .hero-card,
   #home > .quick-actions-home,
   #home > .market-snapshot-card,
   #home > .master-command-card,
-  #home > .price-card,
-  #home > .grid,
-  #home > .chart-card,
-  #home > .setup,
-  #home > .trade-plan-card,
-  #home > .decision,
-  #home > .future-events-card,
+  #home > .bunai-home-card,
+  #home > section:has(#riskBar),
+  #home > section:has(#confidenceBar) {
+    display: none !important;
+  }
+
+  /* =========================================
+     TOP
+     ========================================= */
+
+  #homeSearch {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+  }
+
+  #homePriceCard {
+    grid-column: 1 / 5 !important;
+    grid-row: 2 !important;
+  }
+
+  #homeMetrics {
+    grid-column: 5 / -1 !important;
+    grid-row: 2 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* =========================================
+     MAIN TRADING AREA
+     ========================================= */
+
+  /* Chart */
+  #mainChartCard {
+    grid-column: 1 / 9 !important;
+    grid-row: 3 / 6 !important;
+    width: 100% !important;
+  }
+
+  #mainChartCard #chart {
+    width: 100% !important;
+    height: 470px !important;
+  }
+
+  /* Technical Analysis */
+  #technicalAnalysisCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 3 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+  }
+
+  /* Trade Setup */
+  #tradeSetupCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 4 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+  }
+
+  /* Trade Plan */
+  #tradePlanCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 5 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+
+    /* IMPORTANT: don't let it stretch */
+    align-self: start !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Trade Plan contents */
+  #tradePlanCard .trade-plan-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+  }
+
+  #tradePlanCard .trade-plan-checks {
+    display: none !important;
+  }
+
+  #tradePlanCard .trade-plan-note {
+    display: none !important;
+  }
+
+  /* =========================================
+     WAIT
+     ========================================= */
+
+  #decision {
+    grid-column: 1 / 9 !important;
+    grid-row: 6 !important;
+
+    width: 100% !important;
+    min-height: 64px !important;
+    height: auto !important;
+    margin: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* =========================================
+     MARKET NEWS
+     ========================================= */
+
+  #marketNewsCard {
+    grid-column: 1 / -1 !important;
+    grid-row: 7 !important;
+  }
+
+  #marketNewsCard .news-report-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* =========================================
+     MARKET ALERTS
+     ========================================= */
+
+  #home > section:has(#alerts) {
+    grid-column: 1 / -1 !important;
+    grid-row: 8 !important;
+  }
+
+  /* =========================================
+     LOWER CARDS
+     ========================================= */
+
+  #home > .home-readiness {
+    grid-column: 1 / 7 !important;
+    grid-row: 9 !important;
+  }
+
+  #home > section:has(#tradingBalance) {
+    grid-column: 7 / 13 !important;
+    grid-row: 9 !important;
+  }
+
+  #home > section:has(#level) {
+    grid-column: 1 / 7 !important;
+    grid-row: 10 !important;
+  }
+
   #home > .trade-history-card {
-    margin-bottom: 0;
-    min-width: 0;
+    grid-column: 1 / -1 !important;
+    grid-row: 11 !important;
   }
 
-  /* Top dashboard row */
-  #home > .hero-card { grid-column: 1 / -1; }
-  #home > .quick-actions-home { grid-column: 1 / 5; }
-  #home > .market-snapshot-card { grid-column: 5 / 9; }
-  #home > .master-command-card { grid-column: 9 / 13; }
-
-  /* Search + live quote row */
-  #home > .search { grid-column: 1 / -1; }
-  #home > .price-card { grid-column: 1 / 5; }
-  #home > .grid {
-    grid-column: 5 / 13;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    height: 100%;
+  #home > .reason-card:not(.bunai-home-card) {
+    grid-column: 1 / -1 !important;
+    grid-row: 12 !important;
   }
 
-  /* Chart is the visual centerpiece; analysis sits beside it. */
-  #home > .chart-card { grid-column: 1 / 9; }
-  #home > .chart-card #chart { height: 430px; }
+  /* =========================================
+     COMPACT CARD CONTENT
+     ========================================= */
 
-  /* Analysis stack: section order in the current HTML is stable here:
-     9 = Technical Analysis, 10 = Trade Setup, 11 = Trade Plan. */
-  #home > .setup:nth-of-type(9),
-  #home > .setup:nth-of-type(10),
-  #home > .trade-plan-card {
-    grid-column: 9 / 13;
-  }
-  #home > .decision { grid-column: 9 / 13; }
-  #home > .future-events-card { grid-column: 1 / -1; }
-
-  /* Bottom dashboard row: 14 = Paper Trading, 15 = Trader Level. */
-  #home > .setup:nth-of-type(14) { grid-column: 1 / 7; }
-  #home > .setup:nth-of-type(15) { grid-column: 7 / 13; }
-  #home > .trade-history-card { grid-column: 1 / -1; }
-
-  .quick-actions-grid,
-  .master-grid,
-  .snapshot-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  #home .row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-width: 0 !important;
   }
 
-  .master-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-  .search input { font-size: 15px; }
-
-  /* Other screens use the same wide canvas instead of a 520px-looking column. */
-  #trade,
-  #arcade,
-  #world,
-  #profile {
-    width: 100%;
-    max-width: none;
+  #home .row span,
+  #home .row strong {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
   }
 
-  #trade > .setup,
-  #trade > .section-title,
-  #arcade > .setup,
-  #arcade > .money,
-  #world > .setup,
-  #world > .section-title,
-  #profile > .setup,
-  #profile > .section-title,
-  #profile > .profile-card {
-    min-width: 0;
+  #technicalAnalysisCard .row,
+  #tradeSetupCard .row {
+    padding: 7px 0 !important;
   }
 
-  #trade {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+  #technicalAnalysisCard h3,
+  #tradeSetupCard h3,
+  #tradePlanCard h3 {
+    margin-top: 0 !important;
   }
-  #trade > .section-title { grid-column: 1 / -1; }
-  #trade > .setup:nth-of-type(1) { grid-column: 1 / 7; }
-  #trade > .setup:nth-of-type(2) { grid-column: 7 / 13; }
-  #trade > .market-board-card { grid-column: 1 / -1; }
-  #trade > .setup:nth-of-type(4) { grid-column: 1 / 5; }
-  #trade > .setup:nth-of-type(5) { grid-column: 5 / 9; }
-  #trade > .setup:nth-of-type(6) { grid-column: 9 / 13; }
-  #trade > .setup:nth-of-type(7) { grid-column: 1 / -1; }
-
-  #arcade,
-  #world,
-  #profile {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
-  }
-  #arcade > .section-title,
-  #world > .section-title,
-  #profile > .section-title { grid-column: 1 / -1; }
-  #arcade > *:not(.section-title) { grid-column: span 6; }
-  #world > *:not(.section-title) { grid-column: span 6; }
-  #profile > .profile-card { grid-column: 1 / 5; }
-  #profile > .setup { grid-column: span 4; }
-  #profile > .asset-customizer { grid-column: 1 / -1; }
-
-  .bot-grid,
-  .game-grid,
-  .world-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .asset-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .background-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-
-  .bottom-nav { display: none !important; }
-}
-
-/* Large desktop: give the dashboard more breathing room. */
-@media (min-width: 1200px) {
-  .app { padding-left: 36px; padding-right: 36px; }
-  #home { gap: 16px; }
-  #home > .chart-card #chart { height: 470px; }
-}
-
-/* Tablet / narrow desktop: collapse the 12-column dashboard cleanly. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  #home { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  #home > .quick-actions-home { grid-column: 1 / 3; }
-  #home > .market-snapshot-card { grid-column: 3 / 5; }
-  #home > .master-command-card { grid-column: 5 / 7; }
-  #home > .price-card { grid-column: 1 / 3; }
-  #home > .grid { grid-column: 3 / 7; }
-  #home > .chart-card { grid-column: 1 / -1; }
-  #home > .setup:nth-of-type(9),
-  #home > .setup:nth-of-type(10),
-  #home > .trade-plan-card,
-  #home > .decision { grid-column: 1 / -1; }
 }
 
 
-/* Dedicated navigation screens */
-.dedicated-screen { width:100%; }
-.dedicated-screen > .setup, .dedicated-screen > .money, .dedicated-screen > .profile-card { min-width:0; }
-@media (min-width:768px) {
-  .dedicated-screen { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; align-items:start; }
-  .dedicated-screen > .section-title { grid-column:1 / -1; }
-  .dedicated-screen > section, .dedicated-screen > .setup, .dedicated-screen > .money, .dedicated-screen > .profile-card { grid-column:span 6; margin-bottom:0; }
-  #paper > .trade-history-card, #rank > .asset-customizer { grid-column:1 / -1; }
-  #brokerage > section, #arena > section { grid-column:span 6; }
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+  #home {
+    display: block !important;
+  }
+
+  #home > * {
+    width: 100% !important;
+    margin-bottom: 14px !important;
+  }
+
+  #mainChartCard #chart {
+    height: 340px !important;
+  }
+
+  #homeMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #marketNewsCard .news-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #home > section:has(#riskBar),
+  #home > section:has(#confidenceBar),
+  #home > .bunai-home-card {
+    display: none !important;
+  }
 }

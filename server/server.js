@@ -1,6 +1,10 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config({ path: require("path").join(__dirname, ".env") });
+const path = require("path");
+
+require("dotenv").config({
+  path: path.join(__dirname, ".env")
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,6 +12,7 @@ const API_KEY = process.env.TWELVE_DATA_API_KEY;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "..")));
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -16,7 +21,7 @@ app.get("/api/health", (req, res) => {
             });
             });
 
-            app.get("/api/quote", async (req, res) => {
+            app.get(["/api/quote", "/api/market/price"], async (req, res) => {
               try {
                   const symbol = String(req.query.symbol || "").trim().toUpperCase();
 
@@ -44,7 +49,10 @@ app.get("/api/health", (req, res) => {
                                                                                                                   });
                                                                                                                       }
 
-                                                                                                                          res.json(data);
+                                                                                                                          res.json({
+  ...data,
+  price: data.close
+});
                                                                                                                             } catch (error) {
                                                                                                                                 console.error("Quote error:", error);
                                                                                                                                     res.status(500).json({
@@ -53,7 +61,7 @@ app.get("/api/health", (req, res) => {
                                                                                                                                                 }
                                                                                                                                                 });
 
-                                                                                                                                                app.get("/api/time-series", async (req, res) => {
+                                                                                                                                                app.get("/api/market/time_series", async (req, res) => {
                                                                                                                                                   try {
                                                                                                                                                       const symbol = String(req.query.symbol || "").trim().toUpperCase();
                                                                                                                                                           const interval = String(req.query.interval || "5min").trim();
