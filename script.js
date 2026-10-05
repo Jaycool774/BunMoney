@@ -988,19 +988,9 @@ function loadGameState() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadGameState();
-  startArcadeBank();
   startLivePrice();
   startAlertMonitor();
-  rotateQuote();
-  setInterval(rotateQuote, 15000);
-  updateArcadeBank();
   updateConfidence();
-  updateLevel();
-  updateRank();
-  updateRewards();
-  updateProfile();
-  updateAchievements();
-  restoreBunAssets();
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("arenaStatus", "READY");
