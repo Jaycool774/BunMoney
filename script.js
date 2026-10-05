@@ -9,22 +9,31 @@ const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protoco
 
 // Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
 
-async function marketEngineRequest(endpoint, params = {}) {
+async function marketEngineRequest(endpoint, params = {}, options = {}) {
   const query = new URLSearchParams(params).toString();
+
   if (MARKET_ENGINE_URL) {
-    const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${query}`);
+    const response = await fetch(
+      `${MARKET_ENGINE_URL}${endpoint}?${query}`,
+      options
+    );
     const data = await response.json();
     if (!response.ok || data.status === "error") throw new Error(data.message || "Market engine request failed");
     return data;
   }
   if (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") throw new Error("Market data is not configured. Add a provider key for prototype mode or connect BunMoney Market Engine.");
-  const response = await fetch(`https://api.twelvedata.com${endpoint}?${query}&apikey=${encodeURIComponent(API_KEY)}`);
+   const response = await fetch(
+  `https://api.twelvedata.com${endpoint}?${query}&apikey=${encodeURIComponent(API_KEY)}`,
+  options
+);
   const data = await response.json();
   if (!response.ok || data.status === "error") throw new Error(data.message || "Market data request failed");
   return data;
 }
 
 let selectedTimeframe = "5min";
+let analyzeRequestId = 0;
+let analyzeAbortController = null;
 let chartZoom = 25;
 let arcadeBank = 0;
 let arcadeTimer = null;
@@ -91,13 +100,18 @@ function showScreen(screenName) {
 }
 
 function setTimeframe(timeframe) {
+  if (selectedTimeframe === timeframe) return;
+
   selectedTimeframe = timeframe;
+
   document.querySelectorAll(".timeframes button").forEach(button => {
-    button.classList.remove("active");
-    const buttonTimeframe = button.dataset.timeframe;
-    if (buttonTimeframe === timeframe) button.classList.add("active");
+    button.classList.toggle(
+      "active",
+      button.dataset.timeframe === timeframe
+    );
   });
-  analyze();
+
+  analyze(true);
 }
 
 function calculateSMA(values, period) {
@@ -133,6 +147,16 @@ function calculateRSI(values, period = 14) {
 }
 
 async function analyze(force = false) {
+  const requestId = ++analyzeRequestId;
+
+  // Cancel the previous market request immediately.
+  if (analyzeAbortController) {
+    analyzeAbortController.abort();
+  }
+
+  analyzeAbortController = new AbortController();
+  const signal = analyzeAbortController.signal;
+
   const tickerElement = document.getElementById("ticker");
   if (!tickerElement) return;
   const ticker = tickerElement.value.toUpperCase().trim();
@@ -142,7 +166,12 @@ async function analyze(force = false) {
   setText("reason", "BunAI is analyzing the market...");
   try {
     const interval = selectedTimeframe === "max" ? "1month" : selectedTimeframe;
-    const data = await marketEngineRequest("/time_series", { symbol: ticker, interval, outputsize: 80 });
+   const data = await marketEngineRequest(
+  "/time_series",
+  { symbol: ticker, interval, outputsize: 80 },
+  { signal }
+);
+    if (requestId !== analyzeRequestId) return;
     if (data.status === "error" || !data.values || !data.values.length) {
       if (data.message && data.message.toLowerCase().includes("credits")) {
         throw new Error("Twelve Data credits are exhausted for today.");
@@ -151,13 +180,34 @@ async function analyze(force = false) {
     }
 
     const candles = [...data.values].reverse();
-    const closes = candles.map(c => Number(c.close));
-    const highs = candles.map(c => Number(c.high));
-    const lows = candles.map(c => Number(c.low));
-    const volumes = candles.map(c => Number(c.volume || 0));
-    const currentPrice = closes[closes.length - 1];
-    const previousPrice = closes.length > 1 ? closes[closes.length - 2] : currentPrice;
-    const changePercent = previousPrice === 0 ? 0 : ((currentPrice - previousPrice) / previousPrice) * 100;
+const closes = candles.map(c => Number(c.close));
+const highs = candles.map(c => Number(c.high));
+const lows = candles.map(c => Number(c.low));
+const volumes = candles.map(c => Number(c.volume || 0));
+
+const lastCandlePrice = closes[closes.length - 1];
+let currentPrice = lastCandlePrice;
+
+try {
+  const quote = await marketEngineRequest(
+  "/price",
+  { symbol: ticker },
+  { signal }
+);
+  if (quote.price && Number.isFinite(Number(quote.price))) {
+    currentPrice = Number(quote.price);
+  }
+} catch (quoteError) {
+  console.log("Live quote unavailable; using latest candle close.");
+}
+
+const previousPrice = closes.length > 1
+  ? closes[closes.length - 2]
+  : lastCandlePrice;
+
+const changePercent = previousPrice === 0
+  ? 0
+  : ((currentPrice - previousPrice) / previousPrice) * 100;
 
     const sma10Values = calculateSMA(closes, 10);
     const sma20Values = calculateSMA(closes, 20);
@@ -300,7 +350,10 @@ async function analyze(force = false) {
     } catch (error) {
       console.log("Could not save local analysis.");
     }
-  } catch (error) {
+    } catch (error) {
+    if (error.name === "AbortError") return;
+    if (requestId !== analyzeRequestId) return;
+
     console.error("Market analysis error:", error);
     setText("decision", "MARKET DATA UNAVAILABLE");
     setText("reason", error.message.includes("credits")
@@ -460,41 +513,63 @@ function changeChartZoom(value) {
 }
 
 let livePriceTimer = null;
-function startLivePrice() {
-  if (livePriceTimer) clearInterval(livePriceTimer);
-  livePriceTimer = setInterval(async () => {
-    const tickerElement = document.getElementById("ticker");
-    if (!tickerElement) return;
-    const ticker = tickerElement.value.toUpperCase().trim();
-    if (!ticker) return;
-    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") && !demoMarketEnabled) return;
-    try {
-      const data = await marketEngineRequest("/price", { symbol: ticker });
-      if (data.price && Number.isFinite(Number(data.price))) {
-        const newPrice = Number(data.price);
-        lastLivePrice = newPrice;
-        window.lastLivePrice = newPrice;
-        setText("price", formatMoney(newPrice));
-        setText("paperCurrentPrice", formatMoney(newPrice));
-        updatePaperPL(newPrice);
-        if (window.lastCandles?.length) drawChart(window.lastCandles, window.lastSupport, window.lastResistance, window.lastEntry, window.lastStop, window.lastTarget, window.lastBreakoutIndex, window.lastRetestIndex, window.lastSma10, window.lastSma20);
+async function updateLivePrice() {
+  const tickerElement = document.getElementById("ticker");
+  if (!tickerElement) return;
+
+  const ticker = tickerElement.value.toUpperCase().trim();
+  if (!ticker) return;
+
+  if (
+    !MARKET_ENGINE_URL &&
+    (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") &&
+    !demoMarketEnabled
+  ) {
+    return;
+  }
+
+  try {
+    const data = await marketEngineRequest("/price", { symbol: ticker });
+
+    if (data.price && Number.isFinite(Number(data.price))) {
+      const newPrice = Number(data.price);
+
+      lastLivePrice = newPrice;
+      window.lastLivePrice = newPrice;
+
+      setText("price", formatMoney(newPrice));
+      setText("paperCurrentPrice", formatMoney(newPrice));
+
+      updatePaperPL(newPrice);
+
+      if (window.lastCandles?.length) {
+        drawChart(
+          window.lastCandles,
+          window.lastSupport,
+          window.lastResistance,
+          window.lastEntry,
+          window.lastStop,
+          window.lastTarget,
+          window.lastBreakoutIndex,
+          window.lastRetestIndex,
+          window.lastSma10,
+          window.lastSma20
+        );
       }
-    } catch (error) { console.log("Live price unavailable."); }
-  }, 60000);
+    }
+  } catch (error) {
+    console.log("Live price unavailable.");
+  }
 }
 
-async function askBunAIFromUI() {
-  const input = document.getElementById("bunAiInput");
-  const reply = document.getElementById("bunAiReply");
-  const question = input?.value?.trim();
-  if (!question) { if (reply) reply.textContent = "Type a question first."; return; }
-  if (reply) reply.textContent = "BunAI is thinking…";
-  try {
-    const data = await askBunAI(question, lastAnalysis || {});
-    if (reply) reply.textContent = data.text || "BunAI has no response right now.";
-  } catch (error) {
-    if (reply) reply.textContent = error.message || "BunAI is unavailable right now.";
-  }
+function startLivePrice() {
+  if (livePriceTimer) clearInterval(livePriceTimer);
+
+  // Update immediately.
+  updateLivePrice();
+
+  // Then refresh every 60 seconds.
+  livePriceTimer = setInterval(updateLivePrice, 60000);
 }
 
 async function askBunAI(message, context = {}) {
@@ -1630,22 +1705,13 @@ function demoLivePrice(symbol) {
   return base * (1 + waveA + waveB + drift);
 }
 
-const originalMarketEngineRequest = window.marketEngineRequest || marketEngineRequest;
+const originalMarketEngineRequest =
+  window.marketEngineRequest || marketEngineRequest;
+
 window.marketEngineRequest = async function(endpoint, params = {}) {
-  try {
-    return await originalMarketEngineRequest(endpoint, params);
-  } catch (error) {
-    if (!demoMarketEnabled) throw error;
-    const symbol = String(params.symbol || "SOUN").toUpperCase();
-    if (endpoint === "/time_series") return demoCandles(symbol, params.interval || "5min", Math.min(Number(params.outputsize || 80), 100));
-    if (endpoint === "/price") {
-      return { status: "ok", symbol, price: demoLivePrice(symbol).toFixed(4), demo: true };
-    }
-    throw error;
-  }
+  return await originalMarketEngineRequest(endpoint, params);
 };
 
-/* Replace the analysis request reference so analyze/other callers use the demo fallback. */
 marketEngineRequest = window.marketEngineRequest;
 
 function saveDemoProfile() {
