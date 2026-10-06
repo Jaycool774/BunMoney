@@ -655,6 +655,71 @@ function paperBuy() {
   saveGameState();
 }
 
+function closePaperPosition(price, closeReason = "MANUAL") {
+  if (!position) return;
+
+  if (!Number.isFinite(Number(price))) {
+    setText("reason", "Current market price is unavailable.");
+    return;
+  }
+
+  const exitPrice = Number(price);
+  const percentageMove = (exitPrice - position.entry) / position.entry;
+  const profit = position.amount * percentageMove;
+
+  // Return the position amount plus its realized P/L to available balance.
+  tradingBalance += position.amount + profit;
+
+  tradeHistory.push({
+    side: position.side,
+    symbol: position.symbol || document.getElementById("symbol")?.textContent || "",
+    entry: position.entry,
+    exit: exitPrice,
+    amount: position.amount,
+    profit,
+    reason: closeReason,
+    time: new Date().toLocaleString()
+  });
+
+  position = null;
+
+  setText("tradingBalance", formatMoney(tradingBalance));
+  setText("paperBalance", formatMoney(tradingBalance));
+  setText("position", "NONE");
+  setText("paperCurrentPrice", formatMoney(exitPrice));
+  setText("paperPL", `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`);
+  setText(
+    "paperPLPercent",
+    `${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%`
+  );
+
+  if (closeReason === "STOP LOSS") {
+    setText(
+      "paperPLMessage",
+      `🛑 STOP LOSS — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
+    );
+    setText("reason", "🛑 Paper trade automatically closed at the stop-loss level.");
+  } else if (closeReason === "TAKE PROFIT") {
+    setText(
+      "paperPLMessage",
+      `🎯 TAKE PROFIT — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
+    );
+    setText("reason", "🎯 Paper trade automatically closed at the take-profit level.");
+  } else {
+    setText(
+      "paperPLMessage",
+      `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`
+    );
+    setText(
+      "reason",
+      `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
+    );
+  }
+
+  renderTradeHistory();
+  saveGameState();
+}
+
 function paperSell() {
   if (!position) {
     setText("reason", "There is no open paper position.");
@@ -668,44 +733,7 @@ function paperSell() {
     return;
   }
 
-  const percentageMove = (price - position.entry) / position.entry;
-  const profit = position.amount * percentageMove;
-
-  // Return the position amount plus its realized P/L to available balance.
-  tradingBalance += position.amount + profit;
-
-  tradeHistory.push({
-    side: position.side,
-    symbol: position.symbol || document.getElementById("symbol")?.textContent || "",
-    entry: position.entry,
-    exit: price,
-    amount: position.amount,
-    profit,
-    time: new Date().toLocaleString()
-  });
-
-  position = null;
-
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("paperBalance", formatMoney(tradingBalance));
-  setText("position", "NONE");
-  setText("paperCurrentPrice", formatMoney(price));
-  setText("paperPL", `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`);
-  setText(
-    "paperPLPercent",
-    `${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%`
-  );
-  setText(
-    "paperPLMessage",
-    `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`
-  );
-  setText(
-    "reason",
-    `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
-  );
-
-  renderTradeHistory();
-  saveGameState();
+  closePaperPosition(price, "MANUAL");
 }
 
 function updatePotentialRiskReward() {
@@ -764,22 +792,15 @@ function updatePaperPL(price) {
     `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`
   );
 
-  // Detect whether the simulated price has reached the stored stop or target.
+  // Automatically close at the stored stop-loss price.
   if (Number.isFinite(position.stop) && current <= position.stop) {
-    setText(
-      "paperPLMessage",
-      `🛑 STOP LOSS REACHED — ${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%).`
-    );
-    setText("reason", "🛑 Paper trade has reached its stop-loss level. Review the position before closing.");
+    closePaperPosition(position.stop, "STOP LOSS");
     return;
   }
 
+  // Automatically close at the stored take-profit price.
   if (Number.isFinite(position.target) && current >= position.target) {
-    setText(
-      "paperPLMessage",
-      `🎯 TAKE PROFIT REACHED — ${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%).`
-    );
-    setText("reason", "🎯 Paper trade has reached its take-profit level. Review the position before closing.");
+    closePaperPosition(position.target, "TAKE PROFIT");
     return;
   }
 
