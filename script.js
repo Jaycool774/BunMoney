@@ -636,10 +636,12 @@ function paperBuy() {
 
   tradingBalance -= amount;
 
-  position = {
+    position = {
     side: "LONG",
     entry: price,
     amount,
+    stop: Number.isFinite(Number(window.lastStop)) ? Number(window.lastStop) : null,
+    target: Number.isFinite(Number(window.lastTarget)) ? Number(window.lastTarget) : null,
     symbol: document.getElementById("symbol")?.textContent || ""
   };
 
@@ -737,19 +739,54 @@ function updatePotentialRiskReward() {
 
 function updatePaperPL(price) {
   if (!Number.isFinite(Number(price))) return;
-  setText("paperCurrentPrice", formatMoney(Number(price)));
+
+  const current = Number(price);
+
+  setText("paperCurrentPrice", formatMoney(current));
+
   if (!position) {
     setText("paperPL", "$0.00");
     setText("paperPLPercent", "0.00%");
     setText("paperPLMessage", "No open position.");
     return;
   }
-  const current = Number(price);
+
   const move = (current - position.entry) / position.entry;
   const pl = position.amount * move;
-  setText("paperPL", `${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))}`);
-  setText("paperPLPercent", `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`);
-  setText("paperPLMessage", `${pl >= 0 ? "You're up" : "You're down"} ${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%) right now.`);
+
+  setText(
+    "paperPL",
+    `${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))}`
+  );
+
+  setText(
+    "paperPLPercent",
+    `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`
+  );
+
+  // Detect whether the simulated price has reached the stored stop or target.
+  if (Number.isFinite(position.stop) && current <= position.stop) {
+    setText(
+      "paperPLMessage",
+      `🛑 STOP LOSS REACHED — ${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%).`
+    );
+    setText("reason", "🛑 Paper trade has reached its stop-loss level. Review the position before closing.");
+    return;
+  }
+
+  if (Number.isFinite(position.target) && current >= position.target) {
+    setText(
+      "paperPLMessage",
+      `🎯 TAKE PROFIT REACHED — ${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%).`
+    );
+    setText("reason", "🎯 Paper trade has reached its take-profit level. Review the position before closing.");
+    return;
+  }
+
+  setText(
+    "paperPLMessage",
+    `${pl >= 0 ? "You're up" : "You're down"} ${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%) right now.`
+  );
 }
 
 function updateConfidence() {
