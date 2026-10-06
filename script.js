@@ -599,14 +599,46 @@ function getCurrentPrice() {
 }
 
 function paperBuy() {
-  if (position) { setText("reason", "You already have an open paper position."); return; }
+  if (position) {
+    setText("reason", "You already have an open paper position.");
+    return;
+  }
+
   const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
-  if (!Number.isFinite(price)) { setText("reason", "Analyze a market before opening a paper trade."); return; }
-  position = { side: "LONG", entry: price, amount: tradingBalance, symbol: document.getElementById("symbol")?.textContent || "" };
+
+  if (!Number.isFinite(price)) {
+    setText("reason", "Analyze a market before opening a paper trade.");
+    return;
+  }
+
+  const amountInput = document.getElementById("paperTradeAmount");
+  const amount = Number(amountInput?.value);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setText("reason", "Enter a valid trade amount greater than $0.");
+    return;
+  }
+
+  if (amount > tradingBalance) {
+    setText("reason", `Trade amount cannot exceed your available balance of ${formatMoney(tradingBalance)}.`);
+    return;
+  }
+
+  tradingBalance -= amount;
+
+  position = {
+    side: "LONG",
+    entry: price,
+    amount,
+    symbol: document.getElementById("symbol")?.textContent || ""
+  };
+
+  setText("tradingBalance", formatMoney(tradingBalance));
+  setText("paperBalance", formatMoney(tradingBalance));
   setText("position", `LONG @ ${formatMoney(price)}`);
   setText("paperCurrentPrice", formatMoney(price));
   updatePaperPL(price);
-  setText("reason", "Paper long opened. Bun is tracking your gain/loss as the market moves. 🐰📊");
+  setText("reason", `Paper long opened with ${formatMoney(amount)}. Bun is tracking your gain/loss as the market moves. 🐰📊`);
   mascotReaction("Position opened. Protect the bag. 🐰💰");
   saveGameState();
 }
@@ -618,6 +650,7 @@ function paperSell() {
   }
 
   const price = getCurrentPrice();
+
   if (!Number.isFinite(price)) {
     setText("reason", "Current market price is unavailable.");
     return;
@@ -626,14 +659,15 @@ function paperSell() {
   const percentageMove = (price - position.entry) / position.entry;
   const profit = position.amount * percentageMove;
 
-  // Realize the paper-trading P/L into the simulated balance.
-  tradingBalance += profit;
+  // Return the position amount plus its realized P/L to available balance.
+  tradingBalance += position.amount + profit;
 
   tradeHistory.push({
     side: position.side,
     symbol: position.symbol || document.getElementById("symbol")?.textContent || "",
     entry: position.entry,
     exit: price,
+    amount: position.amount,
     profit,
     time: new Date().toLocaleString()
   });
@@ -641,6 +675,7 @@ function paperSell() {
   position = null;
 
   setText("tradingBalance", formatMoney(tradingBalance));
+  setText("paperBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("paperCurrentPrice", formatMoney(price));
   setText("paperPL", `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`);
