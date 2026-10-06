@@ -261,6 +261,14 @@ const changePercent = previousPrice === 0
     const reward = target - entry;
     const rr = risk > 0 ? reward / risk : 0;
 
+    const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
+    const potentialLoss = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
+      ? tradeAmount * (risk / entry)
+      : null;
+    const potentialProfit = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
+      ? tradeAmount * (reward / entry)
+      : null;
+
     let score = 0;
     if (trend === "BULLISH") score += 2;
     if (trend === "BEARISH") score -= 2;
@@ -312,6 +320,8 @@ const changePercent = previousPrice === 0
     setText("stop", formatMoney(stop));
     setText("target", formatMoney(target));
     setText("rr", rr ? rr.toFixed(2) + ":1" : "—");
+    setText("potentialLoss", potentialLoss !== null ? "-" + formatMoney(potentialLoss) : "—");
+    setText("potentialProfit", potentialProfit !== null ? "+" + formatMoney(potentialProfit) : "—");
     setText("decision", decision);
     setText("reason", reason);
     setText("setupQuality", setupQuality);
@@ -694,6 +704,35 @@ function paperSell() {
 
   renderTradeHistory();
   saveGameState();
+}
+
+function updatePotentialRiskReward() {
+  const entry = Number(window.lastEntry);
+  const stop = Number(window.lastStop);
+  const target = Number(window.lastTarget);
+  const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
+
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(stop) ||
+    !Number.isFinite(target) ||
+    !Number.isFinite(tradeAmount) ||
+    tradeAmount <= 0 ||
+    entry <= 0
+  ) {
+    setText("potentialLoss", "—");
+    setText("potentialProfit", "—");
+    return;
+  }
+
+  const risk = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+
+  const potentialLoss = tradeAmount * (risk / entry);
+  const potentialProfit = tradeAmount * (reward / entry);
+
+  setText("potentialLoss", "-" + formatMoney(potentialLoss));
+  setText("potentialProfit", "+" + formatMoney(potentialProfit));
 }
 
 function updatePaperPL(price) {
@@ -1105,6 +1144,12 @@ function loadGameState() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadGameState();
+
+  const paperTradeAmount = document.getElementById("paperTradeAmount");
+  if (paperTradeAmount) {
+    paperTradeAmount.addEventListener("input", updatePotentialRiskReward);
+  }
+
   startLivePrice();
   startAlertMonitor();
   updateConfidence();
