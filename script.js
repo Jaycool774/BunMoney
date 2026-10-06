@@ -354,7 +354,7 @@ const changePercent = previousPrice === 0
     if (error.name === "AbortError") return;
     if (requestId !== analyzeRequestId) return;
 
-    console.error("Market analysis error:", error);
+    console.error("Market analysis error:", error); 
     setText("decision", "MARKET DATA UNAVAILABLE");
     setText("reason", error.message.includes("credits")
       ? "The market-data provider has reached its current limit. BunMoney will work again when the provider allowance resets."
@@ -590,6 +590,12 @@ function getDisplayedPrice() {
   const text = document.getElementById("price")?.textContent || "";
   const parsed = Number(text.replace(/[$,]/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getCurrentPrice() {
+  return Number.isFinite(lastLivePrice)
+    ? lastLivePrice
+    : getDisplayedPrice();
 }
 
 function paperBuy() {
