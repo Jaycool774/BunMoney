@@ -1051,7 +1051,7 @@ function updateAchievements() {
 }
 function saveGameState() {
   try {
-    localStorage.setItem("bunmoney_state", JSON.stringify({ tradingBalance, tradeHistory, rewardPoints, arcadeBank, activeBot }));
+    localStorage.setItem("bunmoney_state", JSON.stringify({ tradingBalance, tradeHistory, position, rewardPoints, arcadeBank, activeBot }));
   } catch (error) { console.log("Could not save BunMoney state."); }
 }
 function loadGameState() {
@@ -1061,6 +1061,7 @@ function loadGameState() {
     const state = JSON.parse(saved);
     if (Number.isFinite(Number(state.tradingBalance))) tradingBalance = Number(state.tradingBalance);
     if (Array.isArray(state.tradeHistory)) tradeHistory = state.tradeHistory;
+    if (state.position && typeof state.position === "object") position = state.position;
     if (Number.isFinite(Number(state.rewardPoints))) rewardPoints = Number(state.rewardPoints);
     if (Number.isFinite(Number(state.arcadeBank))) arcadeBank = Number(state.arcadeBank);
     if (state.activeBot) activeBot = state.activeBot;
@@ -1073,7 +1074,12 @@ document.addEventListener("DOMContentLoaded", () => {
   startAlertMonitor();
   updateConfidence();
   setText("tradingBalance", formatMoney(tradingBalance));
-  setText("position", "NONE");
+  setText(
+  "position",
+  position
+    ? `${position.side} @ ${formatMoney(position.entry)}`
+    : "NONE"
+);
   setText("arenaStatus", "READY");
   mascotReaction("Protect the bag. 🥕💰");
   const savedMascot = localStorage.getItem("bunmoney_mascot");
