@@ -232,25 +232,41 @@ const changePercent = previousPrice === 0
     }
 
     let breakout = "NO CONFIRMATION";
-    let breakoutIndex = null;
-    if (candles.length >= 21) {
-      const priorResistance = Math.max(...highs.slice(-21, -1));
-      if (currentPrice > priorResistance) {
-        breakout = "POSSIBLE BREAKOUT";
-        breakoutIndex = candles.length - 1;
-      }
-    }
+let breakoutIndex = null;
+let breakoutDirection = null;
 
-    let retest = "WAITING";
-    let retestIndex = null;
-    if (breakoutIndex !== null) {
-      const distance = Math.abs(currentPrice - resistance);
-      const tolerance = currentPrice * 0.01;
-      if (distance <= tolerance) {
-        retest = "RETEST AREA";
-        retestIndex = candles.length - 1;
-      }
-    }
+if (candles.length >= 21) {
+  const priorResistance = Math.max(...highs.slice(-21, -1));
+  const priorSupport = Math.min(...lows.slice(-21, -1));
+
+  if (currentPrice > priorResistance) {
+    breakout = "POSSIBLE BREAKOUT";
+    breakoutIndex = candles.length - 1;
+    breakoutDirection = "BULLISH";
+  } else if (currentPrice < priorSupport) {
+    breakout = "POSSIBLE BREAKDOWN";
+    breakoutIndex = candles.length - 1;
+    breakoutDirection = "BEARISH";
+  }
+}
+
+let retest = "WAITING";
+let retestIndex = null;
+
+if (breakoutIndex !== null) {
+  const referenceLevel =
+  breakoutDirection === "BEARISH"
+    ? priorSupport
+    : priorResistance;
+
+  const distance = Math.abs(currentPrice - referenceLevel);
+  const tolerance = currentPrice * 0.01;
+
+  if (distance <= tolerance) {
+    retest = "RETEST AREA";
+    retestIndex = candles.length - 1;
+  }
+}
 
     let entry = currentPrice;
 let stop;
@@ -301,15 +317,37 @@ const rr = risk > 0 ? reward / risk : 0;
       : null;
 
     let score = 0;
-    if (trend === "BULLISH") score += 2;
-    if (trend === "BEARISH") score -= 2;
-    if (Number.isFinite(rsi) && rsi > 50 && rsi < 70) score += 1;
-    if (Number.isFinite(rsi) && rsi < 30) score += 1;
-    if (Number.isFinite(rsi) && rsi > 75) score -= 1;
-    if (volumeRatio >= 1.5) score += 1;
-    if (breakout === "POSSIBLE BREAKOUT") score += 2;
-    if (retest === "RETEST AREA") score += 2;
-    if (rr >= 2) score += 1;
+
+// Trend
+if (trend === "BULLISH") score += 2;
+if (trend === "BEARISH") score -= 2;
+
+// RSI
+if (Number.isFinite(rsi)) {
+  if (rsi > 50 && rsi < 70) score += 1;
+  if (rsi >= 70 && rsi <= 75) score -= 1;
+  if (rsi < 30) score += 1;
+  if (rsi >= 30 && rsi < 50) score -= 1;
+  if (rsi > 75) score -= 2;
+}
+
+// Volume confirms the existing trend instead of automatically favoring LONG.
+if (volumeRatio >= 1.5) {
+  if (trend === "BULLISH") score += 1;
+  if (trend === "BEARISH") score -= 1;
+}
+
+// Breakout/retest currently represent bullish moves above resistance.
+if (breakout === "POSSIBLE BREAKOUT") score += 2;
+if (breakout === "POSSIBLE BREAKDOWN") score -= 2;
+
+if (retest === "RETEST AREA") {
+  if (breakoutDirection === "BULLISH") score += 2;
+  if (breakoutDirection === "BEARISH") score -= 2;
+}
+
+// Reward-to-risk bonus.
+if (rr >= 2) score += 1;
 
     let decision = "WAIT";
     if (score >= 5) decision = "WATCH FOR LONG";
