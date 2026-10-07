@@ -391,8 +391,11 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   const visible = candles.slice(start);
   const highs = visible.map(c => Number(c.high));
   const lows = visible.map(c => Number(c.low));
-  const maxPrice = Math.max(...highs, resistance, target);
-  const minPrice = Math.min(...lows, support, stop);
+  const chartRangeStop = position?.stop ?? stop;
+const chartRangeTarget = position?.target ?? target;
+
+const maxPrice = Math.max(...highs, resistance, chartRangeStop, chartRangeTarget);
+const minPrice = Math.min(...lows, support, chartRangeStop, chartRangeTarget);
   const padding = 22;
   const range = maxPrice - minPrice || 1;
 
@@ -453,10 +456,35 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   ctx.fillRect(20, resistanceTop, width - 40, resistanceBottom - resistanceTop);
 
   drawLevel(ctx, width, yPosition(support), "rgba(34,197,94,.75)", "SUPPORT");
-  drawLevel(ctx, width, yPosition(resistance), "rgba(239,68,68,.75)", "RESISTANCE");
-  drawLevel(ctx, width, yPosition(entry), "rgba(255,255,255,.75)", "ENTRY");
-  drawLevel(ctx, width, yPosition(stop), "rgba(239,68,68,.9)", "STOP");
-  drawLevel(ctx, width, yPosition(target), "rgba(132,204,22,.9)", "TARGET");
+ const activePosition = window.position || position;
+const chartEntry = position?.entry ?? entry;
+const chartStop = position?.stop ?? stop;
+const chartTarget = position?.target ?? target;
+const chartSide = position?.side || "PLAN";
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartEntry),
+  "rgba(255,255,255,.75)",
+  chartSide === "PLAN" ? "ENTRY" : `${chartSide} ENTRY`
+);
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartStop),
+  "rgba(239,68,68,.9)",
+  chartSide === "PLAN" ? "STOP" : `${chartSide} STOP`
+);
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartTarget),
+  "rgba(132,204,22,.9)",
+  chartSide === "PLAN" ? "TARGET" : `${chartSide} TARGET`
+);
 
   const currentPrice = Number(window.lastLivePrice);
   if (Number.isFinite(currentPrice) && currentPrice >= minPrice && currentPrice <= maxPrice) {
@@ -706,6 +734,17 @@ function closePaperPosition(price, closeReason = "MANUAL") {
   const closedSide = position.side;
 
   position = null;
+  
+  if (window.lastCandles?.length) {
+  drawChart(
+    window.lastCandles,
+    window.lastSupport,
+    window.lastResistance,
+    window.lastEntry,
+    window.lastStop,
+    window.lastTarget
+  );
+}
 
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("paperBalance", formatMoney(tradingBalance));
