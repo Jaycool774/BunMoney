@@ -609,9 +609,25 @@ function getCurrentPrice() {
 }
 
 function paperBuy() {
+  // If a SHORT is open, BUY closes it.
   if (position) {
-    setText("reason", "You already have an open paper position.");
-    return;
+    if (position.side === "SHORT") {
+      const price = getCurrentPrice();
+
+      if (!Number.isFinite(price)) {
+        setText("reason", "Current market price is unavailable.");
+        return;
+      }
+
+      closePaperPosition(price, "MANUAL");
+      return;
+    }
+
+    // Don't allow stacking another LONG.
+    if (position.side === "LONG") {
+      setText("reason", "You already have an open LONG position.");
+      return;
+    }
   }
 
   const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
@@ -664,7 +680,13 @@ function closePaperPosition(price, closeReason = "MANUAL") {
   }
 
   const exitPrice = Number(price);
-  const percentageMove = (exitPrice - position.entry) / position.entry;
+
+  // LONG profits when price rises.
+  // SHORT profits when price falls.
+  const direction = position.side === "SHORT" ? -1 : 1;
+  const percentageMove =
+    ((exitPrice - position.entry) / position.entry) * direction;
+
   const profit = position.amount * percentageMove;
 
   // Return the position amount plus its realized P/L to available balance.
@@ -681,13 +703,20 @@ function closePaperPosition(price, closeReason = "MANUAL") {
     time: new Date().toLocaleString()
   });
 
+  const closedSide = position.side;
+
   position = null;
 
   setText("tradingBalance", formatMoney(tradingBalance));
   setText("paperBalance", formatMoney(tradingBalance));
   setText("position", "NONE");
   setText("paperCurrentPrice", formatMoney(exitPrice));
-  setText("paperPL", `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`);
+
+  setText(
+    "paperPL",
+    `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`
+  );
+
   setText(
     "paperPLPercent",
     `${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%`
@@ -698,21 +727,32 @@ function closePaperPosition(price, closeReason = "MANUAL") {
       "paperPLMessage",
       `🛑 STOP LOSS — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
     );
-    setText("reason", "🛑 Paper trade automatically closed at the stop-loss level.");
+
+    setText(
+      "reason",
+      `🛑 ${closedSide} paper trade automatically closed at the stop-loss level.`
+    );
+
   } else if (closeReason === "TAKE PROFIT") {
     setText(
       "paperPLMessage",
       `🎯 TAKE PROFIT — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
     );
-    setText("reason", "🎯 Paper trade automatically closed at the take-profit level.");
+
+    setText(
+      "reason",
+      `🎯 ${closedSide} paper trade automatically closed at the take-profit level.`
+    );
+
   } else {
     setText(
       "paperPLMessage",
       `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`
     );
+
     setText(
       "reason",
-      `Paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
+      `${closedSide} paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
     );
   }
 
@@ -721,19 +761,91 @@ function closePaperPosition(price, closeReason = "MANUAL") {
 }
 
 function paperSell() {
-  if (!position) {
-    setText("reason", "There is no open paper position.");
-    return;
+  // If a LONG is open, SELL closes it.
+  if (position) {
+    if (position.side === "LONG") {
+      const price = getCurrentPrice();
+
+      if (!Number.isFinite(price)) {
+        setText("reason", "Current market price is unavailable.");
+        return;
+      }
+
+      closePaperPosition(price, "MANUAL");
+      return;
+    }
+
+    // Don't allow stacking another SHORT.
+    if (position.side === "SHORT") {
+      setText("reason", "You already have an open SHORT position.");
+      return;
+    }
   }
 
   const price = getCurrentPrice();
 
   if (!Number.isFinite(price)) {
-    setText("reason", "Current market price is unavailable.");
+    setText("reason", "Analyze a market before opening a paper trade.");
     return;
   }
 
-  closePaperPosition(price, "MANUAL");
+  const amountInput = document.getElementById("paperTradeAmount");
+  const amount = Number(amountInput?.value);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setText("reason", "Enter a valid trade amount greater than $0.");
+    return;
+  }
+
+  if (amount > tradingBalance) {
+    setText(
+      "reason",
+      `Trade amount cannot exceed your available balance of ${formatMoney(tradingBalance)}.`
+    );
+    return;
+  }
+
+  tradingBalance -= amount;
+
+  const analysisStop = Number(window.lastStop);
+const analysisTarget = Number(window.lastTarget);
+
+let shortStop = null;
+let shortTarget = null;
+
+if (
+  Number.isFinite(analysisStop) &&
+  Number.isFinite(analysisTarget)
+) {
+  // Mirror the LONG levels for a SHORT.
+  shortStop = analysisTarget;
+  shortTarget = analysisStop;
+}
+
+position = {
+  side: "SHORT",
+  entry: price,
+  amount,
+  stop: shortStop,
+  target: shortTarget,
+  symbol: document.getElementById("symbol")?.textContent || ""
+};
+
+  setText("tradingBalance", formatMoney(tradingBalance));
+  setText("paperBalance", formatMoney(tradingBalance));
+  setText("position", `SHORT @ ${formatMoney(price)}`);
+  setText("paperCurrentPrice", formatMoney(price));
+
+  updatePaperPL(price);
+
+  setText(
+    "reason",
+    `Paper short opened with ${formatMoney(amount)}. Bun is tracking your gain/loss as the market moves. 🐰📉`
+  );
+
+  mascotReaction("Short position opened. Watch the downside. 🐰📉");
+
+  saveGameState();
 }
 
 function updatePotentialRiskReward() {
@@ -779,7 +891,8 @@ function updatePaperPL(price) {
     return;
   }
 
-  const move = (current - position.entry) / position.entry;
+  const direction = position.side === "SHORT" ? -1 : 1;
+  const move = ((current - position.entry) / position.entry) * direction;
   const pl = position.amount * move;
 
   setText(
@@ -792,14 +905,24 @@ function updatePaperPL(price) {
     `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`
   );
 
-  // Automatically close at the stored stop-loss price.
-  if (Number.isFinite(position.stop) && current <= position.stop) {
+  // LONG: stop below entry, target above entry.
+  // SHORT: stop above entry, target below entry.
+  const hitStop = Number.isFinite(position.stop) &&
+    (position.side === "SHORT"
+      ? current >= position.stop
+      : current <= position.stop);
+
+  const hitTarget = Number.isFinite(position.target) &&
+    (position.side === "SHORT"
+      ? current <= position.target
+      : current >= position.target);
+
+  if (hitStop) {
     closePaperPosition(position.stop, "STOP LOSS");
     return;
   }
 
-  // Automatically close at the stored take-profit price.
-  if (Number.isFinite(position.target) && current >= position.target) {
+  if (hitTarget) {
     closePaperPosition(position.target, "TAKE PROFIT");
     return;
   }
