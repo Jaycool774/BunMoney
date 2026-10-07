@@ -253,13 +253,44 @@ const changePercent = previousPrice === 0
     }
 
     let entry = currentPrice;
-    let stop = Math.min(support, currentPrice * 0.98);
-    let target = Math.max(resistance, currentPrice * 1.04);
-    if (target <= entry) target = entry * 1.03;
-    if (stop >= entry) stop = entry * 0.98;
-    const risk = entry - stop;
-    const reward = target - entry;
-    const rr = risk > 0 ? reward / risk : 0;
+let stop;
+let target;
+
+// Build the direction from the market conditions first.
+const preliminaryLong =
+  trend === "BULLISH" ||
+  breakout === "POSSIBLE BREAKOUT" ||
+  retest === "RETEST AREA";
+
+const preliminaryShort =
+  trend === "BEARISH" &&
+  !preliminaryLong;
+
+if (preliminaryShort) {
+  // SHORT: stop above entry, target below entry.
+  stop = Math.max(resistance, currentPrice * 1.02);
+  target = Math.min(support, currentPrice * 0.96);
+
+  if (stop <= entry) stop = entry * 1.02;
+  if (target >= entry) target = entry * 0.96;
+} else {
+  // LONG: stop below entry, target above entry.
+  stop = Math.min(support, currentPrice * 0.98);
+  target = Math.max(resistance, currentPrice * 1.04);
+
+  if (target <= entry) target = entry * 1.03;
+  if (stop >= entry) stop = entry * 0.98;
+}
+
+const risk = preliminaryShort
+  ? stop - entry
+  : entry - stop;
+
+const reward = preliminaryShort
+  ? entry - target
+  : target - entry;
+
+const rr = risk > 0 ? reward / risk : 0;
 
     const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
     const potentialLoss = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
@@ -734,7 +765,7 @@ function closePaperPosition(price, closeReason = "MANUAL") {
   const closedSide = position.side;
 
   position = null;
-  
+
   if (window.lastCandles?.length) {
   drawChart(
     window.lastCandles,
@@ -1678,64 +1709,54 @@ function updateTradeReadiness() {
 
 
 function updateTradePlan() {
-  const status = document.getElementById("tradePlanStatus");
   const direction = document.getElementById("tradePlanDirection");
   const entry = document.getElementById("tradePlanEntry");
   const stop = document.getElementById("tradePlanStop");
   const target = document.getElementById("tradePlanTarget");
-  const confirmation = document.getElementById("planConfirmation");
-  const reward = document.getElementById("planReward");
   const note = document.getElementById("tradePlanNote");
-  if (![status,direction,entry,stop,target,confirmation,reward,note].every(Boolean)) return;
 
-  [status, direction, confirmation, reward].forEach(el => el.classList.remove("good","bad","warn","neutral"));
-  confirmation.classList.remove("ready","caution","blocked");
-  reward.classList.remove("ready","caution","blocked");
+  if (![direction, entry, stop, target, note].every(Boolean)) return;
 
   if (!lastAnalysis) {
-    status.textContent = "WAIT"; status.classList.add("neutral");
-    direction.textContent = "—"; entry.textContent = "—"; stop.textContent = "—"; target.textContent = "—";
-    confirmation.querySelector("span").textContent = "•";
-    confirmation.querySelector("small").textContent = "Waiting for analysis";
-    reward.querySelector("span").textContent = "•";
-    reward.querySelector("small").textContent = "Waiting for setup";
+    direction.textContent = "—";
+    entry.textContent = "—";
+    stop.textContent = "—";
+    target.textContent = "—";
     note.textContent = "Analyze a market to build a trade plan.";
     return;
   }
 
   const a = lastAnalysis;
+
   const long = String(a.decision || "").includes("LONG");
   const short = String(a.decision || "").includes("SHORT");
-  const confirmed = (a.breakout === "POSSIBLE BREAKOUT" || a.retest === "RETEST AREA") && Number(a.volumeRatio) >= 1.05;
-  const rrGood = Number.isFinite(Number(a.rr)) && Number(a.rr) >= 2;
 
-  direction.textContent = long ? "LONG WATCH" : short ? "SHORT WATCH" : "NO DIRECTION";
-  direction.classList.add(long ? "good" : short ? "bad" : "warn");
+  const confirmed =
+    (a.breakout === "POSSIBLE BREAKOUT" ||
+      a.retest === "RETEST AREA") &&
+    Number(a.volumeRatio) >= 1.05;
+
+  const rrGood =
+    Number.isFinite(Number(a.rr)) &&
+    Number(a.rr) >= 2;
+
+  direction.textContent = long
+    ? "LONG WATCH"
+    : short
+      ? "SHORT WATCH"
+      : "NO DIRECTION";
+
   entry.textContent = formatMoney(a.entry);
   stop.textContent = formatMoney(a.stop);
   target.textContent = formatMoney(a.target);
 
   const ready = (long || short) && confirmed && rrGood;
   const watch = (long || short) || confirmed;
-  status.textContent = ready ? "READY TO WATCH" : watch ? "WATCH" : "WAIT";
-  status.classList.add(ready ? "good" : watch ? "warn" : "neutral");
-
-  confirmation.classList.add(confirmed ? "ready" : "caution");
-  confirmation.querySelector("span").textContent = confirmed ? "✓" : "!";
-  confirmation.querySelector("small").textContent = confirmed
-    ? "Price action and volume are giving confirmation."
-    : "Wait for price action and volume to confirm.";
-
-  reward.classList.add(rrGood ? "ready" : "caution");
-  reward.querySelector("span").textContent = rrGood ? "✓" : "!";
-  reward.querySelector("small").textContent = rrGood
-    ? `${Number(a.rr).toFixed(2)}:1 reward-to-risk.`
-    : "Reward-to-risk is below the preferred 2:1 threshold.";
 
   note.textContent = ready
-    ? "Setup has multiple confirmations. Still wait for your own entry trigger before acting."
+    ? `Setup has confirmation and ${Number(a.rr).toFixed(2)}:1 reward-to-risk. Still wait for your own entry trigger before acting.`
     : watch
-      ? "A setup may be forming. Do not chase; wait for confirmation."
+      ? "A setup may be forming. Wait for confirmation and do not chase."
       : "No clean setup yet. Patience is part of the strategy.";
 }
 
