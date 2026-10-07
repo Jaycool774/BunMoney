@@ -333,15 +333,29 @@ if (trend === "BEARISH") signalFactors.trend = -2;
 
 // RSI
 if (Number.isFinite(rsi)) {
-  if (rsi > 50 && rsi < 70) signalFactors.rsi = 1;
-  if (rsi >= 70 && rsi <= 75) signalFactors.rsi = -1;
-  if (rsi < 30) signalFactors.rsi = 1;
-  if (rsi >= 30 && rsi < 50) signalFactors.rsi = -1;
-  if (rsi > 75) signalFactors.rsi = -2;
+  if (trend === "BULLISH") {
+    if (rsi > 50 && rsi < 70) signalFactors.rsi = 1;
+    if (rsi >= 70 && rsi <= 75) signalFactors.rsi = -1;
+    if (rsi > 75) signalFactors.rsi = -2;
+    if (rsi < 30) signalFactors.rsi = 1;
+  }
+
+  if (trend === "BEARISH") {
+    if (rsi >= 30 && rsi < 50) signalFactors.rsi = -1;
+    if (rsi < 30 && rsi >= 25) signalFactors.rsi = 1;
+    if (rsi < 25) signalFactors.rsi = 2;
+    if (rsi >= 70) signalFactors.rsi = -1;
+  }
 }
 
-// Volume confirms the existing trend.
-if (volumeRatio >= 1.5) {
+// Volume strength confirms the existing trend.
+if (volumeRatio >= 3) {
+  if (trend === "BULLISH") signalFactors.volume = 3;
+  if (trend === "BEARISH") signalFactors.volume = -3;
+} else if (volumeRatio >= 2) {
+  if (trend === "BULLISH") signalFactors.volume = 2;
+  if (trend === "BEARISH") signalFactors.volume = -2;
+} else if (volumeRatio >= 1.5) {
   if (trend === "BULLISH") signalFactors.volume = 1;
   if (trend === "BEARISH") signalFactors.volume = -1;
 }
@@ -374,13 +388,45 @@ score =
   signalFactors.retest +
   signalFactors.riskReward;
 
-    let decision = "WAIT";
-    if (score >= 5) decision = "WATCH FOR LONG";
-    else if (score <= -3) decision = "WATCH FOR SHORT";
+    // Directional confirmation gate.
+// A strong score alone is not enough; price must confirm the direction.
+const longConfirmed =
+  trend === "BULLISH" &&
+  (
+    breakout === "POSSIBLE BREAKOUT" ||
+    (retest === "RETEST AREA" && breakoutDirection === "BULLISH")
+  );
 
-    let setupQuality = "LOW";
-    if (score >= 2) setupQuality = "MODERATE";
-    if (score >= 5) setupQuality = "HIGH";
+const shortConfirmed =
+  trend === "BEARISH" &&
+  (
+    breakout === "POSSIBLE BREAKDOWN" ||
+    (retest === "RETEST AREA" && breakoutDirection === "BEARISH")
+  );
+
+let decision = "WAIT";
+
+if (longConfirmed && score >= 5) {
+  decision = "WATCH FOR LONG";
+} else if (shortConfirmed && score <= -3) {
+  decision = "WATCH FOR SHORT";
+}
+
+let setupQuality = "LOW";
+
+if (
+  (longConfirmed && score >= 3) ||
+  (shortConfirmed && score <= -3)
+) {
+  setupQuality = "MODERATE";
+}
+
+if (
+  (longConfirmed && score >= 5) ||
+  (shortConfirmed && score <= -5)
+) {
+  setupQuality = "HIGH";
+}
 
     let outlook = "Market conditions are mixed.";
     if (trend === "BULLISH") outlook = "Momentum currently favors buyers.";
