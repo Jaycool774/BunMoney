@@ -318,36 +318,61 @@ const rr = risk > 0 ? reward / risk : 0;
 
     let score = 0;
 
+const signalFactors = {
+  trend: 0,
+  rsi: 0,
+  volume: 0,
+  breakout: 0,
+  retest: 0,
+  riskReward: 0
+};
+
 // Trend
-if (trend === "BULLISH") score += 2;
-if (trend === "BEARISH") score -= 2;
+if (trend === "BULLISH") signalFactors.trend = 2;
+if (trend === "BEARISH") signalFactors.trend = -2;
 
 // RSI
 if (Number.isFinite(rsi)) {
-  if (rsi > 50 && rsi < 70) score += 1;
-  if (rsi >= 70 && rsi <= 75) score -= 1;
-  if (rsi < 30) score += 1;
-  if (rsi >= 30 && rsi < 50) score -= 1;
-  if (rsi > 75) score -= 2;
+  if (rsi > 50 && rsi < 70) signalFactors.rsi = 1;
+  if (rsi >= 70 && rsi <= 75) signalFactors.rsi = -1;
+  if (rsi < 30) signalFactors.rsi = 1;
+  if (rsi >= 30 && rsi < 50) signalFactors.rsi = -1;
+  if (rsi > 75) signalFactors.rsi = -2;
 }
 
-// Volume confirms the existing trend instead of automatically favoring LONG.
+// Volume confirms the existing trend.
 if (volumeRatio >= 1.5) {
-  if (trend === "BULLISH") score += 1;
-  if (trend === "BEARISH") score -= 1;
+  if (trend === "BULLISH") signalFactors.volume = 1;
+  if (trend === "BEARISH") signalFactors.volume = -1;
 }
 
-// Breakout/retest currently represent bullish moves above resistance.
-if (breakout === "POSSIBLE BREAKOUT") score += 2;
-if (breakout === "POSSIBLE BREAKDOWN") score -= 2;
+// Breakout / breakdown.
+if (breakout === "POSSIBLE BREAKOUT") {
+  signalFactors.breakout = 2;
+}
 
+if (breakout === "POSSIBLE BREAKDOWN") {
+  signalFactors.breakout = -2;
+}
+
+// Retest.
 if (retest === "RETEST AREA") {
-  if (breakoutDirection === "BULLISH") score += 2;
-  if (breakoutDirection === "BEARISH") score -= 2;
+  if (breakoutDirection === "BULLISH") signalFactors.retest = 2;
+  if (breakoutDirection === "BEARISH") signalFactors.retest = -2;
 }
 
-// Reward-to-risk bonus.
-if (rr >= 2) score += 1;
+// Reward-to-risk.
+if (rr >= 2) {
+  signalFactors.riskReward = 1;
+}
+
+score =
+  signalFactors.trend +
+  signalFactors.rsi +
+  signalFactors.volume +
+  signalFactors.breakout +
+  signalFactors.retest +
+  signalFactors.riskReward;
 
     let decision = "WAIT";
     if (score >= 5) decision = "WATCH FOR LONG";
@@ -404,8 +429,31 @@ if (rr >= 2) score += 1;
       else decisionElement.classList.add("wait");
     }
 
-    lastAnalysis = { ticker, currentPrice, changePercent, trend, support, resistance, rsi, sma10, sma20, volumeRatio, breakout, retest, entry, stop, target, rr, score, decision, setupQuality, outlook, timestamp: Date.now() };
-    lastMarketDataTime = Date.now();
+    lastAnalysis = {
+  ticker,
+  currentPrice,
+  changePercent,
+  trend,
+  support,
+  resistance,
+  rsi,
+  sma10,
+  sma20,
+  volumeRatio,
+  breakout,
+  breakoutDirection,
+  retest,
+  entry,
+  stop,
+  target,
+  rr,
+  score,
+  signalFactors,
+  decision,
+  setupQuality,
+  outlook,
+  timestamp: Date.now()
+};
 
     window.lastCandles = candles;
     window.lastSupport = support;
@@ -1748,14 +1796,16 @@ function updateTradeReadiness() {
 
 function updateTradePlan() {
   const direction = document.getElementById("tradePlanDirection");
+  const score = document.getElementById("tradePlanScore");
   const entry = document.getElementById("tradePlanEntry");
   const stop = document.getElementById("tradePlanStop");
   const target = document.getElementById("tradePlanTarget");
   const note = document.getElementById("tradePlanNote");
 
-  if (![direction, entry, stop, target, note].every(Boolean)) return;
+  if (![direction, score, entry, stop, target, note].every(Boolean)) return;
 
   if (!lastAnalysis) {
+    score.textContent = "—";
     direction.textContent = "—";
     entry.textContent = "—";
     stop.textContent = "—";
@@ -1766,6 +1816,7 @@ function updateTradePlan() {
 
   const a = lastAnalysis;
 
+score.textContent = `${a.score > 0 ? "+" : ""}${a.score}`;
   const long = String(a.decision || "").includes("LONG");
   const short = String(a.decision || "").includes("SHORT");
 
