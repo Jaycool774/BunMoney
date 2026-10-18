@@ -9,7 +9,9 @@
 
 <body>
 
-  <main id="home" class="screen active">
+  <div class="app">
+<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">Trading core</button></nav>
+<main id="home" class="screen active">
 
     <header class="app-header">
       <div>
@@ -26,13 +28,24 @@
       <input
         id="ticker"
         type="text"
+        maxlength="30"
+        aria-label="Market symbol"
         value="SOUN"
         placeholder="Enter ticker"
         autocomplete="off"
       >
-      <button onclick="analyze()">ANALYZE</button>
+      <button data-action="analyze">ANALYZE</button>
     </section>
 
+    <section class="setup connection-settings">
+      <p id="feedStatus" role="status" aria-live="polite">REST polling; Coinbase streaming for BTC/USD, ETH/USD and SOL/USD.</p>
+      <button id="demoMarketButton" data-action="toggleDemoMarket">Demo Market: OFF</button>
+      <details><summary>Private engine access</summary>
+        <label for="engineToken">Engine access token (only if configured)</label>
+        <input id="engineToken" type="password" autocomplete="off">
+        <button data-action="unlockMarketEngine">Unlock</button>
+      </details>
+    </section>
     <!-- PRICE -->
     <section class="price-card home-price-card" id="homePriceCard">
       <h2 id="symbol">SOUN</h2>
@@ -69,15 +82,15 @@
       <div class="chart-tools-row">
         <div class="timeframes chart-timeframes">
 
-          <button data-timeframe="1min" onclick="setTimeframe('1min')">1m</button>
-          <button class="active" data-timeframe="5min" onclick="setTimeframe('5min')">5m</button>
-          <button data-timeframe="15min" onclick="setTimeframe('15min')">15m</button>
-          <button data-timeframe="1h" onclick="setTimeframe('1h')">1H</button>
-          <button data-timeframe="4h" onclick="setTimeframe('4h')">4H</button>
-          <button data-timeframe="1day" onclick="setTimeframe('1day')">1D</button>
-          <button data-timeframe="1week" onclick="setTimeframe('1week')">1W</button>
-          <button data-timeframe="1month" onclick="setTimeframe('1month')">1M</button>
-          <button data-timeframe="max" onclick="setTimeframe('max')">MAX</button>
+          <button data-timeframe="1min" data-action="setTimeframe">1m</button>
+          <button class="active" data-timeframe="5min" data-action="setTimeframe">5m</button>
+          <button data-timeframe="15min" data-action="setTimeframe">15m</button>
+          <button data-timeframe="1h" data-action="setTimeframe">1H</button>
+          <button data-timeframe="4h" data-action="setTimeframe">4H</button>
+          <button data-timeframe="1day" data-action="setTimeframe">1D</button>
+          <button data-timeframe="1week" data-action="setTimeframe">1W</button>
+          <button data-timeframe="1month" data-action="setTimeframe">1M</button>
+          <button data-timeframe="max" data-action="setTimeframe">History (up to 5,000 bars)</button>
 
         </div>
       </div>
@@ -95,7 +108,7 @@
           min="10"
           max="80"
           value="25"
-          oninput="changeChartZoom(this.value)"
+
         >
 
         <span id="zoomValue">25</span>
@@ -176,12 +189,12 @@
 </div>
 
 <div class="row">
-  <span>Potential Loss</span>
+  <span>Estimated Loss (with costs)</span>
   <strong id="potentialLoss">—</strong>
 </div>
 
 <div class="row">
-  <span>Potential Profit</span>
+  <span>Estimated Profit (with costs)</span>
   <strong id="potentialProfit">—</strong>
 </div>
 
@@ -231,6 +244,9 @@
     <section class="setup paper-trading-card">
 
       <h3>Paper Trading</h3>
+      <p class="simulator-note">Practice only. BUY opens LONG or closes SHORT; SELL opens SHORT or closes LONG.
+      Fees: 0.10% per side. Slippage: 0.05% per fill. Stops execute at the next observed price and can gap.
+      Keep this browser open for exits. Extreme SHORT losses can leave a negative paper balance.</p>
 
       <div class="row">
   <span>Balance</span>
@@ -263,8 +279,8 @@
       </div>
 
       <div class="trade-buttons">
-        <button class="buy-button" onclick="paperBuy()">BUY</button>
-        <button class="sell-button" onclick="paperSell()">SELL</button>
+        <button class="buy-button" data-action="paperBuy">BUY</button>
+        <button class="sell-button" data-action="paperSell">SELL</button>
       </div>
 
       <p id="reason"></p>
@@ -280,7 +296,7 @@
           <p>Your closed practice trades.</p>
         </div>
 
-        <button class="mini-btn" onclick="exportPaperTrades()">
+        <button class="mini-btn" data-action="exportPaperTrades">
           Export
         </button>
       </div>
@@ -295,6 +311,18 @@
 
   </main>
 
+  <section class="setup" aria-label="Data and tools">
+    <h3>Watchlist scanner (first 10 favorites)</h3><button data-action="scanMarket">Scan watchlist</button><div id="scanner"></div>
+    <h3>Analysis alerts</h3><div id="alerts"></div>
+    <h3>Local data</h3>
+    <button data-action="exportBunMoneyData">Export backup</button>
+    <button data-action="importBunMoneyData">Import backup</button>
+    <button data-action="clearLocalProgress">Reset local data</button>
+    <p>Backups contain editable practice data, never brokerage credentials. AI, live news, brokerage orders and multiplayer are not connected.</p>
+  </section>
+  </div>
+  <script src="trading-core.js"></script>
+  <script src="coinbase-feed.js"></script>
   <script src="script.js"></script>
 
 </body>

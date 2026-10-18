@@ -3,32 +3,61 @@
    Prototype / Paper Trading / Analysis Assistant
 ========================================================= */
 
-const API_KEY = "";
-// Production: set MARKET_ENGINE_URL to your secure backend. Leave blank for CodePen prototype mode.
-const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protocol !== "file:" && !/codepen\.io$/i.test(location.hostname) ? "/api/market" : "");
-
-// Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
+const MARKET_ENGINE_URL = "/api/market";
+const Trading = window.BunTrading;
+const quoteCache = new Map();
+const QUOTE_MAX_AGE = 20000;
+const ANALYSIS_MAX_AGE = 120000;
+let stateBlocked = false;
+let engineToken = ""; // Memory only; never included in backups or local storage.
+let liveUpdateRunning = false;
+let candleRefreshTimer = null;
+let coinbaseFeed = null;
 
 async function marketEngineRequest(endpoint, params = {}, options = {}) {
-  const query = new URLSearchParams(params).toString();
-
-  if (MARKET_ENGINE_URL) {
-    const response = await fetch(
-      `${MARKET_ENGINE_URL}${endpoint}?${query}`,
-      options
-    );
-    const data = await response.json();
-    if (!response.ok || data.status === "error") throw new Error(data.message || "Market engine request failed");
-    return data;
+  if (demoMarketEnabled) {
+    if (options.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    if (endpoint === "/time_series") return demoCandles(params.symbol, params.interval, params.outputsize);
+    if (endpoint === "/price") return { price: demoLivePrice(params.symbol) };
+    throw new Error("Unsupported demo request.");
   }
-  if (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") throw new Error("Market data is not configured. Add a provider key for prototype mode or connect BunMoney Market Engine.");
-   const response = await fetch(
-  `https://api.twelvedata.com${endpoint}?${query}&apikey=${encodeURIComponent(API_KEY)}`,
-  options
-);
+  const timeout = AbortSignal.timeout(15000);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const headers = { ...options.headers };
+  if (engineToken) headers.Authorization = `Bearer ${engineToken}`;
+  const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${new URLSearchParams(params)}`, { ...options, headers, signal });
   const data = await response.json();
-  if (!response.ok || data.status === "error") throw new Error(data.message || "Market data request failed");
+  if (!response.ok || data.status === "error") throw new Error(data.error || data.message || "Market engine request failed");
   return data;
+}
+function unlockMarketEngine() {
+  const input = document.getElementById("engineToken");
+  engineToken = input?.value || "";
+  if (input) input.value = "";
+  analyze(true);
+}
+function marketSource() { return demoMarketEnabled ? "demo" : "live"; }
+function selectedSymbol() { return document.getElementById("ticker")?.value.toUpperCase().trim() || ""; }
+function acceptPrice(symbol, price, time = Date.now()) {
+  if (!Trading.validSymbol(symbol) || !Trading.positive(price)) return;
+  quoteCache.set(symbol, { price, time, source:marketSource() });
+  if (quoteCache.size > 100) quoteCache.delete(quoteCache.keys().next().value);
+  if (symbol === selectedSymbol()) {
+    lastLivePrice = price; window.lastLivePrice = price; lastMarketDataTime = time;
+    setText("price", formatMoney(price));
+  }
+  updatePaperPL(price, symbol, marketSource());
+}
+function invalidateAnalysis() {
+  analyzeRequestId++;
+  analyzeAbortController?.abort();
+  lastAnalysis = null; lastLivePrice = null; window.lastLivePrice = undefined;
+  window.lastCandles = [];
+  window.lastEntry = window.lastStop = window.lastTarget = undefined;
+  coinbaseFeed?.stop();
+  setText("price", "$—"); setText("reason", "Analyze this market before opening a position.");
+  ["entry","stop","target","rr","potentialLoss","potentialProfit","tradePlanEntry","tradePlanStop","tradePlanTarget","tradePlanScore","tradePlanDirection","trend","support","resistance","sma10","sma20","rsi","volumeRatio","breakout","retest","setupQuality","marketOutlook"].forEach(id => setText(id,"—"));
+  updateTradePlan();
 }
 
 let selectedTimeframe = "5min";
@@ -65,7 +94,7 @@ function setText(id, value) {
   if (element) element.textContent = value;
 }
 function formatMoney(value) {
-  if (!Number.isFinite(Number(value))) return "$—";
+  if (value == null || !Number.isFinite(Number(value))) return "$—";
   return "$" + Number(value).toFixed(2);
 }
 function average(values) {
@@ -87,8 +116,9 @@ function closePopup() {
 }
 
 function showScreen(screenName) {
-  document.querySelectorAll(".screen").forEach(screen => screen.classList.remove("active"));
   const target = document.getElementById(screenName);
+  if (!target) return;
+  document.querySelectorAll(".screen").forEach(screen => screen.classList.remove("active"));
   if (target) target.classList.add("active");
   document.querySelectorAll(".nav-button").forEach(button => {
     button.classList.remove("active");
@@ -134,14 +164,14 @@ function calculateRSI(values, period = 14) {
   }
   let avgGain = gains / period;
   let avgLoss = losses / period;
-  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  rsi[period] = avgLoss === 0 ? (avgGain === 0 ? 50 : 100) : 100 - 100 / (1 + avgGain / avgLoss);
   for (let i = period + 1; i < values.length; i++) {
     const change = values[i] - values[i - 1];
     const gain = Math.max(change, 0);
     const loss = Math.max(-change, 0);
     avgGain = (avgGain * (period - 1) + gain) / period;
     avgLoss = (avgLoss * (period - 1) + loss) / period;
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    rsi[i] = avgLoss === 0 ? (avgGain === 0 ? 50 : 100) : 100 - 100 / (1 + avgGain / avgLoss);
   }
   return rsi;
 }
@@ -160,7 +190,8 @@ async function analyze(force = false) {
   const tickerElement = document.getElementById("ticker");
   if (!tickerElement) return;
   const ticker = tickerElement.value.toUpperCase().trim();
-  if (!ticker) { setText("reason", "Enter a ticker symbol first."); return; }
+  lastAnalysis = null;
+  if (!Trading.validSymbol(ticker)) { setText("reason", "Enter a ticker symbol first."); return; }
   setText("symbol", ticker);
   setText("decision", "LOADING MARKET DATA...");
   setText("reason", "BunAI is analyzing the market...");
@@ -168,7 +199,7 @@ async function analyze(force = false) {
     const interval = selectedTimeframe === "max" ? "1month" : selectedTimeframe;
    const data = await marketEngineRequest(
   "/time_series",
-  { symbol: ticker, interval, outputsize: 80 },
+  { symbol: ticker, interval, outputsize: selectedTimeframe === "max" ? 5000 : 80 },
   { signal }
 );
     if (requestId !== analyzeRequestId) return;
@@ -179,7 +210,7 @@ async function analyze(force = false) {
       throw new Error(data.message || "No market data returned.");
     }
 
-    const candles = [...data.values].reverse();
+    const candles = Trading.candles(data.values);
 const closes = candles.map(c => Number(c.close));
 const highs = candles.map(c => Number(c.high));
 const lows = candles.map(c => Number(c.low));
@@ -194,13 +225,18 @@ try {
   { symbol: ticker },
   { signal }
 );
-  if (quote.price && Number.isFinite(Number(quote.price))) {
+  if (requestId !== analyzeRequestId || ticker !== selectedSymbol()) return;
+  if (Trading.positive(Number(quote.price))) {
     currentPrice = Number(quote.price);
+    acceptPrice(ticker, currentPrice);
   }
 } catch (quoteError) {
-  console.log("Live quote unavailable; using latest candle close.");
+  if (quoteError.name === "AbortError") throw quoteError;
+  quoteCache.delete(ticker);
+  console.log("Live quote unavailable; analysis uses candle close, trading remains locked.");
 }
 
+if (requestId !== analyzeRequestId || ticker !== selectedSymbol()) return;
 const previousPrice = closes.length > 1
   ? closes[closes.length - 2]
   : lastCandlePrice;
@@ -235,36 +271,26 @@ const changePercent = previousPrice === 0
 let breakoutIndex = null;
 let breakoutDirection = null;
 
-if (candles.length >= 21) {
-  const priorResistance = Math.max(...highs.slice(-21, -1));
-  const priorSupport = Math.min(...lows.slice(-21, -1));
-
-  if (currentPrice > priorResistance) {
-    breakout = "POSSIBLE BREAKOUT";
-    breakoutIndex = candles.length - 1;
-    breakoutDirection = "BULLISH";
-  } else if (currentPrice < priorSupport) {
-    breakout = "POSSIBLE BREAKDOWN";
-    breakoutIndex = candles.length - 1;
-    breakoutDirection = "BEARISH";
-  }
+// Compare with levels that exclude the candidate candle. A retest must occur later.
+const priorResistance = Math.max(...highs.slice(-21, -1));
+const priorSupport = Math.min(...lows.slice(-21, -1));
+if (currentPrice > priorResistance) {
+  breakout = "POSSIBLE BREAKOUT"; breakoutIndex = candles.length - 1; breakoutDirection = "BULLISH";
+} else if (currentPrice < priorSupport) {
+  breakout = "POSSIBLE BREAKDOWN"; breakoutIndex = candles.length - 1; breakoutDirection = "BEARISH";
 }
-
-let retest = "WAITING";
-let retestIndex = null;
-
-if (breakoutIndex !== null) {
-  const referenceLevel =
-  breakoutDirection === "BEARISH"
-    ? priorSupport
-    : priorResistance;
-
-  const distance = Math.abs(currentPrice - referenceLevel);
-  const tolerance = currentPrice * 0.01;
-
-  if (distance <= tolerance) {
-    retest = "RETEST AREA";
-    retestIndex = candles.length - 1;
+let retest = "WAITING", retestIndex = null;
+if (breakoutIndex === null) {
+  for (let i = candles.length - 2; i >= Math.max(20, candles.length - 6); i--) {
+    const upper = Math.max(...highs.slice(i - 20, i));
+    const lower = Math.min(...lows.slice(i - 20, i));
+    const tolerance = currentPrice * 0.005;
+    if (closes[i] > upper && lows.at(-1) <= upper + tolerance && currentPrice >= upper) {
+      breakoutDirection = "BULLISH";
+    } else if (closes[i] < lower && highs.at(-1) >= lower - tolerance && currentPrice <= lower) {
+      breakoutDirection = "BEARISH";
+    } else continue;
+    retest = "RETEST AREA"; retestIndex = candles.length - 1; breakoutIndex = i; break;
   }
 }
 
@@ -276,7 +302,7 @@ let target;
 const preliminaryLong =
   trend === "BULLISH" ||
   breakout === "POSSIBLE BREAKOUT" ||
-  retest === "RETEST AREA";
+  (retest === "RETEST AREA" && breakoutDirection === "BULLISH");
 
 const preliminaryShort =
   trend === "BEARISH" &&
@@ -310,10 +336,10 @@ const rr = risk > 0 ? reward / risk : 0;
 
     const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
     const potentialLoss = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
-      ? tradeAmount * (risk / entry)
+      ? tradeAmount * (risk / entry) + tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE)
       : null;
     const potentialProfit = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
-      ? tradeAmount * (reward / entry)
+      ? tradeAmount * (reward / entry) - tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE)
       : null;
 
     let score = 0;
@@ -440,11 +466,10 @@ if (
     if (decision === "WAIT") reason += "There is not enough confirmation yet, so waiting is safer.";
     else reason += "This is an analysis signal, not a guaranteed prediction.";
 
-    lastLivePrice = currentPrice;
-    window.lastLivePrice = currentPrice;
+    // Candle-only prices are display values, never execution quotes.
     setText("price", formatMoney(currentPrice));
     setText("paperCurrentPrice", formatMoney(currentPrice));
-    updatePaperPL(currentPrice);
+    // Position exits are processed only from symbol-tagged fresh quotes.
     setText("change", `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`);
     setText("trend", trend);
     setText("volume", currentVolume ? currentVolume.toLocaleString() : "—");
@@ -498,9 +523,11 @@ if (
   decision,
   setupQuality,
   outlook,
+  source: marketSource(),
   timestamp: Date.now()
 };
 
+    if (!demoMarketEnabled && coinbaseFeed?.symbol !== ticker) coinbaseFeed?.start(ticker);
     window.lastCandles = candles;
     window.lastSupport = support;
     window.lastResistance = resistance;
@@ -527,6 +554,8 @@ if (
     if (error.name === "AbortError") return;
     if (requestId !== analyzeRequestId) return;
 
+    lastAnalysis = null;
+    updateTradePlan();
     console.error("Market analysis error:", error); 
     setText("decision", "MARKET DATA UNAVAILABLE");
     setText("reason", error.message.includes("credits")
@@ -554,11 +583,13 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   const visible = candles.slice(start);
   const highs = visible.map(c => Number(c.high));
   const lows = visible.map(c => Number(c.low));
-  const chartRangeStop = position?.stop ?? stop;
-const chartRangeTarget = position?.target ?? target;
+  const chartPosition = position?.symbol === lastAnalysis?.ticker ? position : null;
+  const chartRangeStop = chartPosition?.stop ?? stop;
+const chartRangeTarget = chartPosition?.target ?? target;
 
-const maxPrice = Math.max(...highs, resistance, chartRangeStop, chartRangeTarget);
-const minPrice = Math.min(...lows, support, chartRangeStop, chartRangeTarget);
+const extents = [...highs,...lows,resistance,support,chartRangeStop,chartRangeTarget,chartPosition?.entry,window.lastLivePrice].filter(Trading.positive);
+const maxPrice = Math.max(...extents);
+const minPrice = Math.min(...extents);
   const padding = 22;
   const range = maxPrice - minPrice || 1;
 
@@ -619,11 +650,12 @@ const minPrice = Math.min(...lows, support, chartRangeStop, chartRangeTarget);
   ctx.fillRect(20, resistanceTop, width - 40, resistanceBottom - resistanceTop);
 
   drawLevel(ctx, width, yPosition(support), "rgba(34,197,94,.75)", "SUPPORT");
- const activePosition = window.position || position;
-const chartEntry = position?.entry ?? entry;
-const chartStop = position?.stop ?? stop;
-const chartTarget = position?.target ?? target;
-const chartSide = position?.side || "PLAN";
+  drawLevel(ctx, width, yPosition(resistance), "rgba(239,68,68,.75)", "RESISTANCE");
+ const activePosition = chartPosition;
+const chartEntry = chartPosition?.entry ?? entry;
+const chartStop = chartPosition?.stop ?? stop;
+const chartTarget = chartPosition?.target ?? target;
+const chartSide = chartPosition?.side || "PLAN";
 
 drawLevel(
   ctx,
@@ -715,62 +747,34 @@ function changeChartZoom(value) {
 
 let livePriceTimer = null;
 async function updateLivePrice() {
-  const tickerElement = document.getElementById("ticker");
-  if (!tickerElement) return;
-
-  const ticker = tickerElement.value.toUpperCase().trim();
-  if (!ticker) return;
-
-  if (
-    !MARKET_ENGINE_URL &&
-    (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") &&
-    !demoMarketEnabled
-  ) {
-    return;
-  }
-
+  if (liveUpdateRunning) return;
+  liveUpdateRunning = true;
+  const source = marketSource();
+  const symbols = [...new Set([selectedSymbol(), position?.symbol].filter(Trading.validSymbol))];
   try {
-    const data = await marketEngineRequest("/price", { symbol: ticker });
-
-    if (data.price && Number.isFinite(Number(data.price))) {
-      const newPrice = Number(data.price);
-
-      lastLivePrice = newPrice;
-      window.lastLivePrice = newPrice;
-
-      setText("price", formatMoney(newPrice));
-      setText("paperCurrentPrice", formatMoney(newPrice));
-
-      updatePaperPL(newPrice);
-
-      if (window.lastCandles?.length) {
-        drawChart(
-          window.lastCandles,
-          window.lastSupport,
-          window.lastResistance,
-          window.lastEntry,
-          window.lastStop,
-          window.lastTarget,
-          window.lastBreakoutIndex,
-          window.lastRetestIndex,
-          window.lastSma10,
-          window.lastSma20
-        );
-      }
-    }
-  } catch (error) {
-    console.log("Live price unavailable.");
-  }
+    await Promise.allSettled(symbols.map(async symbol => {
+      if (!demoMarketEnabled && coinbaseFeed?.fresh(symbol)) return;
+      try {
+        const data = await marketEngineRequest("/price", {symbol});
+        if (source === marketSource()) acceptPrice(symbol, Number(data.price));
+      } catch { setText("feedStatus", "Price unavailable; stale quotes cannot open or close trades."); }
+    }));
+    if (window.lastCandles?.length) redrawChart();
+  } finally { liveUpdateRunning = false; }
 }
-
+function redrawChart() {
+  drawChart(window.lastCandles,window.lastSupport,window.lastResistance,window.lastEntry,window.lastStop,window.lastTarget,window.lastBreakoutIndex,window.lastRetestIndex,window.lastSma10,window.lastSma20);
+}
 function startLivePrice() {
   if (livePriceTimer) clearInterval(livePriceTimer);
-
-  // Update immediately.
+  if (!coinbaseFeed && window.BunCoinbaseFeed) coinbaseFeed = new window.BunCoinbaseFeed({
+    onPrice:(symbol,price,time) => { if (!demoMarketEnabled) { acceptPrice(symbol,price,time); if(window.lastCandles?.length) redrawChart(); } },
+    onStatus:status => setText("feedStatus",status)
+  });
   updateLivePrice();
-
-  // Then refresh every 60 seconds.
-  livePriceTimer = setInterval(updateLivePrice, 60000);
+  livePriceTimer = setInterval(updateLivePrice,15000);
+  if (candleRefreshTimer) clearInterval(candleRefreshTimer);
+  candleRefreshTimer = setInterval(() => { if (Trading.validSymbol(selectedSymbol())) analyze(true); },60000);
 }
 
 async function askBunAI(message, context = {}) {
@@ -787,266 +791,51 @@ async function askBunAI(message, context = {}) {
   return data;
 }
 
-function getDisplayedPrice() {
-  const text = document.getElementById("price")?.textContent || "";
-  const parsed = Number(text.replace(/[$,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
+function getCurrentPrice(symbol = position?.symbol || selectedSymbol()) {
+  const quote = quoteCache.get(symbol);
+  return quote && quote.source === marketSource() && Date.now() - quote.time <= QUOTE_MAX_AGE ? quote.price : null;
 }
-
-function getCurrentPrice() {
-  return Number.isFinite(lastLivePrice)
-    ? lastLivePrice
-    : getDisplayedPrice();
-}
-
-function paperBuy() {
-  // If a SHORT is open, BUY closes it.
+function getDisplayedPrice() { return getCurrentPrice(selectedSymbol()); }
+function openPaperPosition(side) {
+  if (stateBlocked) return setText("reason", "Saved state needs recovery. Export your backup, then reset before trading.");
   if (position) {
-    if (position.side === "SHORT") {
-      const price = getCurrentPrice();
-
-      if (!Number.isFinite(price)) {
-        setText("reason", "Current market price is unavailable.");
-        return;
-      }
-
-      closePaperPosition(price, "MANUAL");
-      return;
-    }
-
-    // Don't allow stacking another LONG.
-    if (position.side === "LONG") {
-      setText("reason", "You already have an open LONG position.");
-      return;
-    }
+    if (position.side === side) return setText("reason", `You already have an open ${side} position.`);
+    return closePaperPosition(getCurrentPrice(position.symbol));
   }
-
-  const price = Number.isFinite(lastLivePrice) ? lastLivePrice : getDisplayedPrice();
-
-  if (!Number.isFinite(price)) {
-    setText("reason", "Analyze a market before opening a paper trade.");
-    return;
-  }
-
-  const amountInput = document.getElementById("paperTradeAmount");
-  const amount = Number(amountInput?.value);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    setText("reason", "Enter a valid trade amount greater than $0.");
-    return;
-  }
-
-  if (amount > tradingBalance) {
-    setText("reason", `Trade amount cannot exceed your available balance of ${formatMoney(tradingBalance)}.`);
-    return;
-  }
-
-  tradingBalance -= amount;
-
-    position = {
-    side: "LONG",
-    entry: price,
-    amount,
-    stop: Number.isFinite(Number(window.lastStop)) ? Number(window.lastStop) : null,
-    target: Number.isFinite(Number(window.lastTarget)) ? Number(window.lastTarget) : null,
-    symbol: document.getElementById("symbol")?.textContent || ""
-  };
-
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("paperBalance", formatMoney(tradingBalance));
-  setText("position", `LONG @ ${formatMoney(price)}`);
-  setText("paperCurrentPrice", formatMoney(price));
-  updatePaperPL(price);
-  setText("reason", `Paper long opened with ${formatMoney(amount)}. Bun is tracking your gain/loss as the market moves. 🐰📊`);
-  mascotReaction("Position opened. Protect the bag. 🐰💰");
-  saveGameState();
+  try {
+    const symbol = selectedSymbol(), price = getCurrentPrice(symbol);
+    if (!Trading.positive(price) || !lastAnalysis || lastAnalysis.ticker !== symbol || lastAnalysis.source !== marketSource() || Date.now() - lastAnalysis.timestamp > ANALYSIS_MAX_AGE) throw new Error("Analyze this symbol and obtain a fresh quote before trading.");
+    const amount = Number(document.getElementById("paperTradeAmount")?.value);
+    if (!Trading.positive(amount) || amount * (1 + Trading.FEE) > tradingBalance) throw new Error("Enter a positive amount within your balance, including the entry fee.");
+    const entry = Trading.fill(price,side,true);
+    position = { ...Trading.levels(side,entry,lastAnalysis), amount, symbol, source:marketSource(), entryFee:amount * Trading.FEE };
+    tradingBalance -= amount + position.entryFee;
+    setText("position", `${side} ${symbol} @ ${formatMoney(entry)}`);
+    syncPaperBalance(); updatePaperPL(price,symbol,marketSource());
+    setText("reason", `${side} paper position opened. Fees and adverse slippage apply.`);
+    if(window.lastCandles?.length) redrawChart();
+    saveGameState();
+  } catch(error) { setText("reason",error.message); }
 }
-
+function syncPaperBalance() {
+  setText("tradingBalance",formatMoney(tradingBalance)); setText("paperBalance",formatMoney(tradingBalance));
+}
+function paperBuy() { openPaperPosition("LONG"); }
+function paperSell() { openPaperPosition("SHORT"); }
 function closePaperPosition(price, closeReason = "MANUAL") {
-  if (!position) return;
-
-  if (!Number.isFinite(Number(price))) {
-    setText("reason", "Current market price is unavailable.");
-    return;
-  }
-
-  const exitPrice = Number(price);
-
-  // LONG profits when price rises.
-  // SHORT profits when price falls.
-  const direction = position.side === "SHORT" ? -1 : 1;
-  const percentageMove =
-    ((exitPrice - position.entry) / position.entry) * direction;
-
-  const profit = position.amount * percentageMove;
-
-  // Return the position amount plus its realized P/L to available balance.
-  tradingBalance += position.amount + profit;
-
-  tradeHistory.push({
-    side: position.side,
-    symbol: position.symbol || document.getElementById("symbol")?.textContent || "",
-    entry: position.entry,
-    exit: exitPrice,
-    amount: position.amount,
-    profit,
-    reason: closeReason,
-    time: new Date().toLocaleString()
-  });
-
-  const closedSide = position.side;
-
+  if (!position || !Trading.positive(price)) return setText("reason","A fresh quote for the position symbol is required to close.");
+  const closed = position;
+  const result = Trading.settlement(closed,price);
+  // Preserve the ledger, including negative equity after extreme short gaps.
+  tradingBalance += result.returned;
+  tradeHistory.push({ side:closed.side,symbol:closed.symbol,entry:closed.entry,exit:result.exit,amount:closed.amount,profit:result.profit,fees:result.fees,reason:closeReason,time:new Date().toISOString() });
   position = null;
-
-  if (window.lastCandles?.length) {
-  drawChart(
-    window.lastCandles,
-    window.lastSupport,
-    window.lastResistance,
-    window.lastEntry,
-    window.lastStop,
-    window.lastTarget
-  );
-}
-
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("paperBalance", formatMoney(tradingBalance));
-  setText("position", "NONE");
-  setText("paperCurrentPrice", formatMoney(exitPrice));
-
-  setText(
-    "paperPL",
-    `${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))}`
-  );
-
-  setText(
-    "paperPLPercent",
-    `${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%`
-  );
-
-  if (closeReason === "STOP LOSS") {
-    setText(
-      "paperPLMessage",
-      `🛑 STOP LOSS — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
-    );
-
-    setText(
-      "reason",
-      `🛑 ${closedSide} paper trade automatically closed at the stop-loss level.`
-    );
-
-  } else if (closeReason === "TAKE PROFIT") {
-    setText(
-      "paperPLMessage",
-      `🎯 TAKE PROFIT — ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
-    );
-
-    setText(
-      "reason",
-      `🎯 ${closedSide} paper trade automatically closed at the take-profit level.`
-    );
-
-  } else {
-    setText(
-      "paperPLMessage",
-      `${profit >= 0 ? "You gained" : "You lost"} ${formatMoney(Math.abs(profit))} on this paper trade.`
-    );
-
-    setText(
-      "reason",
-      `${closedSide} paper trade closed: ${profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(profit))} (${percentageMove >= 0 ? "+" : ""}${(percentageMove * 100).toFixed(2)}%).`
-    );
-  }
-
-  renderTradeHistory();
-  saveGameState();
-}
-
-function paperSell() {
-  // If a LONG is open, SELL closes it.
-  if (position) {
-    if (position.side === "LONG") {
-      const price = getCurrentPrice();
-
-      if (!Number.isFinite(price)) {
-        setText("reason", "Current market price is unavailable.");
-        return;
-      }
-
-      closePaperPosition(price, "MANUAL");
-      return;
-    }
-
-    // Don't allow stacking another SHORT.
-    if (position.side === "SHORT") {
-      setText("reason", "You already have an open SHORT position.");
-      return;
-    }
-  }
-
-  const price = getCurrentPrice();
-
-  if (!Number.isFinite(price)) {
-    setText("reason", "Analyze a market before opening a paper trade.");
-    return;
-  }
-
-  const amountInput = document.getElementById("paperTradeAmount");
-  const amount = Number(amountInput?.value);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    setText("reason", "Enter a valid trade amount greater than $0.");
-    return;
-  }
-
-  if (amount > tradingBalance) {
-    setText(
-      "reason",
-      `Trade amount cannot exceed your available balance of ${formatMoney(tradingBalance)}.`
-    );
-    return;
-  }
-
-  tradingBalance -= amount;
-
-  const analysisStop = Number(window.lastStop);
-const analysisTarget = Number(window.lastTarget);
-
-let shortStop = null;
-let shortTarget = null;
-
-if (
-  Number.isFinite(analysisStop) &&
-  Number.isFinite(analysisTarget)
-) {
-  // Mirror the LONG levels for a SHORT.
-  shortStop = analysisTarget;
-  shortTarget = analysisStop;
-}
-
-position = {
-  side: "SHORT",
-  entry: price,
-  amount,
-  stop: shortStop,
-  target: shortTarget,
-  symbol: document.getElementById("symbol")?.textContent || ""
-};
-
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("paperBalance", formatMoney(tradingBalance));
-  setText("position", `SHORT @ ${formatMoney(price)}`);
-  setText("paperCurrentPrice", formatMoney(price));
-
-  updatePaperPL(price);
-
-  setText(
-    "reason",
-    `Paper short opened with ${formatMoney(amount)}. Bun is tracking your gain/loss as the market moves. 🐰📉`
-  );
-
-  mascotReaction("Short position opened. Watch the downside. 🐰📉");
-
+  syncPaperBalance(); setText("position","NONE");
+  setText("paperPL",`${result.profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(result.profit))}`);
+  setText("paperPLMessage",`${closeReason}: net ${formatMoney(result.profit)} after fees. Filled at observed price with slippage.`);
+  setText("reason",`${closed.side} ${closed.symbol} closed: ${closeReason}.`);
+  renderTradeHistory(); updateConfidence(); updateLevel(); updateProfile(); updateAchievements();
+  if(window.lastCandles?.length) redrawChart();
   saveGameState();
 }
 
@@ -1072,67 +861,24 @@ function updatePotentialRiskReward() {
   const risk = Math.abs(entry - stop);
   const reward = Math.abs(target - entry);
 
-  const potentialLoss = tradeAmount * (risk / entry);
-  const potentialProfit = tradeAmount * (reward / entry);
+  const potentialLoss = tradeAmount * (risk / entry) + tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE);
+  const potentialProfit = tradeAmount * (reward / entry) - tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE);
 
   setText("potentialLoss", "-" + formatMoney(potentialLoss));
   setText("potentialProfit", "+" + formatMoney(potentialProfit));
 }
 
-function updatePaperPL(price) {
-  if (!Number.isFinite(Number(price))) return;
-
-  const current = Number(price);
-
-  setText("paperCurrentPrice", formatMoney(current));
-
-  if (!position) {
-    setText("paperPL", "$0.00");
-    setText("paperPLPercent", "0.00%");
-    setText("paperPLMessage", "No open position.");
-    return;
-  }
-
-  const direction = position.side === "SHORT" ? -1 : 1;
-  const move = ((current - position.entry) / position.entry) * direction;
-  const pl = position.amount * move;
-
-  setText(
-    "paperPL",
-    `${pl >= 0 ? "+" : "-"}${formatMoney(Math.abs(pl))}`
-  );
-
-  setText(
-    "paperPLPercent",
-    `${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%`
-  );
-
-  // LONG: stop below entry, target above entry.
-  // SHORT: stop above entry, target below entry.
-  const hitStop = Number.isFinite(position.stop) &&
-    (position.side === "SHORT"
-      ? current >= position.stop
-      : current <= position.stop);
-
-  const hitTarget = Number.isFinite(position.target) &&
-    (position.side === "SHORT"
-      ? current <= position.target
-      : current >= position.target);
-
-  if (hitStop) {
-    closePaperPosition(position.stop, "STOP LOSS");
-    return;
-  }
-
-  if (hitTarget) {
-    closePaperPosition(position.target, "TAKE PROFIT");
-    return;
-  }
-
-  setText(
-    "paperPLMessage",
-    `${pl >= 0 ? "You're up" : "You're down"} ${formatMoney(Math.abs(pl))} (${move >= 0 ? "+" : ""}${(move * 100).toFixed(2)}%) right now.`
-  );
+function updatePaperPL(price, symbol, source) {
+  if (!Trading.positive(price) || !position || symbol !== position.symbol || source !== position.source) return;
+  const result = Trading.settlement(position,price);
+  setText("paperCurrentPrice",formatMoney(price));
+  setText("paperPL",`${result.profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(result.profit))}`);
+  setText("paperPLPercent",`${(result.profit / position.amount * 100).toFixed(2)}%`);
+  const stop = position.side === "SHORT" ? price >= position.stop : price <= position.stop;
+  const target = position.side === "SHORT" ? price <= position.target : price >= position.target;
+  if (stop || target) return closePaperPosition(price,stop ? "STOP LOSS" : "TAKE PROFIT");
+  if (result.returned <= 0) return closePaperPosition(price,"COLLATERAL EXHAUSTED");
+  setText("paperPLMessage",`${position.symbol}: estimated net P/L after fees and slippage. Browser must remain open for exits.`);
 }
 
 function updateConfidence() {
@@ -1178,7 +924,7 @@ function updateRank() {
   if (rankIcon) {
     const icons = { BRONZE: "🥉", SILVER: "🥈", GOLD: "🥇", PLATINUM: "💎", DIAMOND: "💠" };
     const img = rankIcon.querySelector("img");
-    if (img) { img.src = `assets/rank_${rank.toLowerCase()}.png`; img.alt = `${rank} Bun rank`; }
+    if (img && ["GOLD","PLATINUM","DIAMOND"].includes(rank)) { img.src = `assets/rank_${rank.toLowerCase()}.webp`; img.alt = `${rank} Bun rank`; }
     else rankIcon.textContent = icons[rank];
   }
   const profileImg = document.getElementById("profileAvatarImage");
@@ -1268,14 +1014,14 @@ function selectBot(botName) {
 }
 
 async function scanMarket() {
-  const symbols = ["GRAB", "SOUN", "BBAI"];
+  const symbols = bunFavorites.slice(0,10);
   const container = document.getElementById("scanner");
   if (!container) return;
   container.innerHTML = `<div class="alert empty">Scanning watchlist...</div>`;
   const results = [];
   for (const symbol of symbols) {
     try {
-      if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) throw new Error("Market data is not configured");
+      if (!MARKET_ENGINE_URL && !demoMarketEnabled) throw new Error("Market data is not configured");
       const data = await marketEngineRequest("/price", { symbol });
       if (data.price && Number.isFinite(Number(data.price))) results.push({ symbol, price: Number(data.price) });
     } catch (error) { console.log("Scanner error:", symbol); }
@@ -1338,15 +1084,15 @@ function getBunReply(message) {
   return "Bun says: think first, trade second. 🐰";
 }
 function escapeHTML(text) {
-  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  return String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 const DEFAULT_PFP_URL = "https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png";
 
 const BUN_ASSETS = {
-  pfp: { happy: "assets/pfs_happy.png", serious: "assets/pfs_serious.png", chill: "assets/pfs_chill.png", focused: "assets/pfs_focused.png", confident: "assets/pfs_confident.png", rich: "assets/pfs_rich.png" },
-  frame: { default: "assets/frame_default.png", glow: "assets/frame_glow.png", neon: "assets/frame_neon.png", animated: "assets/frame_animated.png", streak: "assets/frame_streak.png", elite: "assets/frame_elite.png", legendary: "assets/frame_legendary.png" },
-  background: { charts: "assets/bg_charts.png", city: "assets/bg_city.png", money: "assets/bg_money.png", neon: "assets/bg_neon.png", abstract: "assets/bg_abstract.png", graffiti: "assets/bg_graffiti.png", nature: "assets/bg_nature.png", black: "assets/bg_black.png" }
+  pfp: { happy: "assets/pfs_happy.webp", serious: "assets/pfs_serious.webp", chill: "assets/pfs_chill.webp", focused: "assets/pfs_focused.webp", confident: "assets/pfs_confident.webp", rich: "assets/pfs_rich.webp" },
+  frame: { default: "assets/frame_default.webp", glow: "assets/frame_glow.webp", neon: "assets/frame_neon.webp", animated: "assets/frame_animated.webp", streak: "assets/frame_streak.webp", elite: "assets/frame_elite.webp", legendary: "assets/frame_legendary.webp" },
+  background: { charts: "assets/bg_charts.webp", city: "assets/bg_city.webp", money: "assets/bg_money.webp", neon: "assets/bg_neon.webp", abstract: "assets/bg_abstract.webp", graffiti: "assets/bg_graffiti.webp", nature: "assets/bg_nature.webp", black: "assets/bg_black.webp" }
 };
 function setPfpAsset(name) {
   const src = BUN_ASSETS.pfp[name]; if (!src) return;
@@ -1507,6 +1253,7 @@ function updateAchievements() {
   container.innerHTML = achievements.map(achievement => `<div>${achievement}</div>`).join("");
 }
 function saveGameState() {
+  if (stateBlocked) return;
   try {
     localStorage.setItem("bunmoney_state", JSON.stringify({ tradingBalance, tradeHistory, position, rewardPoints, arcadeBank, activeBot }));
   } catch (error) { console.log("Could not save BunMoney state."); }
@@ -1515,14 +1262,13 @@ function loadGameState() {
   try {
     const saved = localStorage.getItem("bunmoney_state");
     if (!saved) return;
-    const state = JSON.parse(saved);
-    if (Number.isFinite(Number(state.tradingBalance))) tradingBalance = Number(state.tradingBalance);
-    if (Array.isArray(state.tradeHistory)) tradeHistory = state.tradeHistory;
-    if (state.position && typeof state.position === "object") position = state.position;
-    if (Number.isFinite(Number(state.rewardPoints))) rewardPoints = Number(state.rewardPoints);
-    if (Number.isFinite(Number(state.arcadeBank))) arcadeBank = Number(state.arcadeBank);
-    if (state.activeBot) activeBot = state.activeBot;
-  } catch (error) { console.log("Could not load saved state."); }
+    const state = Trading.state(JSON.parse(saved));
+    ({ tradingBalance, tradeHistory, position, rewardPoints, arcadeBank, activeBot } = state);
+    if (position) {
+      demoMarketEnabled = position.source === "demo";
+      const ticker = document.getElementById("ticker"); if (ticker) ticker.value = position.symbol;
+    }
+  } catch { stateBlocked = true; setText("reason","Saved state is invalid or from an older simulator. Export it before resetting; trading is locked."); }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1533,10 +1279,13 @@ document.addEventListener("DOMContentLoaded", () => {
     paperTradeAmount.addEventListener("input", updatePotentialRiskReward);
   }
 
+  loadDemoSettings();
+  if (position) demoMarketEnabled = position.source === "demo";
+  document.getElementById("ticker")?.addEventListener("input",invalidateAnalysis);
   startLivePrice();
   startAlertMonitor();
   updateConfidence();
-  setText("tradingBalance", formatMoney(tradingBalance));
+  syncPaperBalance();
   setText(
   "position",
   position
@@ -1570,7 +1319,7 @@ function loadFavorites() {
     const saved = localStorage.getItem(BUN_FAVORITES_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length) bunFavorites = parsed;
+      if (Array.isArray(parsed)) bunFavorites = [...new Set(parsed.filter(Trading.validSymbol))].slice(0,50);
     }
   } catch (error) { console.log("Could not load favorites."); }
 }
@@ -1603,10 +1352,10 @@ function createFavoritesScreen() {
     </div>
     <div id="favoritesList"></div>
     <div class="favorites-add">
-      <input id="favoriteInput" type="text" maxlength="10" placeholder="Add ticker...">
-      <button onclick="addFavorite()">+ Add</button>
+      <input id="favoriteInput" type="text" maxlength="30" placeholder="Add ticker...">
+      <button data-action="addFavorite">+ Add</button>
     </div>`;
-  const app = document.querySelector(".app");
+  const app = document.querySelector(".app") || document.body;
   if (app) app.appendChild(screen);
   renderFavorites();
 }
@@ -1622,7 +1371,7 @@ function addFavorite() {
   const input = document.getElementById("favoriteInput");
   if (!input) return;
   const symbol = input.value.toUpperCase().trim();
-  if (!symbol) return;
+  if (!Trading.validSymbol(symbol) || bunFavorites.length >= 50) { showPopup("Favorites","Enter a valid symbol. Maximum 50 favorites."); return; }
   if (bunFavorites.includes(symbol)) {
     showPopup("Favorites", `${symbol} is already in your favorites.`); return;
   }
@@ -1673,11 +1422,11 @@ function renderFavorites() {
   if (!bunFavorites.length) {
     container.innerHTML = `<div class="alert empty">No favorite markets yet.</div>`; return;
   }
-  container.innerHTML = bunFavorites.map(symbol => `
+  container.innerHTML = bunFavorites.filter(Trading.validSymbol).map(symbol => `
     <div class="favorite-market" id="favorite-${symbol}">
       <div class="favorite-top">
         <div><strong>⭐ ${symbol}</strong><span class="favorite-price" id="favorite-price-${symbol}">—</span></div>
-        <button class="favorite-remove" onclick="removeFavorite('${symbol}')">×</button>
+        <button class="favorite-remove" data-action="removeFavorite" data-symbol="${symbol}">×</button>
       </div>
       <div class="favorite-stats">
         <div><span>Move</span><strong id="favorite-change-${symbol}">—</strong></div>
@@ -1689,14 +1438,14 @@ function renderFavorites() {
         <span>Support: <strong id="favorite-support-${symbol}">—</strong></span>
         <span>Resistance: <strong id="favorite-resistance-${symbol}">—</strong></span>
       </div>
-      <button class="favorite-open" onclick="openFavorite('${symbol}')">View Chart →</button>
+      <button class="favorite-open" data-action="openFavorite" data-symbol="${symbol}">View Chart →</button>
     </div>`).join("");
 }
 async function updateFavorites(force = false) {
   if (!bunFavorites.length) return;
   for (const symbol of bunFavorites) {
     try {
-      if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) continue;
+      if (!MARKET_ENGINE_URL && !demoMarketEnabled) continue;
       const data = await marketEngineRequest("/price", { symbol });
       if (!data.price || !Number.isFinite(Number(data.price))) continue;
       const price = Number(data.price);
@@ -1867,7 +1616,7 @@ score.textContent = `${a.score > 0 ? "+" : ""}${a.score}`;
   const short = String(a.decision || "").includes("SHORT");
 
   const confirmed =
-    (a.breakout === "POSSIBLE BREAKOUT" ||
+    (a.breakout === "POSSIBLE BREAKOUT" || a.breakout === "POSSIBLE BREAKDOWN" ||
       a.retest === "RETEST AREA") &&
     Number(a.volumeRatio) >= 1.05;
 
@@ -1915,7 +1664,7 @@ function createQuickTradeButtons() {
   if (!chartCard || document.getElementById("chartQuickTrade")) return;
   const controls = document.createElement("div");
   controls.id = "chartQuickTrade"; controls.className = "chart-quick-trade";
-  controls.innerHTML = `<button class="quick-buy" onclick="paperBuy(); quickCharacterReaction('BUY')">🐰 ↑ BUY</button><button class="quick-sell" onclick="paperSell(); quickCharacterReaction('SELL')">↓ SELL 🐰</button>`;
+  controls.innerHTML = `<button class="quick-buy" data-action="paperBuy">🐰 ↑ BUY</button><button class="quick-sell" data-action="paperSell">↓ SELL 🐰</button>`;
   chartCard.appendChild(controls);
 }
 function quickCharacterReaction(action) {
@@ -1927,8 +1676,8 @@ function quickCharacterReaction(action) {
   const message = document.getElementById("chartCopilotMessage");
   if (!message) return;
   message.textContent = action === "BUY"
-    ? "Paper buy opened. Keep an eye on the stop and reaction."
-    : "Paper position closed. Review what price did next.";
+    ? "BUY requests a LONG or closes an existing SHORT. Check the position status."
+    : "SELL requests a SHORT or closes an existing LONG. Check the position status.";
 }
 let miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
 function openMiniGames() {
@@ -1953,9 +1702,9 @@ function chooseMiniGameMode(mode) {
   if (!modeEl || !content) return;
   modeEl.hidden = true;
   if (mode === "single") {
-    content.innerHTML = `<div class="mini-game-selection"><h4>Single-player</h4><button onclick="startMiniGame('reaction')">⚡ Reaction Rush<small>Tap the target as fast as you can.</small></button><button onclick="startMiniGame('price')">🎯 Price Guess<small>Guess whether the next simulated tick goes up or down.</small></button></div>`;
+    content.innerHTML = `<div class="mini-game-selection"><h4>Single-player</h4><button data-action="startMiniGame" data-mode="reaction">⚡ Reaction Rush<small>Tap the target as fast as you can.</small></button><button data-action="startMiniGame" data-mode="price">🎯 Price Guess<small>Guess whether the next simulated tick goes up or down.</small></button></div>`;
   } else {
-    content.innerHTML = `<div class="mini-game-selection"><h4>Online</h4><p class="mini-games-hint">Online matchmaking is a prototype lobby for now. Real multiplayer needs the future backend.</p><button onclick="startMiniGame('duel')">⚔️ 1v1 Reaction Duel<small>Play against a simulated opponent.</small></button><button onclick="startMiniGame('co-op')">🤝 Co-op Challenge<small>Team with a simulated player to reach a target.</small></button></div>`;
+    content.innerHTML = `<div class="mini-game-selection"><h4>Online</h4><p class="mini-games-hint">Online matchmaking is a prototype lobby for now. Real multiplayer needs the future backend.</p><button data-action="startMiniGame" data-mode="duel">⚔️ 1v1 Reaction Duel<small>Play against a simulated opponent.</small></button><button data-action="startMiniGame" data-mode="co-op">🤝 Co-op Challenge<small>Team with a simulated player to reach a target.</small></button></div>`;
   }
 }
 function startMiniGame(game) {
@@ -1965,13 +1714,13 @@ function startMiniGame(game) {
   if (!content) return;
   if (game === "reaction" || game === "duel") {
     miniGameState.target = Math.floor(Math.random()*1000)+600;
-    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Score <strong id="miniScore">0</strong></div><button id="reactionTarget" class="reaction-target" onclick="hitReactionTarget()">TAP!</button><p id="miniGameStatus">Hit the button 10 times.</p><button class="mini-back" onclick="chooseMiniGameMode('${miniGameState.mode}')">← Back</button></div>`;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Score <strong id="miniScore">0</strong></div><button id="reactionTarget" class="reaction-target" data-action="hitReactionTarget">TAP!</button><p id="miniGameStatus">Hit the button 10 times.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="${miniGameState.mode}">← Back</button></div>`;
   } else if (game === "price") {
     miniGameState.target = Math.random() > .5 ? 1 : -1;
-    content.innerHTML = `<div class="mini-game-play"><h4>Next tick?</h4><p class="mini-price-symbol">${document.getElementById("symbol")?.textContent || "MARKET"}</p><div class="mini-choice-row"><button onclick="makePriceGuess(1)">📈 UP</button><button onclick="makePriceGuess(-1)">📉 DOWN</button></div><p id="miniGameStatus">Make your call.</p><button class="mini-back" onclick="chooseMiniGameMode('single')">← Back</button></div>`;
+    content.innerHTML = `<div class="mini-game-play"><h4>Next tick?</h4><p class="mini-price-symbol">${document.getElementById("symbol")?.textContent || "MARKET"}</p><div class="mini-choice-row"><button data-action="makePriceGuess" data-guess="1">📈 UP</button><button data-action="makePriceGuess" data-guess="-1">📉 DOWN</button></div><p id="miniGameStatus">Make your call.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="single">← Back</button></div>`;
   } else {
     miniGameState.target = 10;
-    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Team progress <strong id="miniScore">0</strong>/10</div><button class="reaction-target coop-target" onclick="coOpTap()">HELP TEAM</button><p id="miniGameStatus">Tap to help your teammate reach 10.</p><button class="mini-back" onclick="chooseMiniGameMode('online')">← Back</button></div>`;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Team progress <strong id="miniScore">0</strong>/10</div><button class="reaction-target coop-target" data-action="coOpTap">HELP TEAM</button><p id="miniGameStatus">Tap to help your teammate reach 10.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="online">← Back</button></div>`;
   }
 }
 function hitReactionTarget() {
@@ -2006,7 +1755,7 @@ function connectFavoritesToAnalysis() {
   const originalAnalyze = analyze;
   window.analyze = async function(force = false) {
     await originalAnalyze(force);
-    if (lastAnalysis) {
+    if (lastAnalysis && lastAnalysis.ticker === selectedSymbol()) {
       updateFavoriteFromAnalysis(lastAnalysis.ticker, lastAnalysis);
       updateChartCopilot();
       updateBunAIHome();
@@ -2056,7 +1805,7 @@ function showMarketError(message) {
 }
 
 function exportPaperTrades() {
-  const payload = { exportedAt: new Date().toISOString(), balance: tradingBalance, position, tradeHistory };
+  const payload = { recoveryState: stateBlocked ? localStorage.getItem("bunmoney_state") : null, exportedAt: new Date().toISOString(), balance: tradingBalance, position, tradeHistory };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a"); link.href = url; link.download = "bunmoney-paper-trades.json"; link.click();
@@ -2068,7 +1817,7 @@ function handleKeyboardShortcuts(event) {
   if (event.key === "/") { event.preventDefault(); focusAnalyzer(); }
   if (event.key.toLowerCase() === "a") analyze(true);
   if (event.key.toLowerCase() === "h") showScreen("home");
-  if (event.key.toLowerCase() === "t") showScreen("trade");
+  if (event.key.toLowerCase() === "t") document.querySelector(".paper-trading-card")?.scrollIntoView({behavior:"smooth"});
 }
 
 function markInitialAppReady() {
@@ -2109,7 +1858,8 @@ function toggleChatSetting(id) {
 }
 function clearLocalProgress() {
   if (!confirm("Reset BunMoney's saved prototype progress on this device?")) return;
-  ["bunmoney_state","bunmoney_favorites","bunmoney_mascot","bunmoney_last_analysis"].forEach(k => localStorage.removeItem(k));
+  ["bunmoney_state","bunmoney_favorites","bunmoney_mascot","bunmoney_last_analysis","bunmoney_profile","bunmoney_demo_market","bunmoney_pfp_asset","bunmoney_frame_asset","bunmoney_bg_asset"].forEach(k => localStorage.removeItem(k));
+  stateBlocked = true; // Prevent unload from saving the state just removed.
   location.reload();
 }
 const originalSendChat = window.sendChat;
@@ -2124,7 +1874,7 @@ window.sendChat = function() {
    FREE PROTOTYPE COMPLETION LAYER
    Local demo systems only — no paid services required.
 ========================================================= */
-let demoMarketEnabled = true;
+let demoMarketEnabled = false;
 let demoProfile = { username: "Guest", createdAt: Date.now() };
 
 const DEMO_MARKET_BASE = {
@@ -2146,7 +1896,7 @@ function demoCandles(symbol, interval = "5min", count = 80) {
   let seed = demoSeed(symbol + interval);
   let price = base;
   const candles = [];
-  const stepMinutes = interval === "1day" ? 1440 : interval === "1week" ? 10080 : interval === "1month" ? 43200 : interval === "1h" ? 60 : interval === "4h" ? 240 : interval === "15min" ? 15 : 5;
+  const stepMinutes = interval === "1day" ? 1440 : interval === "1week" ? 10080 : interval === "1month" ? 43200 : interval === "1h" ? 60 : interval === "4h" ? 240 : interval === "15min" ? 15 : interval === "1min" ? 1 : 5;
   const now = Date.now();
   for (let i = count - 1; i >= 0; i--) {
     seed = (seed * 9301 + 49297) % 233280;
@@ -2160,7 +1910,7 @@ function demoCandles(symbol, interval = "5min", count = 80) {
     candles.push({ datetime: new Date(now - i * stepMinutes * 60000).toISOString(), open: open.toFixed(4), high: high.toFixed(4), low: low.toFixed(4), close: close.toFixed(4), volume: String(volume) });
     price = close;
   }
-  return { status: "ok", meta: { symbol, interval }, values: candles };
+  return { status: "ok", meta: { symbol, interval }, values: candles.reverse() };
 }
 
 function demoLivePrice(symbol) {
@@ -2172,15 +1922,6 @@ function demoLivePrice(symbol) {
   const drift = Math.sin(now / 180 + seed * 0.13) * 0.004;
   return base * (1 + waveA + waveB + drift);
 }
-
-const originalMarketEngineRequest =
-  window.marketEngineRequest || marketEngineRequest;
-
-window.marketEngineRequest = async function(endpoint, params = {}) {
-  return await originalMarketEngineRequest(endpoint, params);
-};
-
-marketEngineRequest = window.marketEngineRequest;
 
 function saveDemoProfile() {
   const input = document.getElementById("demoUsername");
@@ -2201,14 +1942,17 @@ function updateDemoProfileUI() {
   if (input && !input.value) input.value = demoProfile.username === "Guest" ? "" : demoProfile.username;
 }
 function toggleDemoMarket() {
+  if (position) return showPopup("Open position","Close the position before changing data sources.");
   demoMarketEnabled = !demoMarketEnabled;
+  quoteCache.clear(); invalidateAnalysis();
+  setText("feedStatus",demoMarketEnabled ? "SIMULATED data" : "REST polling");
   localStorage.setItem("bunmoney_demo_market", String(demoMarketEnabled));
   setText("demoMarketButton", `Demo Market: ${demoMarketEnabled ? "ON" : "OFF"}`);
-  showPopup("📡 Demo Market", demoMarketEnabled ? "Demo market data will keep the prototype usable when live data is unavailable." : "Demo fallback is off. Live market data must be configured.");
+  showPopup("📡 Demo Market", demoMarketEnabled ? "Synthetic data is explicitly selected. These are not live market prices." : "Live Twelve Data and Coinbase data selected.");
 }
 function loadDemoSettings() {
   const saved = localStorage.getItem("bunmoney_demo_market");
-  if (saved !== null) demoMarketEnabled = saved !== "false";
+  if (saved !== null && !position) demoMarketEnabled = saved === "true";
   setText("demoMarketButton", `Demo Market: ${demoMarketEnabled ? "ON" : "OFF"}`);
 }
 
@@ -2226,18 +1970,9 @@ function renderTradeHistory() {
   }).join("");
 }
 
-const originalPaperSell = window.paperSell || paperSell;
-window.paperSell = function() {
-  const symbol = document.getElementById("symbol")?.textContent || "";
-  originalPaperSell();
-  if (tradeHistory.length) tradeHistory[tradeHistory.length - 1].symbol = symbol;
-  saveGameState();
-  renderTradeHistory();
-};
-paperSell = window.paperSell;
-
 function exportBunMoneyData() {
   const data = {
+    recoveryState: stateBlocked ? localStorage.getItem("bunmoney_state") : null,
     app: "BunMoney",
     version: "prototype",
     exportedAt: new Date().toISOString(),
@@ -2256,13 +1991,20 @@ function importBunMoneyData() {
   input.type = "file"; input.accept = "application/json,.json";
   input.onchange = () => {
     const file = input.files?.[0]; if (!file) return;
+    if (file.size > 2000000) return showPopup("Import Failed","Backup exceeds 2 MB.");
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
+        if (position) throw new Error("Close your position before importing.");
+        const importedState = Trading.state(data.state);
+        if (!Array.isArray(data.favorites) || data.favorites.length > 50 || !data.favorites.every(Trading.validSymbol)) throw new Error("Invalid favorites.");
+        data.state = importedState;
+        data.profile = { username: String(data.profile?.username || "Guest").slice(0,40), createdAt: Number(data.profile?.createdAt) || Date.now() };
         if (data.profile) { demoProfile = { ...demoProfile, ...data.profile }; localStorage.setItem("bunmoney_profile", JSON.stringify(demoProfile)); }
         if (data.state) localStorage.setItem("bunmoney_state", JSON.stringify(data.state));
         if (Array.isArray(data.favorites)) localStorage.setItem("bunmoney_favorites", JSON.stringify(data.favorites));
+        stateBlocked = true;
         showPopup("📥 Import Complete", "Your local prototype backup was imported. Reloading now.");
         setTimeout(() => location.reload(), 700);
       } catch (_) { showPopup("Import Failed", "That file is not a valid BunMoney prototype backup."); }
@@ -2319,7 +2061,6 @@ window.sendChat = function() {
 /* Keep the UI in sync after the existing initialization routines run. */
 document.addEventListener("DOMContentLoaded", () => {
   loadDemoProfile();
-  loadDemoSettings();
   renderTradeHistory();
   setTimeout(() => { if (!lastAnalysis) analyze(false).catch(() => {}); }, 250);
 });
@@ -2403,3 +2144,22 @@ clearLocalProgress = window.clearLocalProgress;
   if (symbol) new MutationObserver(updateMarketNewsReport).observe(symbol, { childList: true, characterData: true, subtree: true });
 })();
 
+
+// A CSP-compatible, explicit action table; no eval or inline script handlers.
+document.addEventListener("click", event => {
+  const control = event.target.closest("[data-action]");
+  if (!control) return;
+  const actions = { analyze:() => analyze(true), paperBuy, paperSell, exportPaperTrades,
+    addFavorite, removeFavorite:() => removeFavorite(control.dataset.symbol),
+    openFavorite:() => openFavorite(control.dataset.symbol),
+    setTimeframe:() => setTimeframe(control.dataset.timeframe),
+    startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
+    hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
+    showScreen:() => showScreen(control.dataset.screen), scanMarket, unlockMarketEngine,
+    toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
+  actions[control.dataset.action]?.();
+});
+document.addEventListener("input", event => {
+  if (event.target.id === "zoomSlider") changeChartZoom(event.target.value);
+});
+window.addEventListener("beforeunload", () => { saveGameState(); coinbaseFeed?.stop(); });

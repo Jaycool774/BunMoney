@@ -2,17 +2,28 @@
   "name": "server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node --use-env-proxy server.js",
+    "test": "node --test ../tests/*.test.js",
+    "check": "node --check ../script.js && node --check server.js && node --check market-engine.js",
+    "test:browser": "node ../tests/browser-smoke.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
+  },
+  "engines": {
+    "node": ">=24.5.0 <25"
+  },
+  "overrides": {
+    "proxy-addr": "^2.0.8"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
   }
 }

@@ -1105,3 +1105,12 @@ button:active { transform: scale(.97); }
     display: none !important;
   }
 }
+/* Private core controls */
+.connection-settings input, #paperTradeAmount, #favoriteInput {
+  max-width: 100%; min-width: 0; padding: 9px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+}
+.simulator-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.chart-quick-trade { display: flex; gap: 8px; padding-top: 10px; }
+.chart-quick-trade button { flex: 1; padding: 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
