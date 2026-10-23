@@ -1034,6 +1034,114 @@ async function scanMarket() {
   container.innerHTML = results.map(result => `<div class="feature-card"><strong>${result.symbol}</strong><p>${formatMoney(result.price)}</p></div>`).join("");
 }
 
+/* Recent market spikes: observed provider candles, never invented market events.
+   Detection timestamp is local scan time, not the precise time of a price jump. */
+const BUN_SPIKE_THRESHOLD = 1.5;
+const BUN_SPIKE_CANDLE_COUNT = 30;
+const BUN_SPIKE_SCAN_LIMIT = 8;
+let spikeScanBusy = false;
+let spikeDetections = [];
+
+function spikeTimeAgo(time) {
+  const secs = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (secs < 60) return secs + " seconds ago";
+  if (secs < 3600) return Math.floor(secs / 60) + " minutes ago";
+  return Math.floor(secs / 3600) + " hours ago";
+}
+function renderSpikes() {
+  const container = document.getElementById("spikeResults");
+  if (!container) return;
+  container.replaceChildren();
+  if (!spikeDetections.length) {
+    const empty = document.createElement("div");
+    empty.className = "spike-empty";
+    empty.textContent = "No spikes detected among the checked favorites. Try again later or add other markets.";
+    container.append(empty);
+    return;
+  }
+  for (const spike of spikeDetections) {
+    const card = document.createElement("article");
+    card.className = "spike-card " + (spike.change >= 0 ? "spike-up" : "spike-down");
+    const top = document.createElement("div");
+    top.className = "spike-top";
+    const market = document.createElement("strong");
+    market.textContent = spike.symbol;
+    const move = document.createElement("strong");
+    move.className = "spike-move";
+    move.textContent = (spike.change >= 0 ? "+" : "") + spike.change.toFixed(2) + "% " + (spike.change >= 0 ? "▲ Spike" : "▼ Drop");
+    top.append(market,move);
+    const info = document.createElement("p");
+    info.textContent = "5-minute candle: " + formatMoney(spike.previous) + " → " + formatMoney(spike.close);
+    const timestamp = document.createElement("p");
+    timestamp.className = "spike-time";
+    timestamp.textContent = "Detected " + spikeTimeAgo(spike.detectedAt) + " · Candle: " + spike.candleTime + " (provider time)";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "View " + spike.symbol + " chart →";
+    button.dataset.action = "viewSpikeMarket";
+    button.dataset.symbol = spike.symbol;
+    card.append(top,info,timestamp,button);
+    container.append(card);
+  }
+}
+async function scanSpikes() {
+  if (spikeScanBusy) return;
+  const status = document.getElementById("spikeStatus");
+  const btn = document.getElementById("scanSpikesButton");
+  const symbols = [...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,BUN_SPIKE_SCAN_LIMIT);
+  if (!symbols.length) {
+    spikeDetections = []; renderSpikes();
+    if (status) status.textContent = "No favorites yet. Save a ticker to start scanning.";
+    return;
+  }
+  spikeScanBusy = true;
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Checking " + symbols.length + " favorite markets…";
+  const detections = [];
+  let completed = 0, failed = 0;
+  try {
+    // Sequential requests reduce the chance of hitting a provider credit burst.
+    for (const symbol of symbols) {
+      try {
+        const data = await marketEngineRequest("/time_series", {
+          symbol, interval:"5min", outputsize:BUN_SPIKE_CANDLE_COUNT
+        });
+        if (data.meta?.symbol && String(data.meta.symbol).toUpperCase() !== symbol) throw new Error("Unexpected symbol");
+        const candles = Trading.candles(data.values);
+        completed++;
+        // Restrict to recent candles; provider times can be exchange-local without an offset.
+        // Scan the last six 5-minute candles. No false exact-time estimates.
+        for (let i = Math.max(1,candles.length-6); i < candles.length; i++) {
+          const previous = candles[i-1].close;
+          const close = candles[i].close;
+          if (!Trading.positive(previous) || !Trading.positive(close)) continue;
+          const change = ((close - previous) / previous) * 100;
+          if (Math.abs(change) < BUN_SPIKE_THRESHOLD) continue;
+          detections.push({ symbol, previous, close, change,
+            candleTime:String(candles[i].datetime), detectedAt:Date.now(),
+            source: demoMarketEnabled ? "demo" : "live" });
+        }
+      } catch (error) { failed++; }
+    }
+    detections.sort((a,b) => Math.abs(b.change)-Math.abs(a.change));
+    spikeDetections = detections.slice(0,20);
+    renderSpikes();
+    if (status) status.textContent = (demoMarketEnabled ? "SIMULATED data · " : "") +
+      completed + " checked, " + failed + " unavailable · " + detections.length +
+      " unusual candle moves found (±" + BUN_SPIKE_THRESHOLD + "% threshold). " +
+      "Checked " + new Date().toLocaleTimeString() + ".";
+  } finally {
+    spikeScanBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+function viewSpikeMarket(symbol) {
+  if (!Trading.validSymbol(symbol)) return;
+  analyzeTicker(symbol);
+  document.getElementById("homeSearch")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+setInterval(() => { if (spikeDetections.length) renderSpikes(); },15000);
+
 function startArena() {
   if (arenaRunning) { showPopup("Trading Arena", "The arena is already running."); return; }
   arenaRunning = true;
@@ -2175,7 +2283,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), scanMarket, unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
