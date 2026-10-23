@@ -79,10 +79,10 @@ const assert = require("node:assert/strict");
     await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
     await page.locator("#favoriteInput").fill("ETH/USD");
     await page.locator('[data-action="addFavorite"]').click();
+    // Favorites validates against the provider before saving; wait for the async response.
+    await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').waitFor();
     assert.equal(
-      await page
-        .locator('[data-action="openFavorite"][data-symbol="ETH/USD"]')
-        .count(),
+      await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').count(),
       1,
     );
     await page
