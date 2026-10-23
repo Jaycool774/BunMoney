@@ -180,3 +180,33 @@ test("Emperor Bunny explains supplied chart context without trading", async t =>
   assert.equal(without.status,200);
   assert.match((await without.json()).text,/ANALYZE/);
 });
+
+test("Conversational AI requires private server API key", async t => {
+  const base=await serve(t,{aiKey:""});
+  const chat=await fetch(base+"/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Hello",history:[]})});
+  assert.equal(chat.status,503);
+  assert.match((await chat.json()).error,/OPENAI_API_KEY/);
+  const news=await fetch(base+"/api/news?symbol=TSLA");
+  assert.equal(news.status,503);
+  const invalid=await fetch(base+"/api/news?symbol=%3Cscript%3E");
+  assert.equal(invalid.status,400);
+});
+test("Conversational AI supports sourced news and bounded history", async t => {
+  const calls=[];
+  const mock=async (url,opts)=>{
+    calls.push(JSON.parse(opts.body));
+    return {ok:true,status:200,json:async()=>({output:[{type:"message",content:[{type:"output_text",text:"Tesla reported a new filing.",annotations:[{type:"url_citation",url:"https://example.com/report",title:"Official report"},{type:"url_citation",url:"javascript:alert(1)",title:"bad"}]}]}]})};
+  };
+  const base=await serve(t,{aiKey:"test-ai",aiFetchImpl:mock});
+  const response=await fetch(base+"/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({message:"What's the latest news about TSLA?",context:{symbol:"TSLA",trend:"SIDEWAYS"},history:[{role:"user",content:"Hello"}]})});
+  assert.equal(response.status,200);
+  const data=await response.json();
+  assert.equal(data.searched,true);
+  assert.equal(data.sources.length,1);
+  assert.equal(data.sources[0].url,"https://example.com/report");
+  assert.equal(calls[0].tools[0].type,"web_search");
+  await fetch(base+"/api/news?symbol=TSLA");
+  await fetch(base+"/api/news?symbol=TSLA");
+  assert.equal(calls.length,2); // cached news
+});
