@@ -2340,7 +2340,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(false), newsFromChart:() => loadMarketNews(false), newsAllFavorites:() => loadMarketNews(true), refreshMarketEvents, eventsFromChart, scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(false), newsFromChart:() => loadMarketNews(false), newsAllFavorites:() => loadMarketNews(true), refreshMarketEvents, eventsFromChart, clearEventTicker, scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
@@ -2530,8 +2530,19 @@ function renderMarketEvents(){
  list.replaceChildren();pages.replaceChildren();
  const type=document.getElementById("eventTypeFilter")?.value||"all";
  const ticker=(document.getElementById("eventTickerFilter")?.value||"").trim().toUpperCase();
+ const sort=document.getElementById("eventSortFilter")?.value||"soonest";
+ const favoriteSet=new Set(bunFavorites.map(s=>String(s).toUpperCase()));
  const rows=bunEvents.filter(e=>(type==="all"||e.kind===type) &&
-   (!ticker || e.kind==="economic" || e.symbol===ticker));
+   (!ticker || e.symbol===ticker) &&
+   (sort!=="favorites" || (e.kind==="earnings" && favoriteSet.has(e.symbol))))
+   .sort((a,b)=>{
+     if(sort==="az")return a.title.localeCompare(b.title) || a.date.localeCompare(b.date);
+     if(sort==="impact"){
+       const rank={high:0,medium:1,low:2,unknown:3};
+       return (rank[a.impact]??3)-(rank[b.impact]??3) || a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+     }
+     return a.date.localeCompare(b.date) || (a.at||"").localeCompare(b.at||"") || a.title.localeCompare(b.title);
+   });
  const count=Math.max(1,Math.ceil(rows.length/BUN_EVENTS_PER_PAGE));
  bunEventsPage=Math.min(bunEventsPage,count-1);
  const fmt=new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Chicago"});
@@ -2581,11 +2592,17 @@ async function refreshMarketEvents(){
 }
 function eventsFromChart(){
  const input=document.getElementById("eventTickerFilter");
- if(input)input.value=selectedSymbol();
+ // Apply the ticker the user entered. Do not replace it with the chart symbol.
+ if(input)input.value=input.value.trim().toUpperCase();
+ bunEventsPage=0;renderMarketEvents();
+}
+function clearEventTicker(){
+ const input=document.getElementById("eventTickerFilter");
+ if(input)input.value="";
  bunEventsPage=0;renderMarketEvents();
 }
 document.addEventListener("change",e=>{
- if(e.target?.id==="eventTypeFilter"){bunEventsPage=0;renderMarketEvents();}
+ if(["eventTypeFilter","eventSortFilter"].includes(e.target?.id)){bunEventsPage=0;renderMarketEvents();}
 });
 document.addEventListener("input",e=>{
  if(e.target?.id==="eventTickerFilter"){bunEventsPage=0;renderMarketEvents();}
