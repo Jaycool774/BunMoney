@@ -1246,3 +1246,17 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .news-impact[data-impact="potentially bullish"] .news-impact-label{color:#b9f768}
 .news-impact[data-impact="potentially bearish"] .news-impact-label{color:#ff8b98}
 .news-impact p{margin:0}
+
+/* Multi-market news list, direction labels, and pagination */
+.news-pages{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:16px}
+.news-pages button{background:#263927;color:#c9ff9b;padding:10px 16px;border-radius:10px;border:1px solid #53694b}
+.news-pages button:disabled{opacity:.4}
+.news-pages span,.news-timing{font-size:12px;line-height:1.6;color:#adc1d2}
+.news-timing{margin:10px 0}
+.market-news-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.market-news-top strong{color:#baff75;font-size:17px}
+.market-news-direction{font-size:12px;font-weight:bold;color:#b8c8d7}
+.market-news-direction[data-impact="potentially bullish"]{color:#a3e635}
+.market-news-direction[data-impact="potentially bearish"]{color:#ff8b98}
+.market-news-reason{font-size:13px;line-height:1.55;color:#afc1d1}
+.market-news-chart{border-radius:9px;background:#a3e635;color:#10170b;padding:9px 12px;margin-top:12px;font-weight:750}
