@@ -1260,3 +1260,25 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .market-news-direction[data-impact="potentially bearish"]{color:#ff8b98}
 .market-news-reason{font-size:13px;line-height:1.55;color:#afc1d1}
 .market-news-chart{border-radius:9px;background:#a3e635;color:#10170b;padding:9px 12px;margin-top:12px;font-weight:750}
+
+/* Market events, responsive and separate from AI */
+.bun-events{margin:20px 0 !important;padding:23px !important;background:#121c22}
+.events-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+.events-header h3{font-size:22px;margin:0 0 6px}.events-header p{color:#afc0ce;font-size:13px;margin:0}
+.events-header button,.event-controls button{border-radius:10px;background:#a3e635;color:#10180b;padding:11px 15px}
+.event-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0}
+.event-controls label{font-size:13px;color:#a5bed0}
+.event-controls input,.event-controls select{background:#0e1720;color:white;border:1px solid #465362;border-radius:10px;padding:10px;min-height:43px}
+.event-controls input{flex:1;min-width:190px}
+.events-status,.events-source{color:#aebfd1;font-size:12px;line-height:1.6}
+.events-source{margin:15px 0 0}.events-source a,.events-item a{color:#b7fc62}
+.events-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:13px}
+.events-item{background:#0f1721;border:1px solid #344454;border-radius:14px;padding:17px}
+.event-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.event-title strong{color:white;font-size:16px}.event-title span{font-size:11px;color:#bbf77c;text-transform:capitalize}
+.event-when{font-weight:bold;color:#e3f6d6;font-size:13px}
+.event-note,.event-meta{color:#afc1cf;font-size:12px;line-height:1.5}
+.events-pages{display:flex;justify-content:center;align-items:center;gap:13px;margin-top:16px}
+.events-pages button{padding:10px 14px;color:#d2ffb1;background:#243727;border-radius:10px}
+.events-pages button:disabled{opacity:.35}
+@media(max-width:600px){.bun-events{padding:15px !important}.events-header button{width:100%}}
