@@ -102,6 +102,10 @@ const assert = require("node:assert/strict");
     // Validate user-visible navigation rather than a specific CSS layout mode.
     assert.equal(await page.locator("#home").isVisible(), true);
     assert.equal(await page.locator("#favoritesScreen").isVisible(), false);
+    // Emperor Bunny gives a truthful, useful answer without a paid model key.
+    await page.locator('[data-emperor-question="Explain the current chart"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".emperor-msg.assistant").length > 0);
+    assert.match(await page.locator(".emperor-msg.assistant").last().textContent(), /Chart|AAPL|Trend|Analyze/i);
     page.on("dialog", (dialog) => dialog.accept());
     await page.locator("#demoMarketButton").click();
     // The toggle uses an alert; accept dialogs before issuing further actions.

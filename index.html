@@ -311,6 +311,24 @@
 
     </section>
 
+    <section class="setup emperor-card" id="emperorBunny" aria-label="Emperor Bunny AI assistant">
+      <div class="emperor-header">
+        <div><h3>👑🐰 Emperor Bunny AI</h3><p>Your personal BunMoney market analyst and trading coach.</p></div>
+        <span id="emperorMode" class="emperor-mode">Chart Coach · No AI key needed</span>
+      </div>
+      <div class="emperor-quick-actions">
+        <button type="button" data-emperor-question="Explain the current chart">Explain chart</button>
+        <button type="button" data-emperor-question="What are the risks and levels?">Risks &amp; levels</button>
+        <button type="button" data-emperor-question="What should I watch for next?">What to watch</button>
+      </div>
+      <div class="emperor-messages" id="emperorMessages" role="log" aria-live="polite"><p class="emperor-intro">Welcome! Analyze a market, then ask me about its trend, price levels, risk, or indicators. I never execute trades.</p></div>
+      <form id="emperorForm" class="emperor-form">
+        <label for="emperorInput">Ask Emperor Bunny</label>
+        <div class="emperor-compose"><input id="emperorInput" type="text" maxlength="500" autocomplete="off" placeholder="Why is this ticker bullish?"><button type="submit" id="emperorSend">Ask Bunny →</button></div>
+      </form>
+      <p class="emperor-footnote">Educational analysis only · Uses the displayed market snapshot · AI model requires a separate optional server-side API key.</p>
+    </section>
+
   </main>
 
   <section class="setup spike-board" id="spikeBoard" aria-label="Recent market spikes">

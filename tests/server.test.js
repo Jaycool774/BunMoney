@@ -161,3 +161,24 @@ test('Provider quota cooldown prevents repeated credit-consuming requests', asyn
   await assert.rejects(engine.quote({symbol:'SOUN'}),{status:429});
   assert.equal(calls,1);
 });
+
+test("Emperor Bunny optional API validates input and does not reveal secrets", async (t) => {
+  const base = await serve(t,{aiKey:""});
+  const post = async data => fetch(base+"/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  assert.equal((await post({message:""})).status,400);
+  const noKey = await post({message:"Explain my chart"});
+  assert.equal(noKey.status,503);
+  assert.ok(!(await noKey.text()).includes("sk-"));
+});
+test("Emperor Bunny calls a server-side AI provider and returns text only", async (t) => {
+  let got;
+  const base = await serve(t,{aiKey:"test-secret",aiFetchImpl:async (_url, opts) => {
+    got=JSON.parse(opts.body);
+    assert.equal(opts.headers.Authorization,"Bearer test-secret");
+    return {ok:true,json:async()=>({output:[{type:"message",content:[{type:"output_text",text:"Support is a zone, not a guarantee."}]}]})};
+  }});
+  const response=await fetch(base+"/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Explain support",context:{symbol:"AAPL",support:100}})});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).text,"Support is a zone, not a guarantee.");
+  assert.equal(got.store,false);
+});
