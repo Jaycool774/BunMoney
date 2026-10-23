@@ -177,8 +177,7 @@ test("Conversational AI requires private server API key", async t => {
   const chat=await fetch(base+"/api/ai/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Hello",history:[]})});
   assert.equal(chat.status,503);
   assert.match((await chat.json()).error,/OPENAI_API_KEY/);
-  const news=await fetch(base+"/api/news?symbol=TSLA");
-  assert.equal(news.status,503);
+  // News no longer requires an AI key; test its behavior independently above.
   const invalid=await fetch(base+"/api/news?symbol=%3Cscript%3E");
   assert.equal(invalid.status,400);
 });
@@ -197,7 +196,16 @@ test("Conversational AI supports sourced news and bounded history", async t => {
   assert.equal(data.sources.length,1);
   assert.equal(data.sources[0].url,"https://example.com/report");
   assert.equal(calls[0].tools[0].type,"web_search");
-  await fetch(base+"/api/news?symbol=TSLA");
-  await fetch(base+"/api/news?symbol=TSLA");
-  assert.equal(calls.length,2); // cached news
+  assert.equal(calls.length,1); // Market news no longer calls the AI provider
+});
+
+test("Independent news returns sourced headlines without an AI key",async t=>{
+ const xml='<?xml version="1.0"?><rss><channel><item><title>TSLA announces update &amp; guidance</title><link>https://news.google.com/rss/articles/abc</link><pubDate>Thu, 22 Oct 2026 20:00:00 GMT</pubDate><source>Ticker News</source></item></channel></rss>';
+ let calls=0;
+ const base=await serve(t,{aiKey:"",newsFetchImpl:async()=>{calls++;return {ok:true,text:async()=>xml};}});
+ const r=await fetch(base+"/api/news?symbol=TSLA");assert.equal(r.status,200);
+ const data=await r.json();assert.equal(data.articles.length,1);assert.match(data.articles[0].title,/TSLA announces/);
+ assert.equal(data.articles[0].source,"Ticker News");
+ assert.equal((await fetch(base+"/api/news?symbol=TSLA")).status,200);assert.equal(calls,1);
+ assert.equal((await fetch(base+"/api/news?symbol=%3Cscript%3E")).status,400);
 });
