@@ -161,3 +161,22 @@ test('Provider quota cooldown prevents repeated credit-consuming requests', asyn
   await assert.rejects(engine.quote({symbol:'SOUN'}),{status:429});
   assert.equal(calls,1);
 });
+
+test("Emperor Bunny explains supplied chart context without trading", async t => {
+  const base = await serve(t);
+  const response = await fetch(base + "/api/ai/chat", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({message:"Explain the risk", context: {symbol:"AAPL",trend:"BULLISH",setup:"WAIT",price:100,support:95,resistance:108,stop:94,target:112,rr:2,ageMs:2000,source:"live"}})
+  });
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.mode,"educational");
+  assert.match(result.text,/AAPL/);
+  assert.match(result.text,/risk/i);
+  assert.match(result.text,/paper trading/i);
+  const invalid=await fetch(base + "/api/ai/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:""})});
+  assert.equal(invalid.status,400);
+  const without=await fetch(base + "/api/ai/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:"Explain chart"})});
+  assert.equal(without.status,200);
+  assert.match((await without.json()).text,/ANALYZE/);
+});
