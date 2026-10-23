@@ -1285,3 +1285,13 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 
 #eventSortFilter{min-width:150px}
 .event-controls button[data-action="clearEventTicker"]{background:#263342;color:#d3e4f5;border:1px solid #455264}
+
+.bot-dashboard {margin:24px auto; padding:20px; max-width:1100px; background:#14231f; color:#e5f4ec; border:1px solid #477360; border-radius:16px; overflow:auto}
+.bot-dashboard summary {cursor:pointer; font-size:1.2rem; font-weight:700}
+.bot-controls {display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.bot-dashboard button,.bot-dashboard select {padding:10px; border-radius:8px; border:1px solid #659b7c; background:#234b37; color:white}
+.bot-dashboard .bot-emergency {background:#8b1d2b; border-color:#ff7b8a}
+.bot-dashboard button:disabled {opacity:.5}
+.bot-dashboard table {border-collapse:collapse; font-size:.85rem; width:100%}
+.bot-dashboard td,.bot-dashboard th {padding:8px; text-align:left; border-bottom:1px solid #477360}
+.bot-dashboard pre {white-space:pre-wrap; overflow-wrap:anywhere}
