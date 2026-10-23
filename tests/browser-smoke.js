@@ -79,10 +79,10 @@ const assert = require("node:assert/strict");
     await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
     await page.locator("#favoriteInput").fill("ETH/USD");
     await page.locator('[data-action="addFavorite"]').click();
+    // Favorites validates against the provider before saving; wait for the async response.
+    await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').waitFor();
     assert.equal(
-      await page
-        .locator('[data-action="openFavorite"][data-symbol="ETH/USD"]')
-        .count(),
+      await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').count(),
       1,
     );
     await page
@@ -98,12 +98,10 @@ const assert = require("node:assert/strict");
       .locator('[data-action="showScreen"][data-screen="home"]')
       .click();
     await page.keyboard.press("t");
-    assert.equal(
-      await page
-        .locator("#home")
-        .evaluate((el) => getComputedStyle(el).display),
-      "block",
-    );
+    // The responsive dashboard can be flex on mobile or grid on desktop.
+    // Validate user-visible navigation rather than a specific CSS layout mode.
+    assert.equal(await page.locator("#home").isVisible(), true);
+    assert.equal(await page.locator("#favoritesScreen").isVisible(), false);
     page.on("dialog", (dialog) => dialog.accept());
     await page.locator("#demoMarketButton").click();
     // The toggle uses an alert; accept dialogs before issuing further actions.

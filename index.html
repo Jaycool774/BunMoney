@@ -35,6 +35,7 @@
         autocomplete="off"
       >
       <button data-action="analyze">ANALYZE</button>
+      <button type="button" class="favorite-current" data-action="addCurrentFavorite">☆ Save symbol</button>
     </section>
 
     <section class="setup connection-settings">
@@ -79,6 +80,7 @@
     <!-- CHART -->
     <section class="chart-card home-chart" id="mainChartCard">
 
+      <div class="chart-heading"><h3>Market Chart</h3><span>Live candles · SMA 10 / 20</span></div>
       <div class="chart-tools-row">
         <div class="timeframes chart-timeframes">
 
@@ -310,6 +312,19 @@
     </section>
 
   </main>
+
+  <section class="setup spike-board" id="spikeBoard" aria-label="Recent market spikes">
+    <div class="spike-board-header">
+      <div>
+        <h3>⚡ Recent Market Spikes</h3>
+        <p>Unusual moves in recent 5-minute candles from your Favorites. Not a market-wide scanner.</p>
+      </div>
+      <button type="button" data-action="scanSpikes" id="scanSpikesButton">Scan spikes</button>
+    </div>
+    <p class="spike-board-status" id="spikeStatus" role="status" aria-live="polite">Scan to check up to 8 favorites. A 1.5% candle move is flagged.</p>
+    <div id="spikeResults" class="spike-results"><div class="spike-empty">No scan yet. Save some favorites, then select Scan spikes.</div></div>
+    <p class="spike-disclaimer">Move time is the provider's candle time, not the exact second of the spike. “Detected” means when BunMoney retrieved the result; data may be delayed.</p>
+  </section>
 
   <section class="setup" aria-label="Data and tools">
     <h3>Watchlist scanner (first 10 favorites)</h3><button data-action="scanMarket">Scan watchlist</button><div id="scanner"></div>
