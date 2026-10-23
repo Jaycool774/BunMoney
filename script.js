@@ -1508,6 +1508,7 @@ async function addFavorite(fromChart = null) {
 function addCurrentFavorite() { addFavorite(selectedSymbol()); }
 function removeFavorite(symbol) {
   bunFavorites = bunFavorites.filter(item => item !== symbol);
+  favoriteDetailsCache.delete(symbol);
   saveFavorites(); renderFavorites(); mascotReaction(`${symbol} removed from favorites. 🐰`);
 }
 function focusAnalyzer() {
@@ -1544,68 +1545,124 @@ function openFavorite(symbol) {
   mascotReaction(`Watching ${symbol}. Let's see what the market is doing. 🐰`);
   analyze(true);
 }
+const favoriteDetailsCache = new Map();
+const FAVORITE_DETAILS_TTL = 15 * 60 * 1000;
+let favoriteUpdatesRunning = false;
+
+function renderFavoriteDetails(symbol, snapshot) {
+  if (!bunFavorites.includes(symbol) || !snapshot) return;
+  const field = (part, value) => setText(`favorite-${part}-${symbol}`, value);
+  field("price", snapshot.price != null ? formatMoney(snapshot.price) : "—");
+  field("change", snapshot.change == null ? "—" : `${snapshot.change >= 0 ? "+" : ""}${snapshot.change.toFixed(2)}%`);
+  field("trend", snapshot.trend || "—");
+  field("volume", snapshot.volume || "—");
+  field("setup", snapshot.setup || "—");
+  field("support", snapshot.support != null ? formatMoney(snapshot.support) : "—");
+  field("resistance", snapshot.resistance != null ? formatMoney(snapshot.resistance) : "—");
+  field("status", snapshot.error ? "Data unavailable · " + snapshot.error : 
+    (snapshot.source === "demo" ? "Simulated data" : "Updated " + new Date(snapshot.fetchedAt).toLocaleTimeString()));
+  const move = document.getElementById(`favorite-change-${symbol}`);
+  if (move) move.style.color = snapshot.change == null ? "" : snapshot.change >= 0 ? "#a3e635" : "#fb7185";
+}
 function renderFavorites() {
-  const container = document.getElementById("chartFavoritesList") || document.getElementById("favoritesList");
+  const container = document.getElementById("favoritesList") || document.getElementById("chartFavoritesList");
   if (!container) return;
   if (!bunFavorites.length) {
-    container.innerHTML = `<div class="alert empty">No favorite markets yet.</div>`; return;
+    container.innerHTML = '<div class="alert empty">No favorite markets yet. Add a ticker below.</div>';
+    return;
   }
   container.innerHTML = bunFavorites.filter(Trading.validSymbol).map(symbol => `
-    <div class="favorite-market" id="favorite-${symbol}">
+    <article class="favorite-market" id="favorite-${symbol}">
       <div class="favorite-top">
-        <div><strong>⭐ ${symbol}</strong><span class="favorite-price" id="favorite-price-${symbol}">—</span></div>
-        <button class="favorite-remove" data-action="removeFavorite" data-symbol="${symbol}">×</button>
+        <div class="favorite-heading"><strong>⭐ ${symbol}</strong><span class="favorite-price" id="favorite-price-${symbol}">—</span></div>
+        <button type="button" class="favorite-remove" data-action="removeFavorite" data-symbol="${symbol}" aria-label="Remove ${symbol} from favorites">×</button>
       </div>
       <div class="favorite-stats">
-        <div><span>Move</span><strong id="favorite-change-${symbol}">—</strong></div>
+        <div><span>5m move</span><strong id="favorite-change-${symbol}">—</strong></div>
         <div><span>Trend</span><strong id="favorite-trend-${symbol}">—</strong></div>
-        <div><span>Volume</span><strong id="favorite-volume-${symbol}">—</strong></div>
+        <div><span>Volume ratio</span><strong id="favorite-volume-${symbol}">—</strong></div>
         <div><span>Setup</span><strong id="favorite-setup-${symbol}">—</strong></div>
       </div>
       <div class="favorite-levels">
-        <span>Support: <strong id="favorite-support-${symbol}">—</strong></span>
-        <span>Resistance: <strong id="favorite-resistance-${symbol}">—</strong></span>
+        <span>Support <strong id="favorite-support-${symbol}">—</strong></span>
+        <span>Resistance <strong id="favorite-resistance-${symbol}">—</strong></span>
       </div>
-      <button class="favorite-open" data-action="openFavorite" data-symbol="${symbol}">View Chart →</button>
-    </div>`).join("");
+      <p class="favorite-status" id="favorite-status-${symbol}">Checking market data…</p>
+      <button type="button" class="favorite-open" data-action="openFavorite" data-symbol="${symbol}">View ${symbol} chart →</button>
+    </article>`).join("");
+  for (const symbol of bunFavorites) {
+    if (favoriteDetailsCache.has(symbol)) renderFavoriteDetails(symbol, favoriteDetailsCache.get(symbol));
+  }
+}
+async function fetchFavoriteDetails(symbol) {
+  const quote = await marketEngineRequest("/price", { symbol });
+  if (!Trading.positive(Number(quote.price)) ||
+      (quote.symbol && String(quote.symbol).toUpperCase() !== symbol))
+    throw new Error("Quote unavailable");
+  const series = await marketEngineRequest("/time_series", {symbol,interval:"5min",outputsize:30});
+  if (series.meta?.symbol && String(series.meta.symbol).toUpperCase() !== symbol)
+    throw new Error("Mismatched market data");
+  const candles = Trading.candles(series.values);
+  const closes = candles.map(c => c.close);
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const last = closes.at(-1), previous = closes.at(-2);
+  const price = Number(quote.price);
+  const sma10 = calculateSMA(closes,10).at(-1);
+  const sma20 = calculateSMA(closes,20).at(-1);
+  const trend = price > sma10 && sma10 > sma20 ? "BULLISH" :
+                price < sma10 && sma10 < sma20 ? "BEARISH" : "SIDEWAYS";
+  const recentVolumes = candles.slice(-21,-1).map(c => c.volume);
+  const avgVolume = average(recentVolumes);
+  const volumeRatio = avgVolume > 0 ? candles.at(-1).volume / avgVolume : null;
+  // Exclude the current candle when checking breakout/breakdown.
+  const upper = Math.max(...highs.slice(-21,-1));
+  const lower = Math.min(...lows.slice(-21,-1));
+  const setup = price > upper ? "POSSIBLE BREAKOUT" :
+                price < lower ? "POSSIBLE BREAKDOWN" : "WAIT";
+  return {price, change: previous > 0 ? (last-previous)/previous*100 : null,
+    trend, volume: volumeRatio == null ? "N/A" : volumeRatio.toFixed(2)+"x",
+    setup, support:Math.min(...lows.slice(-20)),
+    resistance:Math.max(...highs.slice(-20)),fetchedAt:Date.now(),
+    source:demoMarketEnabled ? "demo" : "live"};
 }
 async function updateFavorites(force = false) {
-  if (!bunFavorites.length) return;
-  for (const symbol of bunFavorites) {
-    try {
-      if (!MARKET_ENGINE_URL && !demoMarketEnabled) continue;
-      const data = await marketEngineRequest("/price", { symbol });
-      if (!data.price || !Number.isFinite(Number(data.price))) continue;
-      const price = Number(data.price);
-      updateHomeMarketCard(symbol, price, NaN);
-      const priceElement = document.getElementById(`favorite-price-${symbol}`);
-      if (priceElement) priceElement.textContent = formatMoney(price);
-      if (lastAnalysis && lastAnalysis.ticker === symbol) updateFavoriteFromAnalysis(symbol, lastAnalysis);
-      else {
-        const change = document.getElementById(`favorite-change-${symbol}`);
-        if (change) change.textContent = "Live";
+  if (favoriteUpdatesRunning || !bunFavorites.length) return;
+  favoriteUpdatesRunning = true;
+  const source = marketSource();
+  try {
+    // Read from per-symbol cache first to avoid exhausting provider credits.
+    for (const symbol of [...bunFavorites]) {
+      const cached = favoriteDetailsCache.get(symbol);
+      if (cached && cached.source === source && Date.now()-cached.fetchedAt < FAVORITE_DETAILS_TTL) {
+        renderFavoriteDetails(symbol,cached);
+        continue;
       }
-    } catch (error) { console.log("Favorite update failed:", symbol); }
-  }
+      try {
+        const snapshot = await fetchFavoriteDetails(symbol);
+        if (source !== marketSource() || !bunFavorites.includes(symbol)) continue;
+        favoriteDetailsCache.set(symbol,snapshot);
+        renderFavoriteDetails(symbol,snapshot);
+        updateHomeMarketCard(symbol,snapshot.price,snapshot.change);
+      } catch(error) {
+        if (source !== marketSource() || !bunFavorites.includes(symbol)) continue;
+        // Keep last good prices visibly marked as stale rather than erasing them.
+        const fallback = cached && cached.source === source ? {...cached,error:"Refresh failed",fetchedAt:cached.fetchedAt} :
+          {price:null,change:null,trend:"—",volume:"—",setup:"—",support:null,resistance:null,
+            error:"Check provider, market hours or API limits",fetchedAt:Date.now(),source};
+        renderFavoriteDetails(symbol,fallback);
+      }
+    }
+  } finally { favoriteUpdatesRunning = false; }
 }
 function updateFavoriteFromAnalysis(symbol, analysis) {
-  updateHomeMarketCard(symbol, analysis.currentPrice, analysis.changePercent);
-  setText(`favorite-price-${symbol}`, formatMoney(analysis.currentPrice));
-  const change = document.getElementById(`favorite-change-${symbol}`);
-  if (change) {
-    change.textContent = `${analysis.changePercent >= 0 ? "+" : ""}${analysis.changePercent.toFixed(2)}%`;
-    change.style.color = analysis.changePercent >= 0 ? "#22c55e" : "#ef4444";
-  }
-  setText(`favorite-trend-${symbol}`, analysis.trend);
-  setText(`favorite-volume-${symbol}`, analysis.volumeRatio ? analysis.volumeRatio.toFixed(1) + "x" : "—");
-  let setup = "WAIT";
-  if (analysis.retest === "RETEST AREA") setup = "RETEST";
-  else if (analysis.breakout === "POSSIBLE BREAKOUT") setup = "BREAKOUT";
-  else if (analysis.setupQuality === "HIGH") setup = "STRONG";
-  else if (analysis.setupQuality === "MODERATE") setup = "FORMING";
-  setText(`favorite-setup-${symbol}`, setup);
-  setText(`favorite-support-${symbol}`, formatMoney(analysis.support));
-  setText(`favorite-resistance-${symbol}`, formatMoney(analysis.resistance));
+  if (!bunFavorites.includes(symbol)) return;
+  const existing = favoriteDetailsCache.get(symbol);
+  if (!existing || existing.source !== analysis.source) return;
+  // Keep the latest independent snapshot intact. Analysis can refresh the quote
+  // but must not replace this symbol's 5-minute metrics with different intervals.
+  updateHomeMarketCard(symbol,analysis.currentPrice,existing.change);
+  renderFavoriteDetails(symbol,existing);
 }
 function createChartCopilot() {
   const canvas = document.getElementById("chart");

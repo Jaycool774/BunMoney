@@ -1178,3 +1178,21 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .spike-empty{padding:20px;border-radius:12px;border:1px dashed #415064;color:var(--muted)}
 .spike-disclaimer{margin-top:16px}
 @media(max-width:600px){.spike-board{padding:16px !important}.spike-board-header button{width:100%}}
+
+/* Favorites market detail cards — one clear dashboard card per saved symbol. */
+#favoritesList{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:18px 0}
+#favoritesList .favorite-market{display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid #303c4c;border-radius:16px;background:#141b26;min-width:0}
+#favoritesList .favorite-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+#favoritesList .favorite-heading{display:flex;flex-direction:column;gap:8px;min-width:0}
+#favoritesList .favorite-heading strong{font-size:18px;color:#fff}
+#favoritesList .favorite-price{display:block;font-size:25px;font-weight:800;color:#b9fb55}
+#favoritesList .favorite-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#favoritesList .favorite-stats>div{background:#0e141d;padding:12px;border:1px solid #273242;border-radius:10px;min-width:0}
+#favoritesList .favorite-stats span{display:block;color:#9caec4;font-size:12px;margin-bottom:7px}
+#favoritesList .favorite-stats strong{display:block;font-size:15px;color:#f3f6fa;overflow-wrap:anywhere}
+#favoritesList .favorite-levels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#favoritesList .favorite-levels span{font-size:12px;color:#9caec4;display:flex;flex-direction:column;gap:6px}
+#favoritesList .favorite-levels strong{font-size:16px;color:#fff}
+#favoritesList .favorite-status{margin:0;color:#94a8be;font-size:11px;line-height:1.45}
+#favoritesList .favorite-remove{border-radius:10px;background:#44202a;color:#ffd8df;padding:7px 12px;font-size:20px}
+#favoritesList .favorite-open{width:100%;min-height:44px;border-radius:10px;background:#a3e635;color:#10180a;font-size:14px;margin-top:auto}
