@@ -209,3 +209,11 @@ test("Independent news returns sourced headlines without an AI key",async t=>{
  assert.equal((await fetch(base+"/api/news?symbol=TSLA")).status,200);assert.equal(calls,1);
  assert.equal((await fetch(base+"/api/news?symbol=%3Cscript%3E")).status,400);
 });
+
+test("News impact labels are heuristic, not confirmed price predictions",()=>{
+ const {classifyHeadline}=require("../server/news-feed");
+ assert.equal(classifyHeadline("TSLA raises guidance").impact,"potentially bullish");
+ assert.equal(classifyHeadline("TSLA cuts guidance").impact,"potentially bearish");
+ assert.equal(classifyHeadline("TSLA reports a new update").impact,"uncertain");
+ assert.equal(classifyHeadline("TSLA raises and cuts guidance").impact,"uncertain");
+});
