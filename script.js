@@ -2350,3 +2350,80 @@ document.addEventListener("input", event => {
 window.addEventListener("beforeunload", () => { saveGameState(); coinbaseFeed?.stop(); });
 
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target?.id === "favoriteInput") { e.preventDefault(); addFavorite(); } });
+
+/* Emperor Bunny: grounded market coach with optional private model backend. */
+const emperorHistory = [];
+let emperorBusy = false;
+function emperorSnapshot() {
+  const market = lastAnalysis;
+  const valid = market && market.ticker === selectedSymbol() && market.source === marketSource() &&
+    Date.now() - market.timestamp <= 120000;
+  if (!valid) return null;
+  const numeric = (key) => Number.isFinite(Number(market[key])) ? Number(market[key]) : null;
+  return {symbol:market.ticker,source:market.source,ageSeconds:Math.round((Date.now()-market.timestamp)/1000),
+    price:numeric("currentPrice"),trend:market.trend,changePercent:numeric("changePercent"),
+    rsi:numeric("rsi"),volumeRatio:numeric("volumeRatio"),support:numeric("support"),
+    resistance:numeric("resistance"),entry:numeric("entry"),stop:numeric("stop"),
+    target:numeric("target"),riskReward:numeric("rr"),decision:market.decision,
+    setupQuality:market.setupQuality,breakout:market.breakout,retest:market.retest};
+}
+function emperorLocalAnswer(question, market) {
+  if (!market) return "Analyze a ticker first, then ask me again. I only use recent analysis from the selected market, so I won’t pretend to know its current price.";
+  const price = n => Number.isFinite(n) ? formatMoney(n) : "unavailable";
+  const num = n => Number.isFinite(n) ? n.toFixed(2) : "unavailable";
+  const intro = market.symbol + " (" + market.source + " data; analyzed " + market.ageSeconds + " seconds ago).";
+  const risk = "Key levels: support " + price(market.support) + ", resistance " + price(market.resistance) +
+    ". Example plan: entry " + price(market.entry) + ", stop " + price(market.stop) +
+    ", target " + price(market.target) + ", risk/reward " + num(market.riskReward) + ":1. These are estimates, not orders.";
+  const trend = "Trend: " + market.trend + ". RSI " + num(market.rsi) +
+    ", volume relative to recent average " + num(market.volumeRatio) + "x. " +
+    "Signal: " + market.decision + "; setup quality: " + market.setupQuality + ".";
+  const lower = question.toLowerCase();
+  if (/risk|stop|loss|target|level|reward/.test(lower)) return intro + "\n" + risk + "\nKeep position sizes small and don't treat a stop as a guaranteed fill.";
+  if (/watch|next|breakout|confirmation/.test(lower)) return intro + "\n" + trend +
+    "\nWatch for price behavior near support and resistance, a confirmed breakout/retest, and sustained volume. No move is guaranteed.";
+  return intro + "\n" + trend + "\n" + risk +
+    "\nThis is a rules-based chart explanation. Connect an optional AI provider to ask open-ended questions.";
+}
+function emperorAppend(role,text) {
+  const box=document.getElementById("emperorMessages");
+  if (!box) return;
+  const p=document.createElement("div");p.className="emperor-msg "+role;
+  const title=document.createElement("strong");title.textContent=role==="user"?"You":"👑 Emperor Bunny";
+  const content=document.createElement("span");content.textContent=text;
+  p.append(title,content);box.append(p);box.scrollTop=box.scrollHeight;
+}
+async function emperorAsk(question) {
+  const message=String(question||"").trim().slice(0,500);
+  if (!message || emperorBusy) return;
+  emperorBusy=true;
+  const submit=document.getElementById("emperorSend");if(submit)submit.disabled=true;
+  const input=document.getElementById("emperorInput");if(input)input.value="";
+  const snapshot=emperorSnapshot();
+  emperorAppend("user",message);
+  let reply,mode="Chart Coach · No AI key needed";
+  try {
+    const headers={"Content-Type":"application/json"};
+    if (engineToken) headers.Authorization="Bearer "+engineToken;
+    const response=await fetch("/api/ai/chat",{method:"POST",headers,
+      signal:AbortSignal.timeout(15000),body:JSON.stringify({message,context:snapshot,
+        history:emperorHistory.slice(-6)})});
+    if (!response.ok) throw new Error("Model unavailable");
+    const data=await response.json();
+    if(typeof data.text!=="string"||!data.text.trim())throw new Error("Empty reply");
+    reply=data.text.slice(0,2200);mode="Generative AI · Private server";
+  } catch { reply=emperorLocalAnswer(message,snapshot); }
+  emperorHistory.push({role:"user",content:message},{role:"assistant",content:reply});
+  if (emperorHistory.length>12) emperorHistory.splice(0,emperorHistory.length-12);
+  emperorAppend("assistant",reply);
+  setText("emperorMode",mode);
+  emperorBusy=false;if(submit)submit.disabled=false;
+}
+document.addEventListener("submit",event=>{
+  if(event.target?.id!=="emperorForm")return;
+  event.preventDefault();emperorAsk(document.getElementById("emperorInput")?.value);
+});
+document.addEventListener("click",event=>{
+  const button=event.target.closest("[data-emperor-question]");
+  if(button)emperorAsk(button.dataset.emperorQuestion);
+});
