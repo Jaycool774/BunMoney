@@ -342,10 +342,13 @@
     <div class="news-symbol-row">
       <label for="newsSymbol">Market</label>
       <input id="newsSymbol" type="text" maxlength="30" value="SOUN" placeholder="TSLA / SOUN / AAPL" autocomplete="off">
-      <button type="button" data-action="newsFromChart">Use chart ticker</button>
+      <button type="button" data-action="newsFromChart">Search entered ticker</button>
+      <button type="button" data-action="newsAllFavorites">All favorite markets</button>
     </div>
     <p id="liveNewsStatus" class="live-news-status" role="status" aria-live="polite">Choose a ticker and check the headlines. No AI key needed.</p>
+    <p class="news-timing" id="newsTiming">Regular US stock session: 9:30 AM–4:00 PM Eastern, weekdays excluding holidays. News cannot predict the exact time a stock will move.</p>
     <div class="news-brief" id="liveNewsBrief"></div>
+    <div class="news-pages" id="newsPages" aria-label="Market news pages"></div>
     <div class="news-sources" id="liveNewsSources"></div>
     <p class="news-footnote">Headlines are sourced from Google News RSS. Publisher and article dates are shown. Potential impact is a simple headline-based estimate, not a forecast or proof that news caused the market to move.</p>
   </section>
