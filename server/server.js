@@ -5,6 +5,7 @@ const { createMarketEngine } = require("./market-engine");
 const { explain } = require("./emperor-bunny");
 const { makeAssistant } = require("./live-ai");
 const { createNewsFeed } = require("./news-feed");
+const { createEventsCalendar } = require("./events-calendar");
 require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
 function createApp({
   apiKey = process.env.TWELVE_DATA_API_KEY,
@@ -16,11 +17,13 @@ function createApp({
   aiKey = process.env.OPENAI_API_KEY,
   aiFetchImpl = globalThis.fetch,
   newsFetchImpl = globalThis.fetch,
+  eventsFetchImpl = globalThis.fetch,
 } = {}) {
   const app = express(),
     engine = createMarketEngine({ apiKey, fetchImpl, now, timeoutMs }),
     assistant = makeAssistant({apiKey:aiKey,fetchImpl:aiFetchImpl,now}),
     newsFeed = createNewsFeed({fetchImpl:newsFetchImpl,now}),
+    eventsCalendar = createEventsCalendar({fetchImpl:eventsFetchImpl,now}),
     clients = new Map();
   app.disable("x-powered-by");
   app.set("trust proxy", false);
@@ -113,6 +116,10 @@ function createApp({
     } catch {
       res.status(502).json({error:"Market news service unavailable."});
     }
+  });
+  app.get("/api/events",async (_req,res)=>{
+    try{res.json(await eventsCalendar.load());}
+    catch{res.status(502).json({error:"Calendar temporarily unavailable."});}
   });
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
