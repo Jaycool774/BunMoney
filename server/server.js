@@ -3,6 +3,7 @@ const path = require("node:path");
 const { timingSafeEqual } = require("node:crypto");
 const { createMarketEngine } = require("./market-engine");
 const { explain } = require("./emperor-bunny");
+const { makeAssistant } = require("./live-ai");
 require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
 function createApp({
   apiKey = process.env.TWELVE_DATA_API_KEY,
@@ -11,9 +12,12 @@ function createApp({
   now = Date.now,
   requestLimit = 120,
   timeoutMs = 10000,
+  aiKey = process.env.OPENAI_API_KEY,
+  aiFetchImpl = globalThis.fetch,
 } = {}) {
   const app = express(),
     engine = createMarketEngine({ apiKey, fetchImpl, now, timeoutMs }),
+    assistant = makeAssistant({apiKey:aiKey,fetchImpl:aiFetchImpl,now}),
     clients = new Map();
   app.disable("x-powered-by");
   app.set("trust proxy", false);
@@ -90,9 +94,22 @@ function createApp({
         });
     }
   };
-  app.post("/api/ai/chat", express.json({ limit: "12kb" }), (req, res) => {
-    const result = explain(req.body?.message, req.body?.context);
-    res.status(result.status || 200).json(result);
+  app.post("/api/ai/chat", express.json({ limit: "12kb" }), async (req, res) => {
+    try {
+      // Do not silently describe canned answers as generative AI.
+      const result = await assistant.chat(req.body || {});
+      res.status(result.status || 200).json(result);
+    } catch {
+      res.status(502).json({error:"Assistant service unavailable."});
+    }
+  });
+  app.get("/api/news", async (req,res) => {
+    try {
+      const result = await assistant.marketNews(req.query.symbol);
+      res.status(result.status || 200).json(result);
+    } catch {
+      res.status(502).json({error:"Market news service unavailable."});
+    }
   });
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
