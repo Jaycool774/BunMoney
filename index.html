@@ -342,10 +342,13 @@
     <div class="news-symbol-row">
       <label for="newsSymbol">Market</label>
       <input id="newsSymbol" type="text" maxlength="30" value="SOUN" placeholder="TSLA / SOUN / AAPL" autocomplete="off">
-      <button type="button" data-action="newsFromChart">Use chart ticker</button>
+      <button type="button" data-action="newsFromChart">Search entered ticker</button>
+      <button type="button" data-action="scanAllNews">All favorite markets</button>
     </div>
     <p id="liveNewsStatus" class="live-news-status" role="status" aria-live="polite">Choose a ticker and check the headlines. No AI key needed.</p>
+    <div class="news-sort-note">Ranked by potential headline significance (not a prediction of price movement). Positive, negative, mixed and uncertain stories are all included.</div>
     <div class="news-brief" id="liveNewsBrief"></div>
+    <nav id="newsPagination" class="news-pagination" aria-label="News pages"></nav>
     <div class="news-sources" id="liveNewsSources"></div>
     <p class="news-footnote">Headlines are sourced from Google News RSS. Publisher and article dates are shown. Potential impact is a simple headline-based estimate, not a forecast or proof that news caused the market to move.</p>
   </section>

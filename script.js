@@ -2340,7 +2340,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(), newsFromChart:() => loadMarketNews(true), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(), newsFromChart:() => loadMarketNews(false), scanAllNews:() => loadMarketNews(true), newsPrevPage:() => changeNewsPage(-1), newsNextPage:() => changeNewsPage(1), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
@@ -2429,51 +2429,84 @@ async function emperorAsk(question) {
 }
 let marketNewsBusy = false;
 let marketNewsRequest = 0;
-async function loadMarketNews(useChart=false) {
-  if (marketNewsBusy) return;
-  const input=document.getElementById("newsSymbol");
+
+let newsFeedArticles=[], newsCurrentPage=1, newsMode="single";
+const NEWS_PAGE_SIZE=8;
+function newsRank(story) {
+  // Scores rank types of headline, never predict actual return or direction.
+  const title=String(story.title||"").toLowerCase();
+  let score=0;
+  if(/earnings|guidance|revenue|profit|acquisition|merger|fda|approval|bankruptcy|lawsuit|contract|offering|dilution|recall/.test(title))score+=3;
+  if(/beats|misses|raises|cuts|surges|plunges|downgrade|upgrade|investigation|layoffs/.test(title))score+=2;
+  if(story.impact==="potentially bullish"||story.impact==="potentially bearish")score+=2;
+  if(story.impact==="mixed / uncertain")score+=1;
+  return score;
+}
+function renderNewsPage() {
+  const brief=document.getElementById("liveNewsBrief"),pages=document.getElementById("newsPagination");
+  if(!brief||!pages)return;
+  brief.replaceChildren();pages.replaceChildren();
+  const total=Math.max(1,Math.ceil(newsFeedArticles.length/NEWS_PAGE_SIZE));
+  newsCurrentPage=Math.min(total,Math.max(1,newsCurrentPage));
+  if(!newsFeedArticles.length)brief.textContent="No matching articles found. Try other favorite tickers or check later.";
+  for(const story of newsFeedArticles.slice((newsCurrentPage-1)*NEWS_PAGE_SIZE,newsCurrentPage*NEWS_PAGE_SIZE)){
+    let url;try{url=new URL(story.url);if(url.protocol!=="https:")continue;}catch{continue;}
+    const card=document.createElement("article");card.className="market-news-story";
+    const top=document.createElement("div");top.className="market-news-ticker";
+    const ticker=document.createElement("strong");ticker.textContent=story.symbol||"MARKET";
+    const magnitude=document.createElement("small");
+    magnitude.textContent="Headline significance: "+(newsRank(story)>=5?"High":newsRank(story)>=3?"Moderate":"Uncertain");
+    top.append(ticker,magnitude);
+    const headline=document.createElement("a");
+    headline.href=url.href;headline.target="_blank";headline.rel="noopener noreferrer";headline.textContent=story.title;
+    const meta=document.createElement("p");meta.className="market-news-meta";
+    const dt=Date.parse(story.publishedAt);
+    meta.textContent=(story.source||"Publisher")+(Number.isFinite(dt)?" · Published "+new Date(dt).toLocaleString():"");
+    const impact=document.createElement("div");impact.className="news-impact";
+    const value=["potentially bullish","potentially bearish","mixed / uncertain","uncertain"].includes(story.impact)?story.impact:"uncertain";
+    impact.dataset.impact=value;
+    const label=document.createElement("strong");label.className="news-impact-label";label.textContent="Potential effect: "+value;
+    const reason=document.createElement("p");reason.textContent=story.why||"This headline alone cannot establish the direction of a price move.";
+    const when=document.createElement("p");when.className="market-news-timing";
+    when.textContent="Possible reaction time: Unknown. Check the chart around publication and at the next market session; movements are not guaranteed.";
+    impact.append(label,reason,when);card.append(top,headline,meta,impact);brief.append(card);
+  }
+  if(total>1){
+    const prev=document.createElement("button");prev.type="button";prev.textContent="← Previous";prev.disabled=newsCurrentPage===1;prev.dataset.action="newsPrevPage";
+    const position=document.createElement("span");position.textContent="Page "+newsCurrentPage+" of "+total;
+    const next=document.createElement("button");next.type="button";next.textContent="Next →";next.disabled=newsCurrentPage===total;next.dataset.action="newsNextPage";
+    pages.append(prev,position,next);
+  }
+}
+function changeNewsPage(offset){newsCurrentPage+=offset;renderNewsPage();document.getElementById("marketLiveNews")?.scrollIntoView({behavior:"smooth",block:"start"});}
+async function loadMarketNews(all=false) {
+  if(marketNewsBusy)return;
+  const input=document.getElementById("newsSymbol"),status=document.getElementById("liveNewsStatus"),
+    button=document.getElementById("newsRefreshButton");
   if(!input)return;
-  if(useChart)input.value=selectedSymbol();
-  const symbol=input.value.trim().toUpperCase(),status=document.getElementById("liveNewsStatus"),
-        brief=document.getElementById("liveNewsBrief"),sources=document.getElementById("liveNewsSources"),
-        button=document.getElementById("newsRefreshButton");
-  if(!Trading.validSymbol(symbol)){if(status)status.textContent="Enter a valid ticker, such as TSLA.";return;}
-  marketNewsBusy=true;const request=++marketNewsRequest;
-  if(button)button.disabled=true;
-  if(status)status.textContent="Fetching recent headlines for "+symbol+"…";
-  brief?.replaceChildren();sources?.replaceChildren();
+  const entered=input.value.trim().toUpperCase();
+  // Search entered ticker never overwrites it with the current chart ticker.
+  const tickers=all?[...new Set((bunFavorites||[]).filter(Trading.validSymbol))].slice(0,12):[entered];
+  if(!tickers.length||tickers.some(s=>!Trading.validSymbol(s))){if(status)status.textContent="Enter a ticker or save some Favorites.";return;}
+  marketNewsBusy=true;if(button)button.disabled=true;
+  if(status)status.textContent="Checking headlines for "+tickers.join(", ")+"…";
+  const results=[];const failed=[];
   try {
-    const response=await fetch("/api/news?symbol="+encodeURIComponent(symbol));
-    const data=await response.json();
-    if(!response.ok)throw new Error(data.error || "News service unavailable.");
-    if(request!==marketNewsRequest)return;
-    if(brief){
-      if(!data.articles?.length)brief.textContent="No recent matching articles found. Try another ticker or check again later.";
-      for(const story of data.articles || []){
-        const card=document.createElement("article");card.className="market-news-story";
-        const headline=document.createElement("a");
-        try {const url=new URL(story.url);if(url.protocol!=="https:")continue;
-          headline.href=url.href;headline.target="_blank";headline.rel="noopener noreferrer";}
-        catch {continue;}
-        headline.textContent=story.title;
-        const meta=document.createElement("p");meta.className="market-news-meta";
-        const when=Date.parse(story.publishedAt);
-        meta.textContent=(story.source||"News publisher")+
-          (Number.isFinite(when)?" · Published "+new Date(when).toLocaleString():"");
-        const impact=document.createElement("div"); impact.className="news-impact";
-        const pill=document.createElement("strong");pill.className="news-impact-label";
-        const allowed=["potentially bullish","potentially bearish","mixed / uncertain","uncertain"];
-        const value=allowed.includes(story.impact)?story.impact:"uncertain";
-        pill.textContent="Potential impact: "+value;
-        impact.dataset.impact=value;
-        const rationale=document.createElement("p");rationale.textContent=String(story.why||"Headline alone cannot establish price impact.");
-        impact.append(pill,rationale);
-        card.append(headline,meta,impact);brief.append(card);
-      }
+    const responses=await Promise.all(tickers.map(async symbol=>{
+      try{const res=await fetch("/api/news?symbol="+encodeURIComponent(symbol));const data=await res.json();
+        if(!res.ok)throw Error(data.error||"News unavailable");
+        return {symbol,articles:data.articles||[]};
+      }catch{return {symbol,error:true};}
+    }));
+    for(const result of responses){
+      if(result.error){failed.push(result.symbol);continue;}
+      for(const article of result.articles)results.push({...article,symbol:result.symbol});
     }
-    if(status)status.textContent=symbol+" · "+(data.articles?.length||0)+" headlines · Checked "+new Date(data.updatedAt).toLocaleTimeString()+(data.cached?" · Cached":"");
-  }catch(error){if(status)status.textContent=error.message || "Unable to retrieve headlines.";}
-  finally{marketNewsBusy=false;if(button)button.disabled=false;}
+    results.sort((a,b)=>newsRank(b)-newsRank(a)||(Date.parse(b.publishedAt)||0)-(Date.parse(a.publishedAt)||0));
+    newsFeedArticles=results;newsCurrentPage=1;newsMode=all?"all":"single";renderNewsPage();
+    if(status)status.textContent=(all?"Favorite markets":"Market "+entered)+" · "+results.length+" headlines ranked by potential significance"+
+      (failed.length?" · Unavailable: "+failed.join(", "):"")+" · Checked "+new Date().toLocaleTimeString();
+  }finally{marketNewsBusy=false;if(button)button.disabled=false;}
 }
 document.addEventListener("submit", event => {
   if (event.target?.id !== "emperorAskForm") return;
