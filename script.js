@@ -2460,7 +2460,15 @@ async function loadMarketNews(useChart=false) {
         const when=Date.parse(story.publishedAt);
         meta.textContent=(story.source||"News publisher")+
           (Number.isFinite(when)?" · Published "+new Date(when).toLocaleString():"");
-        card.append(headline,meta);brief.append(card);
+        const impact=document.createElement("div"); impact.className="news-impact";
+        const pill=document.createElement("strong");pill.className="news-impact-label";
+        const allowed=["potentially bullish","potentially bearish","mixed / uncertain","uncertain"];
+        const value=allowed.includes(story.impact)?story.impact:"uncertain";
+        pill.textContent="Potential impact: "+value;
+        impact.dataset.impact=value;
+        const rationale=document.createElement("p");rationale.textContent=String(story.why||"Headline alone cannot establish price impact.");
+        impact.append(pill,rationale);
+        card.append(headline,meta,impact);brief.append(card);
       }
     }
     if(status)status.textContent=symbol+" · "+(data.articles?.length||0)+" headlines · Checked "+new Date(data.updatedAt).toLocaleTimeString()+(data.cached?" · Cached":"");
