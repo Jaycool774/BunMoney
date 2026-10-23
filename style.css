@@ -1214,3 +1214,22 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .emperor-form button{background:#a3e635;color:#10180c;border-radius:10px;padding:12px 18px;white-space:nowrap}
 .emperor-form button:disabled{opacity:.5}.emperor-disclaimer{margin:14px 0 0}
 @media(max-width:600px){.emperor-bunny-card{padding:16px !important}.emperor-form{flex-wrap:wrap}.emperor-form button{width:100%}}
+
+/* Emperor Bunny conversational AI and cited market news */
+.emperor-response .news-reference-list, .market-live-news .news-reference-list {display:flex;flex-wrap:wrap;gap:9px;margin-top:9px}
+.news-reference-list a{color:#baff65;text-decoration:underline;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.emperor-response>strong:not(:first-child){display:block;margin-top:12px}
+.market-live-news{margin:20px 0 !important;padding:24px !important;background:linear-gradient(140deg,#121e25,#10151d);border-color:#344a52}
+.live-news-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.live-news-head h3{margin:0 0 6px;font-size:22px}
+.live-news-head p,.news-footnote{font-size:13px;color:#acbace;line-height:1.5;margin:0}
+.live-news-head button,.news-symbol-row button{background:#a3e635;color:#10160d;padding:12px 15px;border-radius:10px}
+.live-news-head button:disabled{opacity:.6}
+.news-symbol-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:18px 0}
+.news-symbol-row label{font-size:13px;color:#b5c1ce}
+.news-symbol-row input{flex:1;min-width:180px;background:#0c141d;color:#fff;border:1px solid #425062;padding:12px;border-radius:10px;text-transform:uppercase}
+.live-news-status{font-size:13px;color:#adcbdd;margin-bottom:12px}
+.news-brief{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;color:#edf3f7;font-size:14px}
+.news-sources{margin:14px 0}.news-sources>strong{display:block;margin-bottom:8px}
+.news-footnote{margin-top:14px}
+@media(max-width:600px){.market-live-news{padding:16px !important}.live-news-head button{width:100%}}

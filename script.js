@@ -2340,7 +2340,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(), newsFromChart:() => loadMarketNews(true), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
@@ -2364,22 +2364,46 @@ function emperorContext() {
     target:a.target, source:a.source, ageMs:Date.now()-a.timestamp
   };
 }
-function emperorPost(speaker, message) {
+const emperorConversation = [];
+function addNewsSources(container, sources) {
+  if (!container || !Array.isArray(sources)) return;
+  const list = document.createElement("div");
+  list.className = "news-reference-list";
+  for (const source of sources.slice(0,8)) {
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== "https:") continue;
+      const link = document.createElement("a");
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source.title || url.hostname;
+      list.append(link);
+    } catch {}
+  }
+  if (list.childElementCount) {
+    const label = document.createElement("strong");
+    label.textContent = "Sources";
+    container.append(label,list);
+  }
+}
+function emperorPost(speaker, message, sources = []) {
   const panel = document.getElementById("emperorMessages");
   if (!panel) return;
-  const item = document.createElement("p");
+  const item = document.createElement("div");
   item.className = speaker === "You" ? "emperor-user" : "emperor-response";
   const heading = document.createElement("strong");
   heading.textContent = speaker + ": ";
   const text = document.createElement("span");
   text.textContent = String(message);
   item.append(heading,text);
+  addNewsSources(item,sources);
   panel.appendChild(item);
   panel.scrollTop = panel.scrollHeight;
 }
 async function emperorAsk(question) {
   const message = String(question || "").trim();
-  if (!message || emperorBusy) return;
+  if (!message || emperorBusy || message.length > 500) return;
   const button = document.getElementById("emperorAskButton");
   const field = document.getElementById("emperorQuestion");
   emperorBusy = true;
@@ -2389,15 +2413,51 @@ async function emperorAsk(question) {
   try {
     const response = await fetch("/api/ai/chat", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message, context:emperorContext()})
+      body:JSON.stringify({message,context:emperorContext(),history:emperorConversation.slice(-8)})
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Assistant unavailable");
-    emperorPost("Emperor Bunny", data.text || "No explanation available.");
+    emperorPost("Emperor Bunny",data.text || "No explanation available.",data.sources);
+    emperorConversation.push({role:"user",content:message},{role:"assistant",content:data.text || ""});
+    while(emperorConversation.length>8)emperorConversation.shift();
   } catch (error) {
-    emperorPost("Emperor Bunny", "Couldn't retrieve the explanation. Please check the BunMoney backend and try again.");
+    emperorPost("Emperor Bunny",error.message || "Unable to contact the AI service.");
   } finally {
     emperorBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+let marketNewsBusy = false;
+async function loadMarketNews(useChart=false) {
+  if (marketNewsBusy) return;
+  const input = document.getElementById("newsSymbol");
+  if (!input) return;
+  if (useChart) input.value = selectedSymbol();
+  const symbol = input.value.trim().toUpperCase();
+  const status = document.getElementById("liveNewsStatus");
+  const brief = document.getElementById("liveNewsBrief");
+  const sources = document.getElementById("liveNewsSources");
+  if (!Trading.validSymbol(symbol)) {
+    if (status) status.textContent = "Enter a valid ticker such as TSLA.";
+    return;
+  }
+  marketNewsBusy = true;
+  const button = document.getElementById("newsRefreshButton");
+  if (button) button.disabled = true;
+  if (status) status.textContent = "Looking up recent news for " + symbol + "…";
+  if (brief) brief.textContent = "";
+  if (sources) sources.replaceChildren();
+  try {
+    const res = await fetch("/api/news?symbol="+encodeURIComponent(symbol));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Unable to retrieve news.");
+    if (brief) brief.textContent = data.text || "No verified recent news found.";
+    if (sources) addNewsSources(sources,data.sources);
+    if (status) status.textContent = symbol+" · Retrieved "+new Date(data.updatedAt).toLocaleString()+(data.cached ? " · Cached report (up to 10 minutes old)" : "");
+  } catch (error) {
+    if (status) status.textContent = error.message || "News is temporarily unavailable.";
+  } finally {
+    marketNewsBusy = false;
     if (button) button.disabled = false;
   }
 }

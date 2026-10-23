@@ -87,3 +87,9 @@ fees, stop gaps, symbol/source isolation, request races, persistence recovery, A
 security/caching/timeouts and Coinbase reconnect behavior. CI runs these checks.
 A real Coinbase network connection and account-specific provider entitlements must
 be checked separately; unit and browser fixtures do not validate them.
+
+
+EMPEROR BUNNY LIVE AI & MARKET NEWS
+Set OPENAI_API_KEY in server/.env (never commit it). Optionally set OPENAI_MODEL=gpt-5.4.
+Restart the BunMoney server after setting the key. This uses the OpenAI Responses API. Chat questions involving current news and the Market News panel use the provider's live web_search tool, which can incur API charges. Chat history is sent with each request (up to 8 recent messages) but not stored on the BunMoney server; requests set store:false. News briefs are cached for 10 minutes per ticker. Responses have sourced links where returned by the provider. No key means the live AI/news endpoints return 503 with a configuration message; existing analysis, charts, and paper trading still work.
+Always verify headlines, citations, dates and alleged market catalysts independently; the assistant is not a real-time trading signal or broker.
