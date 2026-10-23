@@ -2483,7 +2483,7 @@ async function loadMarketNews(allMarkets=false){
   if(!input)return;
   // Explicit search never replaces the input with the chart's selected ticker.
   const symbol=input.value.trim().toUpperCase();
-  const markets=allMarkets?[...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,10)]:[symbol];
+  const markets=allMarkets?[...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,10):[symbol];
   const status=document.getElementById("liveNewsStatus"),btn=document.getElementById("newsRefreshButton");
   const timing=document.getElementById("newsTiming");
   if(timing)timing.textContent=newsSessionLabel();
