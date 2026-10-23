@@ -29,6 +29,9 @@ const patterns=[
  {re:/\b(acquisition|merger|deal|earnings|launch|regulation|tariff|interest rate|fed decision)\b/i,impact:"mixed / uncertain",why:"The outcome depends on financial details and market expectations, which the headline does not establish."}
 ];
 function classifyHeadline(title){
+ // Conflicting positive/negative words must not receive a directional label.
+ if (/\b(raises?|boosts?|beats?)\b.*\b(cuts?|misses?|falls?)\b|\b(cuts?|misses?|falls?)\b.*\b(raises?|boosts?|beats?)\b/i.test(title))
+   return {impact:"uncertain",why:"The headline contains conflicting signals; read the report for context."};
  const matches=patterns.filter(p=>p.re.test(title));
  if(matches.length!==1)return {impact:"uncertain",why:"The headline alone does not establish how investors will react."};
  return {impact:matches[0].impact,why:matches[0].why};
