@@ -24,9 +24,9 @@ function parseFeed(xml,limit=8) {
 }
 // Headline-only heuristic, not proof of causation or a price forecast.
 const patterns=[
- {re:/\\b(raises? guidance|beats? estimates|record revenue|strong earnings|wins? contract|new partnership|approved|upgrade[ds]?|buyback|profit jumps?)\\b/i,impact:"potentially bullish",why:"The headline suggests better earnings, demand, financing conditions, or market confidence."},
- {re:/\\b(cuts? guidance|misses? estimates|earnings miss|layoffs|investigation|lawsuit|recall|downgrade[ds]?|loss widens?|revenue falls?|offering|dilution)\\b/i,impact:"potentially bearish",why:"The headline suggests weaker performance, higher risk, dilution, or lower investor confidence."},
- {re:/\\b(acquisition|merger|deal|earnings|launch|regulation|tariff|interest rate|fed decision)\\b/i,impact:"mixed / uncertain",why:"The outcome depends on financial details and market expectations, which the headline does not establish."}
+ {re:/\b(raises? guidance|beats? estimates|record revenue|strong earnings|wins? contract|new partnership|approved|upgrade[ds]?|buyback|profit jumps?)\b/i,impact:"potentially bullish",why:"The headline suggests better earnings, demand, financing conditions, or market confidence."},
+ {re:/\b(cuts? guidance|misses? estimates|earnings miss|layoffs|investigation|lawsuit|recall|downgrade[ds]?|loss widens?|revenue falls?|offering|dilution)\b/i,impact:"potentially bearish",why:"The headline suggests weaker performance, higher risk, dilution, or lower investor confidence."},
+ {re:/\b(acquisition|merger|deal|earnings|launch|regulation|tariff|interest rate|fed decision)\b/i,impact:"mixed / uncertain",why:"The outcome depends on financial details and market expectations, which the headline does not establish."}
 ];
 function classifyHeadline(title){
  const matches=patterns.filter(p=>p.re.test(title));
