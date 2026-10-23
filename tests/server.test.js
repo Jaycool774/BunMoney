@@ -217,3 +217,16 @@ test("News impact labels are heuristic, not confirmed price predictions",()=>{
  assert.equal(classifyHeadline("TSLA reports a new update").impact,"uncertain");
  assert.equal(classifyHeadline("TSLA raises and cuts guidance").impact,"uncertain");
 });
+
+test("Calendar filters unknown time precision and loads economic events without AI",async t=>{
+ const base=await serve(t,{aiKey:"",eventsFetchImpl:async url=>({
+   ok:true,json:async()=>String(url).includes("financecalendar")?
+     {events:[{id:"cpi",country:"US",date:"2026-10-28",name:"CPI",release_at_utc:"2026-10-28T12:30:00Z",time_precision:"minute",impact:"high",source_url:"https://www.bls.gov"}]}:
+     {events:[{symbol:"TSLA",company:"Tesla",reportDate:"2026-10-29",reportTime:"AMC",status:"upcoming"}]}
+ })});
+ const r=await fetch(base+"/api/events");assert.equal(r.status,200);
+ const result=await r.json();assert.equal(result.events.length,2);
+ assert.equal(result.events[0].at,"2026-10-28T12:30:00.000Z");
+ assert.equal(result.events[1].at,null);
+ assert.equal(result.events[1].session,"After market close");
+});
