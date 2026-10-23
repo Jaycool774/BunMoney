@@ -1196,3 +1196,27 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 #favoritesList .favorite-status{margin:0;color:#94a8be;font-size:11px;line-height:1.45}
 #favoritesList .favorite-remove{border-radius:10px;background:#44202a;color:#ffd8df;padding:7px 12px;font-size:20px}
 #favoritesList .favorite-open{width:100%;min-height:44px;border-radius:10px;background:#a3e635;color:#10180a;font-size:14px;margin-top:auto}
+
+/* Emperor Bunny AI — purposeful market coach, responsive UI */
+#home.screen.active>.emperor-card{grid-column:1/-1 !important;grid-row:auto !important;width:100% !important;max-width:none !important;margin:0 !important;grid-area:auto !important}
+.emperor-card{border:1px solid rgba(250,204,21,.35) !important;background:linear-gradient(150deg,#171b23,#111820) !important;padding:24px !important}
+.emperor-header{display:flex;justify-content:space-between;align-items:start;gap:16px;flex-wrap:wrap;text-align:left}
+.emperor-header h3{font-size:24px;color:#facc15;margin:0 0 7px}
+.emperor-header p{margin:0;color:#c0ccdb;font-size:14px;line-height:1.5}
+.emperor-mode{background:#2a271b;color:#facc15;border:1px solid #635329;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:bold}
+.emperor-quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 !important}
+.emperor-quick-actions button{background:#242c38 !important;border:1px solid #46556a;color:white !important;min-height:40px;padding:10px 14px;border-radius:9px;margin:0 !important}
+.emperor-messages{height:min(42vh,320px);min-height:190px;overflow:auto;text-align:left;border-radius:13px;background:#0b1119;border:1px solid #303b4c;padding:16px;display:flex;flex-direction:column;gap:14px}
+.emperor-intro{color:#b4c3d7;margin:0;line-height:1.55}
+.emperor-msg{max-width:min(100%,720px);padding:12px 16px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;line-height:1.55;font-size:14px}
+.emperor-msg strong{display:block;font-size:12px;margin-bottom:6px;color:#facc15}
+.emperor-msg.user{background:#1f2c3d;align-self:flex-end}
+.emperor-msg.assistant{background:#18251e;border:1px solid #364935;align-self:flex-start}
+.emperor-form{margin-top:15px;text-align:left}
+.emperor-form label{display:block;color:#afc3d7;font-weight:bold;font-size:12px;margin-bottom:8px}
+.emperor-compose{display:flex;gap:10px}
+.emperor-compose input{flex:1;min-width:0;background:#0d141e;color:white;border:1px solid #45546a;border-radius:10px;padding:13px 15px;font-size:15px}
+.emperor-compose button{background:#facc15 !important;color:#11170e !important;min-height:45px;padding:10px 18px;border:0;border-radius:10px;margin:0 !important}
+.emperor-compose button:disabled{opacity:.6;cursor:wait}
+.emperor-footnote{margin:12px 0 0;color:#9baabe;font-size:12px;line-height:1.5;text-align:left}
+@media(max-width:620px){.emperor-card{padding:17px !important}.emperor-compose{flex-direction:column}.emperor-compose button{width:100%}}
