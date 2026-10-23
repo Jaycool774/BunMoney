@@ -98,12 +98,10 @@ const assert = require("node:assert/strict");
       .locator('[data-action="showScreen"][data-screen="home"]')
       .click();
     await page.keyboard.press("t");
-    assert.equal(
-      await page
-        .locator("#home")
-        .evaluate((el) => getComputedStyle(el).display),
-      "block",
-    );
+    // The responsive dashboard can be flex on mobile or grid on desktop.
+    // Validate user-visible navigation rather than a specific CSS layout mode.
+    assert.equal(await page.locator("#home").isVisible(), true);
+    assert.equal(await page.locator("#favoritesScreen").isVisible(), false);
     page.on("dialog", (dialog) => dialog.accept());
     await page.locator("#demoMarketButton").click();
     // The toggle uses an alert; accept dialogs before issuing further actions.
