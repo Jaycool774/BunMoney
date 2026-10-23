@@ -313,6 +313,26 @@
 
   </main>
 
+  <section class="setup emperor-bunny-card" id="emperorBunny" aria-label="Emperor Bunny assistant">
+    <div class="emperor-head">
+      <div class="emperor-icon" aria-hidden="true">🐰</div>
+      <div><h3>Emperor Bunny AI</h3><p>Chart-aware educational copilot · No trading orders</p></div>
+      <span class="emperor-mode">Analysis mode</span>
+    </div>
+    <p class="emperor-intro">Ask about the selected market's trend, RSI, volume, breakouts, or risk. Responses use BunMoney's last analysis, not predictions.</p>
+    <div class="emperor-quick">
+      <button type="button" data-action="emperorPrompt" data-prompt="Explain this chart">Explain chart</button>
+      <button type="button" data-action="emperorPrompt" data-prompt="Is a breakout forming?">Breakout?</button>
+      <button type="button" data-action="emperorPrompt" data-prompt="Explain the risk">Risk check</button>
+    </div>
+    <div id="emperorMessages" class="emperor-messages" role="log" aria-live="polite"><p class="emperor-welcome">🐰 Welcome! Analyze a ticker, then ask me about what the chart shows.</p></div>
+    <form id="emperorAskForm" class="emperor-form">
+      <input id="emperorQuestion" type="text" maxlength="500" autocomplete="off" placeholder="Ask Emperor Bunny about this market…" aria-label="Question for Emperor Bunny">
+      <button type="submit" id="emperorAskButton">Ask Bunny →</button>
+    </form>
+    <p class="emperor-disclaimer">This first version uses transparent rule-based market explanations, not a generative model. It cannot place trades.</p>
+  </section>
+
   <section class="setup spike-board" id="spikeBoard" aria-label="Recent market spikes">
     <div class="spike-board-header">
       <div>

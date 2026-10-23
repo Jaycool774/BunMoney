@@ -1196,3 +1196,21 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 #favoritesList .favorite-status{margin:0;color:#94a8be;font-size:11px;line-height:1.45}
 #favoritesList .favorite-remove{border-radius:10px;background:#44202a;color:#ffd8df;padding:7px 12px;font-size:20px}
 #favoritesList .favorite-open{width:100%;min-height:44px;border-radius:10px;background:#a3e635;color:#10180a;font-size:14px;margin-top:auto}
+
+/* Emperor Bunny v1 */
+.emperor-bunny-card{margin:20px 0 !important;padding:24px !important;border-color:rgba(163,230,53,.3);background:linear-gradient(140deg,#1d251b,#101620)}
+.emperor-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.emperor-icon{height:58px;width:58px;display:grid;place-items:center;border-radius:17px;background:#28361b;font-size:34px}
+.emperor-head h3{font-size:24px;margin:0 0 4px}.emperor-head p,.emperor-intro,.emperor-disclaimer{font-size:13px;line-height:1.55;color:#adb9c8}
+.emperor-head p{margin:0}.emperor-mode{margin-left:auto;background:rgba(163,230,53,.13);border:1px solid rgba(163,230,53,.35);color:#d4ff89;border-radius:99px;font-size:12px;padding:7px 12px}
+.emperor-intro{margin:16px 0}.emperor-quick{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
+.emperor-quick button{background:#263026;color:white;border:1px solid #445837;border-radius:10px;padding:10px 14px}
+.emperor-messages{background:#0d131b;border:1px solid #35404c;border-radius:15px;min-height:145px;max-height:360px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.emperor-messages p{margin:0;line-height:1.5;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.emperor-welcome{color:#b2c1d2}.emperor-user{align-self:flex-end;background:#2b3c1f;border-radius:12px;padding:12px;max-width:90%}
+.emperor-response{align-self:flex-start;background:#1e2937;border-radius:12px;padding:12px;max-width:95%}
+.emperor-form{display:flex;gap:10px;margin-top:12px}
+.emperor-form input{flex:1;min-width:0;min-height:46px;border:1px solid #3b4656;border-radius:10px;background:#0d131b;color:white;padding:11px;font:inherit}
+.emperor-form button{background:#a3e635;color:#10180c;border-radius:10px;padding:12px 18px;white-space:nowrap}
+.emperor-form button:disabled{opacity:.5}.emperor-disclaimer{margin:14px 0 0}
+@media(max-width:600px){.emperor-bunny-card{padding:16px !important}.emperor-form{flex-wrap:wrap}.emperor-form button{width:100%}}

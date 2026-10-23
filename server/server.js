@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const { timingSafeEqual } = require("node:crypto");
 const { createMarketEngine } = require("./market-engine");
+const { explain } = require("./emperor-bunny");
 require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
 function createApp({
   apiKey = process.env.TWELVE_DATA_API_KEY,
@@ -89,6 +90,10 @@ function createApp({
         });
     }
   };
+  app.post("/api/ai/chat", express.json({ limit: "12kb" }), (req, res) => {
+    const result = explain(req.body?.message, req.body?.context);
+    res.status(result.status || 200).json(result);
+  });
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
   app.use("/api", (_req, res) =>

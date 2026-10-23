@@ -2340,7 +2340,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
@@ -2350,3 +2350,59 @@ document.addEventListener("input", event => {
 window.addEventListener("beforeunload", () => { saveGameState(); coinbaseFeed?.stop(); });
 
 document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target?.id === "favoriteInput") { e.preventDefault(); addFavorite(); } });
+
+
+/* Emperor Bunny educational assistant — selected chart context only. */
+let emperorBusy = false;
+function emperorContext() {
+  const a = lastAnalysis;
+  if (!a || a.ticker !== selectedSymbol()) return null;
+  return {
+    symbol:a.ticker, trend:a.trend, setup:a.breakout || a.retest || "NO CONFIRMATION",
+    price:a.currentPrice, support:a.support, resistance:a.resistance,
+    rsi:a.rsi, volumeRatio:a.volumeRatio, rr:a.rr, stop:a.stop,
+    target:a.target, source:a.source, ageMs:Date.now()-a.timestamp
+  };
+}
+function emperorPost(speaker, message) {
+  const panel = document.getElementById("emperorMessages");
+  if (!panel) return;
+  const item = document.createElement("p");
+  item.className = speaker === "You" ? "emperor-user" : "emperor-response";
+  const heading = document.createElement("strong");
+  heading.textContent = speaker + ": ";
+  const text = document.createElement("span");
+  text.textContent = String(message);
+  item.append(heading,text);
+  panel.appendChild(item);
+  panel.scrollTop = panel.scrollHeight;
+}
+async function emperorAsk(question) {
+  const message = String(question || "").trim();
+  if (!message || emperorBusy) return;
+  const button = document.getElementById("emperorAskButton");
+  const field = document.getElementById("emperorQuestion");
+  emperorBusy = true;
+  if (button) button.disabled = true;
+  if (field) field.value = "";
+  emperorPost("You", message);
+  try {
+    const response = await fetch("/api/ai/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message, context:emperorContext()})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Assistant unavailable");
+    emperorPost("Emperor Bunny", data.text || "No explanation available.");
+  } catch (error) {
+    emperorPost("Emperor Bunny", "Couldn't retrieve the explanation. Please check the BunMoney backend and try again.");
+  } finally {
+    emperorBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+document.addEventListener("submit", event => {
+  if (event.target?.id !== "emperorAskForm") return;
+  event.preventDefault();
+  emperorAsk(document.getElementById("emperorQuestion")?.value);
+});
