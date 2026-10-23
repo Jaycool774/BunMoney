@@ -210,6 +210,7 @@ async function analyze(force = false) {
       throw new Error(data.message || "No market data returned.");
     }
 
+    if (data.meta?.symbol && data.meta.symbol.toUpperCase() !== ticker) throw new Error("Provider returned a different symbol.");
     const candles = Trading.candles(data.values);
 const closes = candles.map(c => Number(c.close));
 const highs = candles.map(c => Number(c.high));
@@ -1352,8 +1353,9 @@ function createFavoritesScreen() {
     </div>
     <div id="favoritesList"></div>
     <div class="favorites-add">
-      <input id="favoriteInput" type="text" maxlength="30" placeholder="Add ticker...">
-      <button data-action="addFavorite">+ Add</button>
+      <input id="favoriteInput" type="text" maxlength="30" placeholder="e.g. AAPL" aria-label="Add market ticker">
+      <button data-action="addFavorite">+ Add favorite</button>
+       <p id="favoriteFeedback" role="status" aria-live="polite"></p>
     </div>`;
   const app = document.querySelector(".app") || document.body;
   if (app) app.appendChild(screen);
@@ -1367,17 +1369,35 @@ function createFavoritesNav() {
   button.addEventListener("click", () => { showScreen("favoritesScreen"); updateFavorites(true); });
   nav.appendChild(button);
 }
-function addFavorite() {
+let favoritePending = false;
+function favoriteFeedback(text) { setText("favoriteFeedback", text); }
+async function addFavorite(fromChart = null) {
+  if (favoritePending) return;
   const input = document.getElementById("favoriteInput");
-  if (!input) return;
-  const symbol = input.value.toUpperCase().trim();
-  if (!Trading.validSymbol(symbol) || bunFavorites.length >= 50) { showPopup("Favorites","Enter a valid symbol. Maximum 50 favorites."); return; }
-  if (bunFavorites.includes(symbol)) {
-    showPopup("Favorites", `${symbol} is already in your favorites.`); return;
-  }
-  bunFavorites.push(symbol); saveFavorites(); input.value = ""; renderFavorites(); updateFavorites(true);
-  mascotReaction(`${symbol} joined the watchlist. ⭐🐰`);
+  const symbol = String(fromChart || input?.value || "").trim().toUpperCase();
+  if (!Trading.validSymbol(symbol)) return favoriteFeedback("Enter a valid symbol, like AAPL or BTC/USD.");
+  if (bunFavorites.includes(symbol)) return favoriteFeedback(symbol + " is already in Favorites.");
+  if (bunFavorites.length >= 50) return favoriteFeedback("Favorites is limited to 50 symbols.");
+  favoritePending = true;
+  favoriteFeedback("Checking " + symbol + "...");
+  try {
+    if (!demoMarketEnabled) {
+      const quote = await marketEngineRequest("/price", { symbol });
+      if (!Trading.positive(Number(quote.price)) ||
+          (quote.symbol && String(quote.symbol).toUpperCase() !== symbol))
+        throw new Error("Ticker not recognized by the provider.");
+    }
+    bunFavorites.push(symbol);
+    saveFavorites();
+    if (input) input.value = "";
+    renderFavorites();
+    favoriteFeedback(symbol + " saved." + (demoMarketEnabled ? " Demo quotes are simulated." : ""));
+    updateFavorites(true);
+  } catch(error) {
+    favoriteFeedback("Could not add " + symbol + ": " + (error.message || "Provider unavailable"));
+  } finally { favoritePending = false; }
 }
+function addCurrentFavorite() { addFavorite(selectedSymbol()); }
 function removeFavorite(symbol) {
   bunFavorites = bunFavorites.filter(item => item !== symbol);
   saveFavorites(); renderFavorites(); mascotReaction(`${symbol} removed from favorites. 🐰`);
@@ -2150,7 +2170,7 @@ document.addEventListener("click", event => {
   const control = event.target.closest("[data-action]");
   if (!control) return;
   const actions = { analyze:() => analyze(true), paperBuy, paperSell, exportPaperTrades,
-    addFavorite, removeFavorite:() => removeFavorite(control.dataset.symbol),
+    addFavorite:() => addFavorite(), addCurrentFavorite, removeFavorite:() => removeFavorite(control.dataset.symbol),
     openFavorite:() => openFavorite(control.dataset.symbol),
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
@@ -2163,3 +2183,5 @@ document.addEventListener("input", event => {
   if (event.target.id === "zoomSlider") changeChartZoom(event.target.value);
 });
 window.addEventListener("beforeunload", () => { saveGameState(); coinbaseFeed?.stop(); });
+
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target?.id === "favoriteInput") { e.preventDefault(); addFavorite(); } });
