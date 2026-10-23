@@ -4,6 +4,7 @@ const { timingSafeEqual } = require("node:crypto");
 const { createMarketEngine } = require("./market-engine");
 const { explain } = require("./emperor-bunny");
 const { makeAssistant } = require("./live-ai");
+const { createNewsFeed } = require("./news-feed");
 require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
 function createApp({
   apiKey = process.env.TWELVE_DATA_API_KEY,
@@ -14,10 +15,12 @@ function createApp({
   timeoutMs = 10000,
   aiKey = process.env.OPENAI_API_KEY,
   aiFetchImpl = globalThis.fetch,
+  newsFetchImpl = globalThis.fetch,
 } = {}) {
   const app = express(),
     engine = createMarketEngine({ apiKey, fetchImpl, now, timeoutMs }),
     assistant = makeAssistant({apiKey:aiKey,fetchImpl:aiFetchImpl,now}),
+    newsFeed = createNewsFeed({fetchImpl:newsFetchImpl,now}),
     clients = new Map();
   app.disable("x-powered-by");
   app.set("trust proxy", false);
@@ -105,7 +108,7 @@ function createApp({
   });
   app.get("/api/news", async (req,res) => {
     try {
-      const result = await assistant.marketNews(req.query.symbol);
+      const result = await newsFeed.news(req.query.symbol);
       res.status(result.status || 200).json(result);
     } catch {
       res.status(502).json({error:"Market news service unavailable."});

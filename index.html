@@ -336,7 +336,7 @@
 
   <section class="setup market-live-news" id="marketLiveNews" aria-label="Market news">
     <div class="live-news-head">
-      <div><h3>📰 Market News</h3><p>Search recent stories about your selected ticker, with publisher links and possible market impact.</p></div>
+      <div><h3>📰 Market News</h3><p>Headlines from independent news feeds, not Emperor Bunny AI. Choose a market to see recent articles.</p></div>
       <button type="button" data-action="refreshMarketNews" id="newsRefreshButton">Check latest news</button>
     </div>
     <div class="news-symbol-row">
@@ -344,10 +344,10 @@
       <input id="newsSymbol" type="text" maxlength="30" value="SOUN" placeholder="TSLA / SOUN / AAPL" autocomplete="off">
       <button type="button" data-action="newsFromChart">Use chart ticker</button>
     </div>
-    <p id="liveNewsStatus" class="live-news-status" role="status" aria-live="polite">Choose a market, then check the latest news. Requires an OpenAI API key on the BunMoney server.</p>
+    <p id="liveNewsStatus" class="live-news-status" role="status" aria-live="polite">Choose a ticker and check the headlines. No AI key needed.</p>
     <div class="news-brief" id="liveNewsBrief"></div>
     <div class="news-sources" id="liveNewsSources"></div>
-    <p class="news-footnote">AI summaries can be wrong. Check the linked reports and dates. Market movements can have several causes, not just one headline.</p>
+    <p class="news-footnote">Headlines are sourced from Google News RSS. Publisher and article dates are shown. Potential impact is a simple headline-based estimate, not a forecast or proof that news caused the market to move.</p>
   </section>
 
   <section class="setup spike-board" id="spikeBoard" aria-label="Recent market spikes">
