@@ -1282,3 +1282,6 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .events-pages button{padding:10px 14px;color:#d2ffb1;background:#243727;border-radius:10px}
 .events-pages button:disabled{opacity:.35}
 @media(max-width:600px){.bun-events{padding:15px !important}.events-header button{width:100%}}
+
+#eventSortFilter{min-width:150px}
+.event-controls button[data-action="clearEventTicker"]{background:#263342;color:#d3e4f5;border:1px solid #455264}

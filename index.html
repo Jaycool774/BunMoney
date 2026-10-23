@@ -346,8 +346,12 @@
       </select>
       <label for="eventTickerFilter">Ticker (optional)</label>
       <input id="eventTickerFilter" placeholder="TSLA, SOUN, AAPL…" maxlength="30" autocomplete="off">
-      <button type="button" data-action="eventsFromChart">Use chart ticker</button>
+      <button type="button" data-action="eventsFromChart">Apply entered ticker</button>
+      <button type="button" data-action="clearEventTicker">Clear ticker</button>
+      <label for="eventSortFilter">Show / sort</label>
+      <select id="eventSortFilter" aria-label="Sort or filter events"><option value="soonest">Soonest first</option><option value="az">A–Z</option><option value="impact">Most impactful</option><option value="favorites">Favorites only</option></select>
     </div>
+    <p class="events-source">Most impactful sorts by published economic importance (high → medium → low → unknown), not predicted stock price movement. Earnings events without verified importance are unranked.</p>
     <p id="eventsStatus" class="events-status" role="status" aria-live="polite">Load upcoming scheduled events; no OpenAI API key needed.</p>
     <div id="eventsList" class="events-list"></div>
     <div id="eventsPages" class="events-pages"></div>
