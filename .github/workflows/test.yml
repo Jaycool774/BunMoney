@@ -1,0 +1,22 @@
+name: Test trading core
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm run check && npm test
+        working-directory: server
+      - run: npx playwright install --with-deps chromium
+        working-directory: server
+      - run: npm run test:browser
+        working-directory: server
