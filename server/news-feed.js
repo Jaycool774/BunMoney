@@ -22,6 +22,17 @@ function parseFeed(xml,limit=8) {
    return {title:title.slice(0,240),url:url.href,source:source.slice(0,100),publishedAt:new Date(date).toISOString()};
  }).filter(Boolean).slice(0,limit);
 }
+// Headline-only heuristic, not proof of causation or a price forecast.
+const patterns=[
+ {re:/\\b(raises? guidance|beats? estimates|record revenue|strong earnings|wins? contract|new partnership|approved|upgrade[ds]?|buyback|profit jumps?)\\b/i,impact:"potentially bullish",why:"The headline suggests better earnings, demand, financing conditions, or market confidence."},
+ {re:/\\b(cuts? guidance|misses? estimates|earnings miss|layoffs|investigation|lawsuit|recall|downgrade[ds]?|loss widens?|revenue falls?|offering|dilution)\\b/i,impact:"potentially bearish",why:"The headline suggests weaker performance, higher risk, dilution, or lower investor confidence."},
+ {re:/\\b(acquisition|merger|deal|earnings|launch|regulation|tariff|interest rate|fed decision)\\b/i,impact:"mixed / uncertain",why:"The outcome depends on financial details and market expectations, which the headline does not establish."}
+];
+function classifyHeadline(title){
+ const matches=patterns.filter(p=>p.re.test(title));
+ if(matches.length!==1)return {impact:"uncertain",why:"The headline alone does not establish how investors will react."};
+ return {impact:matches[0].impact,why:matches[0].why};
+}
 function createNewsFeed({fetchImpl=globalThis.fetch,now=Date.now,cacheMs=600000}={}){
  const cache=new Map(),pending=new Map();
  async function news(symbol){
@@ -40,7 +51,7 @@ function createNewsFeed({fetchImpl=globalThis.fetch,now=Date.now,cacheMs=600000}
      if(!response.ok)return {status:502,error:"News feed temporarily unavailable."};
      const xml=await response.text();
      if(xml.length>1500000) return {status:502,error:"News feed response exceeded safe size."};
-     const articles=parseFeed(xml);
+     const articles=parseFeed(xml).map(article=>({...article,...classifyHeadline(article.title)}));
      const value={symbol:ticker,articles,updatedAt:new Date(now()).toISOString(),provider:"Google News RSS"};
      cache.set(ticker,{time:now(),value});
      while(cache.size>40)cache.delete(cache.keys().next().value);
@@ -52,4 +63,4 @@ function createNewsFeed({fetchImpl=globalThis.fetch,now=Date.now,cacheMs=600000}
  }
  return {news};
 }
-module.exports={createNewsFeed,parseFeed};
+module.exports={createNewsFeed,parseFeed,classifyHeadline};
