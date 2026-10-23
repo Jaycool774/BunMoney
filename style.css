@@ -1240,3 +1240,9 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .market-news-story a{color:#e8f4f4;font-weight:750;font-size:15px;line-height:1.5;text-decoration:none;overflow-wrap:anywhere}
 .market-news-story a:hover{text-decoration:underline;color:#b8f66c}
 .market-news-meta{font-size:12px;color:#9caec4;margin:12px 0 0}
+
+.news-impact{margin-top:12px;border-top:1px solid #2c3a49;padding-top:11px;font-size:13px;line-height:1.5;color:#b5c6d3}
+.news-impact-label{display:block;color:#ccd9e6;text-transform:capitalize;font-size:12px;margin-bottom:4px}
+.news-impact[data-impact="potentially bullish"] .news-impact-label{color:#b9f768}
+.news-impact[data-impact="potentially bearish"] .news-impact-label{color:#ff8b98}
+.news-impact p{margin:0}
