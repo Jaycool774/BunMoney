@@ -2340,7 +2340,7 @@ document.addEventListener("click", event => {
     setTimeframe:() => setTimeframe(control.dataset.timeframe),
     startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
     hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
-    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(false), newsFromChart:() => loadMarketNews(false), newsAllFavorites:() => loadMarketNews(true), scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(false), newsFromChart:() => loadMarketNews(false), newsAllFavorites:() => loadMarketNews(true), refreshMarketEvents, eventsFromChart, scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
     toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
   actions[control.dataset.action]?.();
 });
@@ -2518,4 +2518,75 @@ document.addEventListener("submit", event => {
   if (event.target?.id !== "emperorAskForm") return;
   event.preventDefault();
   emperorAsk(document.getElementById("emperorQuestion")?.value);
+});
+
+
+/* Independent market events calendar: never manufacture earnings release times. */
+let bunEvents=[],bunEventsPage=0,bunEventsBusy=false;
+const BUN_EVENTS_PER_PAGE=8;
+function renderMarketEvents(){
+ const list=document.getElementById("eventsList"),pages=document.getElementById("eventsPages");
+ if(!list||!pages)return;
+ list.replaceChildren();pages.replaceChildren();
+ const type=document.getElementById("eventTypeFilter")?.value||"all";
+ const ticker=(document.getElementById("eventTickerFilter")?.value||"").trim().toUpperCase();
+ const rows=bunEvents.filter(e=>(type==="all"||e.kind===type) &&
+   (!ticker || e.kind==="economic" || e.symbol===ticker));
+ const count=Math.max(1,Math.ceil(rows.length/BUN_EVENTS_PER_PAGE));
+ bunEventsPage=Math.min(bunEventsPage,count-1);
+ const fmt=new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Chicago"});
+ for(const item of rows.slice(bunEventsPage*BUN_EVENTS_PER_PAGE,(bunEventsPage+1)*BUN_EVENTS_PER_PAGE)){
+   const card=document.createElement("article");card.className="events-item";
+   const heading=document.createElement("div");heading.className="event-title";
+   const name=document.createElement("strong");name.textContent=(item.kind==="earnings"?item.symbol+" · ":"")+item.title;
+   const badge=document.createElement("span");badge.textContent=item.kind==="earnings"?"Earnings":(item.impact||"Economic")+" economic";
+   heading.append(name,badge);
+   const when=document.createElement("p");when.className="event-when";
+   when.textContent=item.at ? "Scheduled: "+fmt.format(new Date(item.at))+" Central Time" :
+     "Date: "+item.date+" · "+(item.session||"Exact release time not published");
+   const reason=document.createElement("p");reason.className="event-note";reason.textContent=item.note||"Release times can change.";
+   const link=document.createElement("a");
+   try{const u=new URL(item.url);if(u.protocol!=="https:")continue;link.href=u.href;}
+   catch{continue;}
+   link.target="_blank";link.rel="noopener noreferrer";link.textContent="Verify schedule →";
+   const details=document.createElement("p");details.className="event-meta";
+   details.textContent="Status: "+(item.status||"scheduled")+" · Source: "+(item.source||"Calendar");
+   card.append(heading,when,details,reason,link);list.append(card);
+ }
+ if(!rows.length)list.textContent="No matching events found in the upcoming calendar window. This does not confirm there are no events.";
+ const prev=document.createElement("button");prev.type="button";prev.textContent="← Previous";prev.disabled=bunEventsPage===0;
+ prev.addEventListener("click",()=>{bunEventsPage--;renderMarketEvents();});
+ const indicator=document.createElement("span");indicator.textContent="Page "+(bunEventsPage+1)+" of "+count;
+ const next=document.createElement("button");next.type="button";next.textContent="Next →";next.disabled=bunEventsPage>=count-1;
+ next.addEventListener("click",()=>{bunEventsPage++;renderMarketEvents();});
+ pages.append(prev,indicator,next);
+}
+async function refreshMarketEvents(){
+ if(bunEventsBusy)return;
+ bunEventsBusy=true;
+ const button=document.getElementById("eventsRefreshButton");
+ const status=document.getElementById("eventsStatus");
+ if(button)button.disabled=true;
+ if(status)status.textContent="Checking published event schedules…";
+ try {
+   const res=await fetch("/api/events");const data=await res.json();
+   if(!res.ok)throw new Error(data.error||"Calendar unavailable");
+   bunEvents=Array.isArray(data.events)?data.events:[];
+   bunEventsPage=0;renderMarketEvents();
+   if(status)status.textContent=bunEvents.length+" scheduled events · Updated "+new Date(data.updatedAt).toLocaleString()+
+      (data.unavailable?.length?" · Unavailable feeds: "+data.unavailable.join(", "):"")+
+      (data.cached?" · Cached":"");
+ }catch(err){if(status)status.textContent=err.message||"Calendar unavailable";}
+ finally{bunEventsBusy=false;if(button)button.disabled=false;}
+}
+function eventsFromChart(){
+ const input=document.getElementById("eventTickerFilter");
+ if(input)input.value=selectedSymbol();
+ bunEventsPage=0;renderMarketEvents();
+}
+document.addEventListener("change",e=>{
+ if(e.target?.id==="eventTypeFilter"){bunEventsPage=0;renderMarketEvents();}
+});
+document.addEventListener("input",e=>{
+ if(e.target?.id==="eventTickerFilter"){bunEventsPage=0;renderMarketEvents();}
 });
