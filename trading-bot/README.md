@@ -4,13 +4,15 @@ Simulated funds only. No live order, exchange SDK, leverage, short selling, depo
 or withdrawal implementation exists. This service is **not deployed** by this PR.
 The browser's existing paper account, charts, news, trade plans, and frontend remain
 separate. Python 3.11+ and Node 24.5–24.x are required. Python uses only the standard
-library. The Node dependencies are unchanged.
+library. The Node dependencies are unchanged. Coinbase public data is now the default; see
+[COINBASE_DATA.md](COINBASE_DATA.md) for endpoint usage, request budgets and Codespaces setup.
 
 ## Start locally
 
 1. From the repository root, run `npm ci --prefix server`.
-2. Provide `TWELVE_DATA_API_KEY` to the existing Node server using its documented
-   environment setup. No provider credential is assumed or stored by the bot.
+2. No Coinbase API key is needed. Keep `TWELVE_DATA_API_KEY` in the Node server
+   only if using existing stock/forex features; the Coinbase bot never reads it.
+   Set `BOT_DATA_PROVIDER=coinbase` (also the default when unset).
 3. Generate two independent random secrets, each at least 32 characters, and supply
    **the same** `MARKET_ENGINE_TOKEN` and `BOT_SERVICE_TOKEN` to both processes.
    Keep them in a protected environment file outside the checkout; do not commit
@@ -63,11 +65,15 @@ multi-user permissions system. Serve the Node app over HTTPS before remote acces
   Sale approvals are tied to the original position and cannot close a later one.
 - Quotes must include the matching symbol, a positive finite price and a provider
   timestamp no older than 90 seconds and not in the future. History requires matching
-  symbol, five-minute interval, explicit UTC timezone, at least 21 contiguous valid
+  symbol, five-minute interval, explicit UTC timezone for legacy metadata, at least 21 contiguous valid
   completed candles, and latest completed close within six minutes. Missing or
   unexpected metadata **blocks trading** rather than fabricating a timestamp.
-  Data comes from the existing `/api/quote` and `/api/time-series` routes. No
-  alternative provider endpoints or credentials are invented.
+  Coinbase arrays are bound to fixed product-specific HTTPS paths and granularity
+  300; timestamps are Unix UTC seconds. They do not echo symbol/timezone metadata.
+  Coinbase public Exchange ticker and 300-second candle endpoints are the default.
+  The legacy `/api/quote` and `/api/time-series` routes are used only when explicitly
+  configured with `BOT_DATA_PROVIDER=twelve_data`; no automatic fallback exists.
+  Coinbase rules, caching and public endpoint references are in COINBASE_DATA.md.
 - A feed error pauses entries and cancels pending proposals; explicit Start is
   required after recovery. A cycle validates both markets before creating entries.
   Unknown account state prevents any fill. SQLite cash and inventory must reconcile
