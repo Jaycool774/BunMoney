@@ -1,5 +1,29 @@
 # Validation results
 
+## Coinbase data change
+
+Local tests for `feature/coinbase-paper-data`:
+
+- Python: 61 tests, 60 pass; the existing socket-level HTTP test is blocked by the
+  sandbox's socket restriction (`PermissionError`). All 24 new Coinbase tests pass.
+- JavaScript syntax checks, Python compilation and diff whitespace checks pass.
+- Existing JavaScript tests were attempted: proxy, feed and trading suites pass;
+  eight server tests are blocked by `listen EPERM` in this sandbox.
+- Browser smoke was attempted but Playwright is absent in the local installation;
+  its provider indicator assertion is included for GitHub Actions.
+- New coverage includes keyless fixed endpoints, strict ticker/candle validation,
+  stale/future/regressed timestamps, completed windows and partial bars, missing or
+  duplicate bars, quote/window cache expiry, concurrent request coalescing, rate
+  limiting/Retry-After, exponential backoff, disconnections, malformed/oversized
+  responses, snapshot request isolation, a 264-request simulated hour, explicit
+  provider selection, prevention of Twelve Data use, and safe provider restart.
+- Live Coinbase network validation is outstanding: this workspace's destination
+  allowlist does not include `api.exchange.coinbase.com`. Tests use documented
+  fixture shapes and injectable HTTP responses; they do not claim live availability.
+
+GitHub Actions results for this change are recorded in its draft PR. The earlier
+bot implementation results below are retained as a historical baseline.
+
 GitHub Actions run [40005505740](https://github.com/Jaycool774/BunMoney/actions/runs/40005505740)
 passed on implementation commit `33892af8c4bdbce87c42d1352440887111b917a5`:
 

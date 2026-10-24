@@ -134,7 +134,7 @@ const assert = require("node:assert/strict");
       ),
       false,
     );
-    const botState={status:'running',mode:'approval',emergency:false,last_cycle:Date.now()/1000,last_error:null,
+    const botState={status:'running',mode:'approval',data_provider:'coinbase',provider_status:{status:'connected'},emergency:false,last_cycle:Date.now()/1000,last_error:null,
       cash:1000,equity:1000,realized:0,unrealized:0,daily_loss_usage:0,day_equity:1000,day_entries:0,day_shutdown:false,
       risk:{daily_loss_fraction:.02,daily_trades:3},position:null,trades:[],signals:{},
       proposals:{p1:{id:'p1',symbol:'BTC/USD',status:'pending',entry:100,stop:99,target:102,planned_risk:5,expires:Date.now()/1000+120}},report:{trades:0}};
@@ -151,6 +151,7 @@ const assert = require("node:assert/strict");
     });
     await page.locator('.bot-dashboard summary').click();
     await page.waitForFunction(()=>document.getElementById('bot-account').textContent.includes('$1,000.00'));
+    assert.ok((await page.locator('#bot-message').textContent()).includes('Data: coinbase'));
     await page.locator('[data-bot="reject"]').click();
     await page.waitForFunction(()=>document.getElementById('bot-approvals').textContent==='None');
     await page.locator('#bot-mode').selectOption('automatic');

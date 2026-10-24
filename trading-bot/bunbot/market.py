@@ -17,6 +17,7 @@ def timestamp(value):
 
 
 class BunMoneyMarket:
+    provider = "twelve_data"
     def __init__(self, base_url, token, now):
         parsed = urllib.parse.urlparse(base_url)
         if parsed.scheme not in ('http','https') or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -56,3 +57,15 @@ class BunMoneyMarket:
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise Blocked('Market redirect refused')
+
+
+def create_market(environ, now):
+    """Provider selection is explicit, startup-only and never an automatic fallback."""
+    provider = environ.get('BOT_DATA_PROVIDER', 'coinbase')
+    if provider == 'coinbase':
+        from .coinbase import CoinbaseMarket
+        return CoinbaseMarket(now)
+    if provider == 'twelve_data':
+        return BunMoneyMarket(environ.get('MARKET_ENGINE_URL','http://127.0.0.1:3000'),
+                              environ.get('MARKET_ENGINE_TOKEN',''), now)
+    raise ValueError('BOT_DATA_PROVIDER must be coinbase or twelve_data; no fallback enabled')

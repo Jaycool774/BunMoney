@@ -29,7 +29,7 @@
   }
   function render(s){
     el('bot-mode').value=s.mode;
-    el('bot-message').textContent=`${s.status} · ${s.mode} · Emergency ${s.emergency?'ON':'off'} · Last completed cycle ${s.last_cycle?new Date(s.last_cycle*1000).toISOString():'never'}${s.last_error?' · '+s.last_error:''}`;
+    el('bot-message').textContent=`${s.status} · ${s.mode} · Data: ${s.data_provider || 'unknown'} (${s.provider_status?.status || 'configured'}) · Emergency ${s.emergency?'ON':'off'} · Last completed cycle ${s.last_cycle?new Date(s.last_cycle*1000).toISOString():'never'}${s.last_error?' · '+s.last_error:''}`;
     el('bot-account').textContent=`Paper cash ${money(s.cash)} · Equity ${money(s.equity)} · Realized P/L ${money(s.realized)} · Unrealized P/L ${money(s.unrealized)} · Daily loss ${money(s.daily_loss_usage)} / ${money(s.day_equity*s.risk.daily_loss_fraction)} · Entries ${s.day_entries}/${s.risk.daily_trades} · Daily shutdown ${s.day_shutdown?'ON':'off'}`;
     el('bot-position').textContent=JSON.stringify(s.position,null,2);
     table(el('bot-history'),s.trades.slice(-50).reverse(),['symbol','entry','exit','qty','pnl','fees','reason']);

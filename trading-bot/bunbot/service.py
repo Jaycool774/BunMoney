@@ -8,7 +8,7 @@ import signal
 import threading
 import time
 from .core import Blocked, Engine
-from .market import BunMoneyMarket
+from .market import create_market
 
 log = logging.getLogger('bunbot')
 
@@ -84,7 +84,7 @@ def main():
     if hmac.compare_digest(token,market_token):
         raise SystemExit('Use independent service and market tokens')
     stop = threading.Event()
-    market = BunMoneyMarket(os.environ.get('MARKET_ENGINE_URL','http://127.0.0.1:3000'),market_token,time.time)
+    market = create_market(os.environ,time.time)
     engine = Engine(os.environ.get('BOT_DB','paper.sqlite3'),market,time.time)
     def worker():
         while not stop.is_set():

@@ -106,6 +106,11 @@ class Engine:
                 s['marks'] = {}
                 self.cancel(s, 'restart')
                 self.event('recovery', {'message': 'Recovered paper ledger; explicit start required'})
+            provider = getattr(self.market, 'provider', 'custom')
+            if s.get('data_provider') != provider:
+                self.cancel(s, 'data provider changed')
+                self.event('provider_changed', {'previous':s.get('data_provider'), 'active':provider})
+            s['data_provider'] = provider
             self.verify(s)
             if s['emergency']:
                 self.halt_requested.set()
@@ -373,7 +378,7 @@ class Engine:
                     key = f'{symbol}:{candles[-1].timestamp}:{side}'
                     if key in s['signals']:
                         continue
-                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol)
+                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, provider=s['data_provider'])
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = s['position']
@@ -387,6 +392,7 @@ class Engine:
                         if s['position'] or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades:
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
+                    proposal['provider'] = s['data_provider']
                     if s['mode'] == 'manual':
                         proposal['status'] = 'manual'
                     s['proposals'][key] = proposal
@@ -433,6 +439,7 @@ class Engine:
             since = self.now()-86400
             day_trades = [t for t in s['trades'] if since <= t['closed'] <= self.now()]
             errors = self.db.execute("SELECT at,data FROM events WHERE kind='error' AND at>=? ORDER BY id DESC LIMIT 20", (since,)).fetchall()
+            result['provider_status'] = getattr(self.market, 'diagnostics', lambda: {'provider':s['data_provider'], 'automatic_fallback':False})()
             result.update(equity=equity, unrealized=unrealized, realized=realized, risk=asdict(self.settings),
                           daily_loss_usage=max(0,s['day_equity']-equity) if equity is not None else None,
                           report=dict(period='last 24 hours (UTC)', generated=self.now(), trades=len(day_trades), wins=sum(t['pnl']>0 for t in day_trades),
