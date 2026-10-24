@@ -1,6 +1,20 @@
 # Validation results
 
-Run in the managed workspace with Python 3.12.14 and Node 24.19.0.
+GitHub Actions run [40005505740](https://github.com/Jaycool774/BunMoney/actions/runs/40005505740)
+passed on implementation commit `33892af8c4bdbce87c42d1352440887111b917a5`:
+
+- Python: **37/37 pass**, including socket-level authentication and health checks.
+- JavaScript: **41/41 pass** (3 bot proxy, 3 Coinbase, 21 trading, 14 server).
+- JavaScript syntax checks and browser smoke: **pass**. Browser checks cover the
+  existing frontend and the new dashboard rejection, mode and emergency controls.
+- CI uses Python 3.12.15, Node from `.node-version`, and Playwright Chromium.
+
+The implementation is unchanged after that run; this validation update records
+its results. Live provider data, real historical datasets and an always-on host
+were not exercised by CI.
+
+Local runs used Python 3.12.14 and Node 24.19.0. The following sandbox restrictions
+were resolved by running the complete suite on GitHub Actions:
 
 - Python unittest suite: 37 tests; 36 pass, 1 blocked by socket restrictions
   (`test_service_authentication_and_health`, `PermissionError: Operation not permitted`).
@@ -29,5 +43,5 @@ whole-cycle data validation; stop gaps; targets; sticky daily loss shutdown and 
 rollover; three entries/day; emergency persistence and mode bypass protection;
 mode-specific discretionary sales and expired sale proposals; protective exits while paused; restart recovery/cancellation; corrupted ledger or
 inventory; rollback before commit; report time windows; next-open backtest fills
-and conservative ambiguous-bar exits. Actual socket-level auth/health testing remains
-required on an unrestricted development host or CI before merging this draft.
+and conservative ambiguous-bar exits. Socket-level auth/health and browser verification subsequently passed in CI, as recorded above.
+Deployment and live-provider smoke testing remain outstanding.
