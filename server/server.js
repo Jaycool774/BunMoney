@@ -121,6 +121,7 @@ function createApp({
     try{res.json(await eventsCalendar.load());}
     catch{res.status(502).json({error:"Calendar temporarily unavailable."});}
   });
+  app.use("/api/bot", require("./bot-proxy").botProxy({apiToken}));
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
   app.use("/api", (_req, res) =>
@@ -134,6 +135,7 @@ function createApp({
     "script.js",
     "trading-core.js",
     "coinbase-feed.js",
+    "bot-dashboard.js",
   ])
     app.get(
       name === "index.html" ? ["/", "/index.html"] : `/${name}`,

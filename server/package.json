@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --use-env-proxy server.js",
     "test": "node --test ../tests/*.test.js",
-    "check": "node --check ../script.js && node --check server.js && node --check market-engine.js && node --check emperor-bunny.js && node --check live-ai.js && node --check news-feed.js && node --check events-calendar.js",
+    "check": "node --check ../script.js && node --check server.js && node --check market-engine.js && node --check emperor-bunny.js && node --check live-ai.js && node --check news-feed.js && node --check events-calendar.js && node --check bot-proxy.js && node --check ../bot-dashboard.js",
     "test:browser": "node ../tests/browser-smoke.js"
   },
   "keywords": [],
