@@ -310,11 +310,11 @@ class AdapterTests(unittest.TestCase):
         calls=[]
         def request(path,**params):
             calls.append((path,params))
-            if path=='/api/quote':return {'symbol':'BTC/USD','close':'100','timestamp':1799999999}
-            return {'meta':{'symbol':'BTC/USD','interval':'5min','exchange_timezone':'UTC'},'values':[{'datetime':'2027-01-15 07:55:00','open':'100','high':'101','low':'99','close':'100'}]}
+            if path=='/api/bot-market/quote':return {'symbol':'BTC/USD','close':'100','timestamp':1799999999}
+            return {'meta':{'symbol':'BTC/USD','interval':'5min','exchange_timezone':'UTC','source':'coinbase-exchange-epoch'},'values':[{'datetime':'2027-01-15 07:55:00','open':'100','high':'101','low':'99','close':'100'}]}
         adapter.request=request
         self.assertEqual(adapter.quote('BTC/USD').price,100)
-        adapter.candles('BTC/USD');self.assertEqual(calls[1][0],'/api/time-series')
+        adapter.candles('BTC/USD');self.assertEqual(calls[1][0],'/api/bot-market/candles')
         self.assertEqual(timestamp('2026-10-23T00:00:00Z'),timestamp('2026-10-23 00:00:00'))
         adapter.request=lambda *_a,**_k:{'symbol':'BTC/USD','close':'100'}
         with self.assertRaises(Blocked):adapter.quote('BTC/USD')
