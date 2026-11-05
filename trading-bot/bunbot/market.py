@@ -39,15 +39,15 @@ class BunMoneyMarket:
         return data
 
     def quote(self, symbol):
-        d = self.request('/api/quote', symbol=symbol)
+        d = self.request('/api/bot-market/quote', symbol=symbol)
         if d.get('symbol') != symbol:
             raise Blocked('Unexpected quote symbol')
         return Quote(symbol, positive(d.get('price',d.get('close'))), timestamp(d.get('timestamp')))
 
     def candles(self, symbol):
-        d = self.request('/api/time-series', symbol=symbol, interval='5min', outputsize=40)
+        d = self.request('/api/bot-market/candles', symbol=symbol)
         meta = d.get('meta',{})
-        if meta.get('symbol') != symbol or meta.get('interval') != '5min' or meta.get('exchange_timezone') not in ('UTC','Etc/UTC'):
+        if meta.get('symbol') != symbol or meta.get('interval') != '5min' or meta.get('exchange_timezone') != 'UTC' or meta.get('source') != 'coinbase-exchange-epoch':
             raise Blocked('Unexpected candle metadata or timezone')
         rows = [Candle(timestamp(c['datetime']), *(positive(c[k]) for k in ('open','high','low','close'))) for c in d['values']]
         return sorted((c for c in rows if c.timestamp+300 <= self.now()), key=lambda c:c.timestamp)
