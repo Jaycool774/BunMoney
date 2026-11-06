@@ -1,44 +1,54 @@
-/* Layout-only enhancement: preserve original elements, IDs, handlers and trading state. */
+/* Structural BunMoney dashboard: move existing elements, never clone them.
+   Preserve their IDs, event listeners, chart canvas and paper-trading state. */
 (() => {
-  const main = document.getElementById('home');
-  const scanner = document.getElementById('bun-scanner-guide');
-  const chart = document.getElementById('mainChartCard');
-  const bot = document.querySelector('.bot-dashboard');
-  if (!main || !scanner || !chart || !bot) return;
-  const grid = document.createElement('div');
-  grid.className = 'bun-command-grid';
-  grid.setAttribute('aria-label', 'BunMoney market command dashboard');
-  const left = document.createElement('div');
-  left.className = 'bun-command-scanner';
-  const center = document.createElement('div');
-  center.className = 'bun-command-chart';
-  const right = document.createElement('div');
-  right.className = 'bun-command-bot';
-  const heading = document.createElement('div');
-  heading.className = 'bun-command-heading';
-  heading.innerHTML = '<strong>📈 Market command dashboard</strong><span>Research markets · Practice only · No guaranteed signals</span>';
-  grid.append(left, center, right);
-  scanner.before(heading, grid);
-  left.append(scanner);
-  for (const id of ['homeSearch','homePriceCard','homeMetrics','mainChartCard']) {
-    const node = document.getElementById(id);
-    if (node) center.append(node);
+  function build() {
+    const home = document.getElementById('home');
+    const hero = home?.querySelector('.bun-welcome');
+    const shortcuts = home?.querySelector('.bun-shortcuts');
+    const scanner = document.getElementById('bun-scanner-guide');
+    const bot = home?.querySelector('.bot-dashboard');
+    const chart = document.getElementById('mainChartCard');
+    if (!home || !hero || !shortcuts || !scanner || !bot || !chart) {
+      console.warn('BunMoney dashboard: a required section is missing; original layout retained.');
+      return;
+    }
+    if (home.querySelector('.bun-command-grid')) return;
+    // The mascot banner and shortcuts belong at the very top, above the old header.
+    home.prepend(hero, shortcuts);
+    const heading = document.createElement('div');
+    heading.className = 'bun-command-heading';
+    heading.innerHTML = '<strong>📈 Market command dashboard</strong><span>Paper trading · Market research · Bot controls</span>';
+    const stats = bot.querySelector('.bot-stats');
+    if (stats) {
+      stats.classList.add('bun-command-stats');
+      shortcuts.after(stats);
+    }
+    const grid = document.createElement('div');
+    grid.className = 'bun-command-grid';
+    grid.setAttribute('aria-label', 'Market scanner, chart and Python trading bot');
+    const left = document.createElement('div');
+    left.className = 'bun-command-scanner';
+    const center = document.createElement('div');
+    center.className = 'bun-command-chart';
+    const right = document.createElement('div');
+    right.className = 'bun-command-bot';
+    grid.append(left,center,right);
+    (stats || shortcuts).after(heading,grid);
+    left.append(scanner);
+    // Use the real class/IDs from index.html; previous version targeted missing IDs.
+    for (const id of ['homeSearch','homePriceCard','homeMetrics','mainChartCard']) {
+      const node = document.getElementById(id);
+      if (node) center.append(node);
+    }
+    right.append(bot);
+    bot.open = true;
+    // Preserve existing technical analysis, trade levels, trading controls,
+    // history, news and calendars below the new dashboard.
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   }
-  right.append(bot);
-  bot.open = true;
-  const stats = bot.querySelector('.bot-stats');
-  if (stats) {
-    stats.classList.add('bun-command-stats');
-    heading.before(stats);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', build, {once:true});
+  } else {
+    build();
   }
-  const connection = main.querySelector('.connection-settings');
-  if (connection) {
-    connection.classList.add('bun-connection-panel');
-    grid.after(connection);
-  }
-  const fit = () => {
-    // Chart canvas is responsive to its parent; dispatch resize after relocation.
-    window.dispatchEvent(new Event('resize'));
-  };
-  requestAnimationFrame(fit);
 })();
