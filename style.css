@@ -1552,3 +1552,41 @@ body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.
  #home.screen.active>.bun-command-grid>.bun-command-bot{order:2;width:100%!important}
  #home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
+
+/* V6: keep the scanner, usable chart and Python bot in one desktop row.
+   Override V5's 1130px two-column breakpoint that pushed the bot below. */
+@media (min-width: 960px){
+  #home.screen.active>.bun-command-grid{
+    display:grid!important;
+    grid-template-columns:minmax(170px, 0.78fr) minmax(0, 2.45fr) minmax(220px, 1fr)!important;
+    gap:12px!important;
+    align-items:start!important;
+  }
+  #home.screen.active>.bun-command-grid>.bun-command-scanner,
+  #home.screen.active>.bun-command-grid>.bun-command-chart,
+  #home.screen.active>.bun-command-grid>.bun-command-bot{
+    grid-column:auto!important;
+    grid-row:auto!important;
+    min-width:0!important;
+  }
+  #home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+  }
+  #home.screen.active>.bun-command-grid .bun-command-chart .chart-timeframes{
+    display:flex;
+    flex-wrap:wrap;
+  }
+}
+@media (min-width: 701px) and (max-width: 959px){
+  #home.screen.active>.bun-command-grid{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.65fr)!important;
+    gap:12px!important;
+  }
+  #home.screen.active>.bun-command-grid>.bun-command-bot{
+    grid-column:1/-1!important;
+  }
+}
