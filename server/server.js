@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const { timingSafeEqual } = require("node:crypto");
 const { createMarketEngine } = require("./market-engine");
+const { createBotCryptoFeed } = require("./bot-crypto-feed");
 const { explain } = require("./emperor-bunny");
 const { makeAssistant } = require("./live-ai");
 const { createNewsFeed } = require("./news-feed");
@@ -21,6 +22,7 @@ function createApp({
 } = {}) {
   const app = express(),
     engine = createMarketEngine({ apiKey, fetchImpl, now, timeoutMs }),
+    botCrypto = createBotCryptoFeed({ fetchImpl, now, timeoutMs }),
     assistant = makeAssistant({apiKey:aiKey,fetchImpl:aiFetchImpl,now}),
     newsFeed = createNewsFeed({fetchImpl:newsFetchImpl,now}),
     eventsCalendar = createEventsCalendar({fetchImpl:eventsFetchImpl,now}),
@@ -121,6 +123,14 @@ function createApp({
     try{res.json(await eventsCalendar.load());}
     catch{res.status(502).json({error:"Calendar temporarily unavailable."});}
   });
+  // Authenticated by the existing /api middleware; exclusively for the paper bot.
+  const botMarketRoute = method => async (req, res) => {
+    try { res.json(await botCrypto[method](req.query.symbol)); }
+    catch (error) { res.status(error.status || 502).json({ error: error.message || "Crypto feed unavailable" }); }
+  };
+  app.get("/api/bot-market/quote", botMarketRoute("quote"));
+  app.get("/api/bot-market/candles", botMarketRoute("candles"));
+  app.use("/api/bot", require("./bot-proxy").botProxy({apiToken}));
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
   app.use("/api", (_req, res) =>
@@ -134,6 +144,7 @@ function createApp({
     "script.js",
     "trading-core.js",
     "coinbase-feed.js",
+    "bot-dashboard.js",
   ])
     app.get(
       name === "index.html" ? ["/", "/index.html"] : `/${name}`,

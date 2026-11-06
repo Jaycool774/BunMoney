@@ -219,7 +219,7 @@ test("News impact labels are heuristic, not confirmed price predictions",()=>{
 });
 
 test("Calendar filters unknown time precision and loads economic events without AI",async t=>{
- const base=await serve(t,{aiKey:"",eventsFetchImpl:async url=>({
+ const base=await serve(t,{aiKey:"",now:()=>Date.parse("2026-10-27T00:00:00Z"),eventsFetchImpl:async url=>({
    ok:true,json:async()=>String(url).includes("financecalendar")?
      {events:[{id:"cpi",country:"US",date:"2026-10-28",name:"CPI",release_at_utc:"2026-10-28T12:30:00Z",time_precision:"minute",impact:"high",source_url:"https://www.bls.gov"}]}:
      {events:[{symbol:"TSLA",company:"Tesla",reportDate:"2026-10-29",reportTime:"AMC",status:"upcoming"}]}
