@@ -3,26 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BunMoney — Private Trading Core</title>
+  <title>BunMoney — Market Command Center</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
   <div class="app">
-<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">Trading core</button></nav>
+<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button></nav>
 <main id="home" class="screen active">
 
     <header class="app-header">
       <div>
-        <h1>BunMoney</h1>
-        <span>Private Trading Core</span>
+        <h1><span class="brand-mark" aria-hidden="true">🐰</span> BunMoney <span class="brand-beta">LAB</span></h1>
+        <span>Market Command Center · Paper-first trading</span>
       </div>
       <div>
         <strong id="tradingBalance">$10.00</strong>
       </div>
     </header>
 
+    <section class="bun-welcome" aria-label="BunMoney welcome">
+      <div class="bun-welcome-copy"><span class="bun-eyebrow">🐰 BUNMONEY / YOUR MARKET HQ</span>
+        <h2>Find the move.<br><em>Manage the risk.</em></h2>
+        <p>Explore charts, follow market signals and practice with simulated funds. No trade is guaranteed.</p>
+        <div class="bun-chips"><span>📈 Market analysis</span><span>🛡️ Paper trading</span><span>🤖 Python bot</span></div>
+      </div>
+      <div class="bun-art" aria-label="BunMoney bunny mascot artwork" role="img"><span class="bun-orbit bun-orbit-one"></span><span class="bun-orbit bun-orbit-two"></span><span class="bun-mascot">🐰</span><span class="bun-art-label">BUN / 001</span></div>
+    </section>
     <!-- MARKET SEARCH -->
     <section class="search home-search" id="homeSearch">
       <input
