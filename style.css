@@ -1415,3 +1415,40 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
   #home.screen.active > .bun-command-grid > *{width:100%}
   #home.screen.active > .bun-welcome{grid-template-columns:100px minmax(0,1fr) !important}
 }
+
+/* Structural command-center layout: override the legacy named-area home grid. */
+#home.screen.active{display:block !important;grid-template:none !important;grid-template-areas:none !important}
+#home.screen.active > *{grid-area:auto !important;grid-column:auto !important;grid-row:auto !important;width:100% !important;min-width:0 !important;margin:0 0 16px !important}
+#home.screen.active > .bun-welcome{display:grid !important;grid-template-columns:minmax(210px,31%) minmax(0,1fr) !important;min-height:290px;align-items:center;padding:24px 32px !important}
+#home.screen.active > .bun-welcome .bun-mascot-frame img{max-height:285px;width:100%}
+#home.screen.active > .bun-welcome h2{font-size:clamp(44px,6vw,84px)}
+#home.screen.active > .bun-shortcuts{display:flex !important;flex-wrap:wrap;overflow:visible;gap:10px}
+#home.screen.active > .bun-shortcuts a{flex:1 1 130px;text-align:center}
+#home.screen.active > .bun-command-heading{display:flex !important}
+#home.screen.active > .bun-command-stats{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+#home.screen.active > .bun-command-grid{display:grid !important;grid-template-columns:minmax(200px,.8fr) minmax(0,1.7fr) minmax(270px,1fr) !important;gap:14px;align-items:start}
+#home.screen.active > .bun-command-grid > div{min-width:0}
+#home.screen.active .bun-command-scanner .bun-scan-grid{grid-template-columns:1fr !important}
+#home.screen.active .bun-command-chart .home-metrics{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+#home.screen.active .bun-command-chart .home-search{display:flex !important;flex-wrap:wrap}
+#home.screen.active .bun-command-chart .home-price-card{margin-bottom:12px !important}
+#home.screen.active .bun-command-chart .home-chart{margin-bottom:0 !important}
+#home.screen.active .bun-command-bot .bot-dashboard{width:100% !important;max-width:none !important;margin:0 !important;display:block}
+#home.screen.active .bun-command-bot .bot-stats{display:none}
+#home.screen.active .bun-command-bot .bot-tabs{flex-wrap:wrap}
+#home.screen.active .bun-command-bot .bot-dashboard table{display:block;overflow-x:auto}
+@media(max-width:1150px){
+#home.screen.active > .bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr) !important}
+#home.screen.active > .bun-command-grid > .bun-command-bot{grid-column:1/-1 !important}
+#home.screen.active > .bun-command-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+}
+@media(max-width:700px){
+#home.screen.active > .bun-welcome{grid-template-columns:110px minmax(0,1fr) !important;min-height:180px;padding:12px !important}
+#home.screen.active > .bun-welcome h2{font-size:clamp(28px,7vw,46px)}
+#home.screen.active > .bun-welcome .bun-mascot-frame img{max-height:180px}
+#home.screen.active > .bun-command-grid{display:flex !important;flex-direction:column}
+#home.screen.active > .bun-command-grid > div{width:100%}
+#home.screen.active > .bun-command-grid .bun-command-chart{order:0}
+#home.screen.active > .bun-command-grid .bun-command-scanner{order:1}
+#home.screen.active > .bun-command-grid .bun-command-bot{order:2}
+}
