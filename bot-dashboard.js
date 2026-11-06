@@ -17,7 +17,7 @@
     </section><section data-section="signals" hidden><h3>Signals (sell signals close held longs; no short selling)</h3><div id="bot-signals"></div><h3>Trade plans</h3><div id="bot-plans"></div>
     </section><section data-section="trades" hidden><h3>Open position</h3><pre id="bot-position"></pre><h3>Trade history</h3><div id="bot-history"></div>
     </section><section data-section="settings" hidden><h3>Risk settings and morning report (UTC)</h3><pre id="bot-report"></pre></section>`;
-  (document.querySelector('main') || document.body).append(panel);
+  (document.getElementById('bunBotMount') || document.querySelector('main') || document.body).append(panel);
   let pending=0,latestRequest=0,notifyEnabled=false,seenIds=null;
   function showTab(name){panel.querySelectorAll('[data-section]').forEach(x=>x.hidden=x.dataset.section!==name);panel.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));}
   panel.addEventListener('click',e=>{const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);});
