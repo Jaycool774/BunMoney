@@ -1452,3 +1452,25 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 #home.screen.active > .bun-command-grid .bun-command-scanner{order:1}
 #home.screen.active > .bun-command-grid .bun-command-bot{order:2}
 }
+
+/* V3 structural dashboard: overrides legacy positional home-grid styles */
+.app>.bun-welcome{display:grid !important;grid-template-columns:minmax(180px,32%) minmax(0,1fr) !important;width:100%;margin:0 0 14px !important;min-height:290px}
+.app>.bun-welcome .bun-mascot-frame img{max-height:290px;width:min(100%,390px)}
+.app>.bun-shortcuts{display:flex !important;justify-content:flex-start;flex-wrap:wrap;overflow:visible;margin-bottom:16px}
+.app>.bun-shortcuts a{flex:0 0 auto}
+#home.screen.active{display:block !important;grid-template:none !important;grid-template-areas:none !important}
+#home.screen.active>*{grid-area:auto !important;grid-column:auto !important;grid-row:auto !important;width:100% !important;margin-bottom:15px !important}
+#home.screen.active>.bun-command-grid{display:grid !important;grid-template-columns:minmax(205px,.9fr) minmax(0,1.85fr) minmax(255px,1.1fr) !important;gap:13px;align-items:start}
+#home.screen.active>.bun-command-grid>*{min-width:0}
+#home.screen.active>.bun-command-grid .bun-market-hub{margin:0 !important}
+#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:1fr !important}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-search{display:flex;flex-wrap:wrap}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-metrics{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-chart{width:100% !important;max-width:100%;margin:0 !important}
+#home.screen.active>.bun-command-grid .bun-command-chart #chart{width:100% !important;height:350px !important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{width:100%;max-width:none;margin:0;padding:12px}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard>summary{font-size:15px}
+#home.screen.active>.bun-account-overview .bot-stats{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:10px}
+#home.screen.active>.bun-account-overview .bot-stats>div{min-width:0}
+@media(max-width:1180px){#home.screen.active>.bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) !important}#home.screen.active>.bun-command-grid>.bun-command-bot{grid-column:1/-1 !important}}
+@media(max-width:700px){.app>.bun-welcome{grid-template-columns:105px minmax(0,1fr) !important;min-height:190px;padding:12px !important}.app>.bun-welcome h2{font-size:clamp(30px,8vw,48px)}.app>.bun-shortcuts{flex-wrap:nowrap;overflow-x:auto}#home.screen.active>.bun-command-grid{display:flex !important;flex-direction:column}#home.screen.active>.bun-command-grid>*{width:100%}#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}#home.screen.active>.bun-account-overview .bot-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important}}
