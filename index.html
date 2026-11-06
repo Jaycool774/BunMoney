@@ -4,12 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BunMoney — Market Command Center</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=command-v3">
 </head>
 
 <body>
 
   <div class="app">
+    <section class="bun-welcome" aria-label="BunMoney command center">
+      <div class="bun-mascot-frame"><img src="assets/bunmoney-mascot.svg" alt="Cartoon grey bunny wearing a backwards black and neon green cap" width="330" height="255"></div>
+      <div class="bun-welcome-copy"><span class="bun-eyebrow">BUNMONEY / MARKET COMMAND CENTER</span>
+        <h2><span class="bun-title-light">Bun</span><em>Money</em> <span class="bun-crown" aria-hidden="true">♛</span></h2>
+        <p>Find the move. Manage the risk. Practice with paper money.</p>
+        <div class="bun-chips"><span>📈 Market analysis</span><span>🛡️ Paper trading</span><span>🤖 Python bot</span></div>
+      </div>
+    </section>
+    <nav class="bun-shortcuts" aria-label="BunMoney tools">
+      <a href="#homeSearch">⌕ Markets</a><a href="#mainChartCard">▥ Chart</a><a href="#bun-scanner-guide">◉ Scanner</a><a href="#spikeBoard">⚡ Movers</a><a href="#bun-scanner-guide">★ Watchlist</a>
+    </nav>
 <nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button></nav>
 <main id="home" class="screen active">
 
@@ -23,17 +34,6 @@
       </div>
     </header>
 
-    <section class="bun-welcome" aria-label="BunMoney command center">
-      <div class="bun-mascot-frame"><img src="assets/bunmoney-mascot.svg" alt="Cartoon grey bunny wearing a backwards black and neon green cap" width="330" height="255"></div>
-      <div class="bun-welcome-copy"><span class="bun-eyebrow">BUNMONEY / MARKET COMMAND CENTER</span>
-        <h2><span class="bun-title-light">Bun</span><em>Money</em> <span class="bun-crown" aria-hidden="true">♛</span></h2>
-        <p>Find the move. Manage the risk. Practice with paper money.</p>
-        <div class="bun-chips"><span>📈 Market analysis</span><span>🛡️ Paper trading</span><span>🤖 Python bot</span></div>
-      </div>
-    </section>
-    <nav class="bun-shortcuts" aria-label="BunMoney tools">
-      <a href="#homeSearch">⌕ Markets</a><a href="#mainChartCard">▥ Chart</a><a href="#bun-scanner-guide">◉ Scanner</a><a href="#spikeBoard">⚡ Movers</a><a href="#bun-scanner-guide">★ Watchlist</a>
-    </nav>
     <section id="bun-scanner-guide" class="bun-market-hub" aria-label="Market scanner navigation">
       <div class="bun-market-hub-heading"><div><span class="bun-eyebrow">MARKET INTELLIGENCE</span><h3>◉ Market Scanner</h3></div><span class="bun-scan-status">Watchlist tools · Paper only</span></div>
       <div class="bun-scan-grid">
@@ -427,6 +427,6 @@
   <script src="script.js"></script>
 
 <script src="bot-dashboard.js" defer></script>
-<script src="dashboard-layout.js" defer></script>
+<script src="dashboard-layout.js?v=command-v3" defer></script>
 </body>
 </html>
