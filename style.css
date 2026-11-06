@@ -1511,3 +1511,44 @@ body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.
 #home .bot-dashboard [data-section]{background:#0e1a12!important;border-color:#315936!important}
 @media(max-width:700px){.app>.bun-welcome{min-height:190px!important}.app>.bun-welcome .bun-mascot-frame img{max-height:190px!important}.app>.bun-shortcuts a{padding:10px 12px!important}}
 @media(prefers-reduced-motion:reduce){#home .bun-scan-grid a{transition:none}#home .bun-scan-grid a:hover{transform:none}}
+
+/* V5: structural three-column command center, not visual DOM reordering. */
+#home.screen.active>.bun-command-grid{
+ display:grid!important;
+ grid-template-columns:minmax(195px,.85fr) minmax(0,2fr) minmax(250px,1.05fr)!important;
+ gap:14px!important;align-items:start!important;
+ width:100%!important;min-width:0;
+}
+#home.screen.active>.bun-command-grid>.bun-command-scanner,
+#home.screen.active>.bun-command-grid>.bun-command-chart,
+#home.screen.active>.bun-command-grid>.bun-command-bot{
+ grid-area:auto!important;grid-row:auto!important;grid-column:auto!important;
+ width:auto!important;min-width:0!important;max-width:100%;
+}
+#home.screen.active>.bun-command-grid .bun-market-hub{margin:0!important;padding:15px!important}
+#home.screen.active>.bun-command-grid .bun-market-hub-heading{display:flex;flex-direction:column;align-items:start;gap:7px}
+#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:1fr!important}
+#home.screen.active>.bun-command-grid .bun-scan-grid a{min-height:68px!important}
+#home.screen.active>.bun-command-grid .bun-command-chart{padding:12px!important}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-search{display:flex!important;flex-wrap:wrap;gap:7px}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-search input{flex:1 1 140px;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-metrics{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-metrics>.card{min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-chart{max-width:100%;width:100%!important;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart .chart-wrap{width:100%;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart #chart{max-width:100%;width:100%!important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{display:block!important;margin:0!important;max-width:100%;width:100%;min-width:0;overflow-wrap:anywhere}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard>summary{font-size:16px}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-stats{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-tabs{flex-wrap:wrap}
+@media(max-width:1130px){
+ #home.screen.active>.bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr)!important}
+ #home.screen.active>.bun-command-grid>.bun-command-bot{grid-column:1/-1!important}
+}
+@media(max-width:700px){
+ #home.screen.active>.bun-command-grid{display:flex!important;flex-direction:column!important}
+ #home.screen.active>.bun-command-grid>.bun-command-chart{order:0;width:100%!important}
+ #home.screen.active>.bun-command-grid>.bun-command-scanner{order:1;width:100%!important}
+ #home.screen.active>.bun-command-grid>.bun-command-bot{order:2;width:100%!important}
+ #home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
