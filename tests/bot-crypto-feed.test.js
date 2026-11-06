@@ -29,5 +29,5 @@ test("requires contiguous completed UTC epoch candles", async () => {
 });
 test("fails closed on malformed prices and candles", async () => {
   await assert.rejects(feed({price:"0",time:"2026-11-05T14:45:00Z"},[]).quote("BTC/USD"), /invalid/);
-  await assert.rejects(feed({}, [[1,2,3,4,5,6]]).candles("BTC/USD"), /stale|Missing/);
+  await assert.rejects(feed({}, [[1,2,3,4,5,6]]).candles("BTC/USD"), /stale|Missing|Invalid Coinbase candle/);
 });
