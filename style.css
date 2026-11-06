@@ -1295,3 +1295,25 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .bot-dashboard table {border-collapse:collapse; font-size:.85rem; width:100%}
 .bot-dashboard td,.bot-dashboard th {padding:8px; text-align:left; border-bottom:1px solid #477360}
 .bot-dashboard pre {white-space:pre-wrap; overflow-wrap:anywhere}
+
+/* BunMoney brand refresh — additive, existing trading controls unchanged */
+.brand-mark{display:inline-block;filter:drop-shadow(0 0 12px rgba(163,230,53,.32))}
+.brand-beta{font-size:10px;letter-spacing:.16em;color:#101b0b;background:#a3e635;padding:4px 7px;border-radius:6px;vertical-align:middle}
+.app-header h1{letter-spacing:-.04em}
+.bun-welcome{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:18px;align-items:center;overflow:hidden;margin:0 0 18px;padding:25px 27px;border-radius:22px;border:1px solid rgba(163,230,53,.28);background:radial-gradient(circle at 82% 30%,rgba(163,230,53,.17),transparent 40%),linear-gradient(125deg,#14251e,#10131d 70%);box-shadow:0 18px 55px rgba(0,0,0,.22)}
+.bun-welcome:before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(163,230,53,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(163,230,53,.035) 1px,transparent 1px);background-size:32px 32px}
+.bun-welcome-copy{position:relative;z-index:1}
+.bun-eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:#bef264}
+.bun-welcome h2{font-size:clamp(27px,4vw,48px);line-height:1.08;letter-spacing:-.055em;margin:12px 0}
+.bun-welcome h2 em{font-style:normal;color:#a3e635}
+.bun-welcome p{max-width:490px;color:#b7c3ba;font-size:14px;line-height:1.65}
+.bun-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:17px}
+.bun-chips span{padding:8px 10px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:999px;color:#dce6df;font-size:11px}
+.bun-art{position:relative;display:grid;place-items:center;min-height:190px;isolation:isolate}
+.bun-orbit{position:absolute;border-radius:50%;border:1px solid rgba(163,230,53,.22);width:175px;height:175px;transform:rotate(-25deg) scaleY(.68)}
+.bun-orbit-two{width:145px;height:145px;transform:rotate(35deg) scaleY(.75);border-color:rgba(56,189,248,.3)}
+.bun-mascot{font-size:100px;line-height:1;filter:drop-shadow(0 16px 20px rgba(0,0,0,.38));animation:bunFloat 4s ease-in-out infinite}
+.bun-art-label{position:absolute;bottom:0;right:0;color:#9acb8d;letter-spacing:.18em;font-size:10px;font-weight:800}
+@keyframes bunFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@media(max-width:620px){.bun-welcome{grid-template-columns:minmax(0,1fr) 92px;padding:19px 15px;gap:6px}.bun-art{min-height:120px}.bun-mascot{font-size:66px}.bun-orbit{width:98px;height:98px}.bun-orbit-two{width:78px;height:78px}.bun-welcome p{font-size:12px}.bun-chips span{font-size:10px;padding:6px 8px}.bun-art-label{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.bun-mascot{animation:none}}
