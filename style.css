@@ -1317,3 +1317,23 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 @keyframes bunFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @media(max-width:620px){.bun-welcome{grid-template-columns:minmax(0,1fr) 92px;padding:19px 15px;gap:6px}.bun-art{min-height:120px}.bun-mascot{font-size:66px}.bun-orbit{width:98px;height:98px}.bun-orbit-two{width:78px;height:78px}.bun-welcome p{font-size:12px}.bun-chips span{font-size:10px;padding:6px 8px}.bun-art-label{font-size:8px}}
 @media(prefers-reduced-motion:reduce){.bun-mascot{animation:none}}
+
+/* BunMoney cartoon trading-terminal theme */
+.bun-welcome{grid-template-columns:minmax(160px,34%) minmax(0,1fr);min-height:245px;background:radial-gradient(ellipse at 28% 70%,rgba(73,255,26,.24),transparent 48%),linear-gradient(115deg,#080e0b,#09170c 65%,#07110a);border-color:#61d92a;box-shadow:0 0 0 1px rgba(123,255,43,.15),0 18px 50px rgba(0,0,0,.32)}
+.bun-welcome-copy{z-index:2}.bun-welcome h2{font-size:clamp(42px,7vw,94px);font-style:italic;font-weight:1000;letter-spacing:-.08em;white-space:nowrap;text-shadow:3px 5px 0 #07140b,0 0 24px rgba(99,255,0,.23)}
+.bun-title-light{color:#e7f0e9}.bun-crown{font-size:.38em;color:#a3e635;vertical-align:top;letter-spacing:0}.bun-welcome p{color:#d5ebd3}
+.bun-mascot-frame{align-self:end;display:flex;justify-content:center;align-items:end;position:relative;z-index:1}
+.bun-mascot-frame img{display:block;width:min(100%,360px);height:auto;max-height:265px;object-fit:contain;filter:drop-shadow(0 0 22px rgba(97,255,20,.27))}
+.bun-shortcuts{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;margin:-3px 0 18px;padding:5px 0 10px}
+.bun-shortcuts a{color:#e6f9df;background:#101914;border:1px solid #2b6330;padding:12px 15px;text-decoration:none;border-radius:12px;white-space:nowrap;font-size:12px;font-weight:800}
+.bun-shortcuts a:hover,.bun-shortcuts a:focus-visible{background:#20492a;border-color:#a3e635;outline:2px solid #a3e635}
+.bun-market-hub{padding:18px;margin-bottom:18px;border:1px solid #4ba837;border-radius:18px;background:linear-gradient(155deg,#101c15,#0a1010);box-shadow:0 10px 26px rgba(0,0,0,.25)}
+.bun-market-hub-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+.bun-market-hub h3{font-size:23px;margin:6px 0}.bun-scan-status{color:#b3f98b;font-size:11px;border:1px solid #376f38;padding:7px 9px;border-radius:999px}
+.bun-scan-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.bun-scan-grid a{display:flex;flex-direction:column;gap:9px;text-decoration:none;background:#0b1310;border:1px solid #2d5130;border-radius:13px;padding:15px 12px;min-height:100px;color:#e7f6e5;transition:border-color .15s,background .15s}
+.bun-scan-grid a:hover,.bun-scan-grid a:focus-visible{border-color:#a3e635;background:#17301c;outline:none}
+.bun-scan-grid strong{font-size:14px}.bun-scan-grid small{font-size:11px;line-height:1.5;color:#a9b9ab}
+.bun-scan-disclaimer{font-size:11px;color:#91a998;line-height:1.5;margin:13px 0 0}
+@media(max-width:850px){.bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.bun-welcome{grid-template-columns:100px minmax(0,1fr);min-height:175px;padding:12px}.bun-welcome h2{font-size:clamp(29px,8vw,43px)}.bun-welcome p{font-size:11px}.bun-mascot-frame img{max-height:170px}.bun-welcome .bun-chips{gap:4px}.bun-welcome .bun-chips span{font-size:9px}.bun-market-hub-heading{align-items:start;flex-direction:column}.bun-scan-grid{gap:7px}.bun-scan-grid a{padding:12px 10px;min-height:94px}.bun-scan-grid strong{font-size:12px}}
