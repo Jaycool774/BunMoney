@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BunMoney — Market Command Center</title>
-  <link rel="stylesheet" href="style.css?v=brand-v4">
+  <link rel="stylesheet" href="style.css?v=layout-v5">
 </head>
 
 <body>
@@ -34,6 +34,9 @@
       </div>
     </header>
 
+    <div class="bun-command-heading"><strong>📊 Market Command Dashboard</strong><span>Markets · Charts · Simulated trading</span></div>
+    <div class="bun-command-grid" aria-label="BunMoney trading command center">
+      <aside class="bun-command-scanner" aria-label="Market scanner">
     <section id="bun-scanner-guide" class="bun-market-hub" aria-label="Market scanner navigation">
       <div class="bun-market-hub-heading"><div><span class="bun-eyebrow">MARKET INTELLIGENCE</span><h3>◉ Market Scanner</h3></div><span class="bun-scan-status">Watchlist tools · Paper only</span></div>
       <div class="bun-scan-grid">
@@ -45,6 +48,8 @@
       </div>
       <p class="bun-scan-disclaimer">These are shortcuts to existing tools, not live market-wide rankings. Expanded crypto, stocks, forex and metals scanning is planned separately.</p>
     </section>
+      </aside>
+      <div class="bun-command-chart">
     <!-- MARKET SEARCH -->
     <section class="search home-search" id="homeSearch">
       <input
@@ -140,6 +145,9 @@
 
     </section>
 
+      </div>
+      <aside class="bun-command-bot" id="bunBotMount" aria-label="Python trading bot"></aside>
+    </div>
     <!-- TECHNICAL ANALYSIS -->
     <section class="setup technical-analysis-card">
 
@@ -427,6 +435,6 @@
   <script src="script.js"></script>
 
 <script src="bot-dashboard.js" defer></script>
-<script src="dashboard-layout.js?v=command-v3" defer></script>
+<script src="dashboard-layout.js?v=layout-v5" defer></script>
 </body>
 </html>
