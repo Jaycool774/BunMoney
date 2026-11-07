@@ -10,7 +10,7 @@ import sqlite3
 import threading
 from typing import Protocol
 
-SYMBOLS = ('BTC/USD', 'ETH/USD')
+SYMBOLS = ('BTC/USD', 'ETH/USD', 'SOL/USD', 'LTC/USD', 'DOGE/USD', 'ADA/USD', 'XRP/USD', 'AVAX/USD', 'LINK/USD')
 MODES = ('manual', 'approval', 'automatic')
 
 
@@ -98,7 +98,7 @@ class Engine:
         with self.transaction() as s:
             if not s:
                 s.update(cash=settings.starting_balance, status='stopped', mode='manual', emergency=False,
-                         position=None, orders={}, proposals={}, signals={}, trades=[], marks={},
+                         position=None, orders={}, proposals={}, signals={}, trades=[], marks={},\n                         enabled_symbols=['BTC/USD','ETH/USD'],
                          day='', day_equity=settings.starting_balance, day_entries=0, day_shutdown=False,
                          last_error=None, last_cycle=None)
             else:
@@ -106,6 +106,7 @@ class Engine:
                 s['marks'] = {}
                 self.cancel(s, 'restart')
                 self.event('recovery', {'message': 'Recovered paper ledger; explicit start required'})
+            s.setdefault('enabled_symbols', ['BTC/USD','ETH/USD'])
             self.verify(s)
             if s['emergency']:
                 self.halt_requested.set()
@@ -216,7 +217,15 @@ class Engine:
         with self.transaction() as s:
             self.verify(s)
             self.expire(s)
-            if action == 'mode':
+            if action == 'markets':
+                if not isinstance(value,str):
+                    raise Blocked('Choose markets')
+                symbols = value.split(',')
+                if not symbols or len(symbols)>len(SYMBOLS) or len(set(symbols))!=len(symbols) or any(x not in SYMBOLS for x in symbols):
+                    raise Blocked('Invalid market selection')
+                s['enabled_symbols'] = [x for x in SYMBOLS if x in symbols]
+                self.cancel(s, 'market selection changed')
+            elif action == 'mode':
                 if value not in MODES:
                     raise Blocked('Unknown mode')
                 self.cancel(s, 'mode changed')
@@ -348,7 +357,10 @@ class Engine:
             try:
                 if s['emergency']:
                     return
-                quotes = {symbol:self.checked_quote(symbol) for symbol in SYMBOLS}
+                active = tuple(s['enabled_symbols'])
+                position_symbol = s['position']['symbol'] if s['position'] else None
+                quote_symbols = tuple(dict.fromkeys((*active, *((position_symbol,) if position_symbol else ()))))
+                quotes = {symbol:self.checked_quote(symbol) for symbol in quote_symbols}
                 s['marks'] = {symbol:asdict(q) for symbol,q in quotes.items()}
                 self.daily(s, self.equity(s))
                 p = s['position']
@@ -362,10 +374,10 @@ class Engine:
                     s['last_cycle'] = self.now()
                     s['last_error'] = None
                     return
-                histories = {symbol: self.market.candles(symbol) for symbol in SYMBOLS}
+                histories = {symbol: self.market.candles(symbol) for symbol in active}
                 for candles in histories.values():
                     self.validate_candles(candles)
-                for symbol in SYMBOLS:
+                for symbol in active:
                     candles = histories[symbol]
                     side = signal(candles)
                     if not side:
