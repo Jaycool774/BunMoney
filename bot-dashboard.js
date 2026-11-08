@@ -16,9 +16,12 @@
     <div class="bot-stats"><div>💰 Equity <strong id="bot-equity">—</strong></div><div>📈 P/L <strong id="bot-profit">—</strong></div><div>🔔 Pending <strong id="bot-pending-count">0</strong></div><div>🛡️ Risk <strong id="bot-risk">—</strong></div></div><nav class="bot-tabs"><button type="button" data-tab="overview">🏠 Overview</button><button type="button" data-tab="approvals">🔔 Approvals</button><button type="button" data-tab="signals">📊 Signals</button><button type="button" data-tab="trades">💼 Trades</button><button type="button" data-tab="settings">⚙️ Settings</button></nav><section data-section="overview"><h3>Account overview</h3><div id="bot-account"></div></section><section data-section="approvals" hidden><h3>Pending approvals</h3><button type="button" id="bot-notify">🔔 Enable browser alerts</button><p id="bot-notify-info">Alerts work while this page is open and connected.</p><div id="bot-approvals"></div>
     </section><section data-section="signals" hidden><h3>Signals (sell signals close held longs; no short selling)</h3><div id="bot-signals"></div><h3>Trade plans</h3><div id="bot-plans"></div>
     </section><section data-section="trades" hidden><h3>Open position</h3><pre id="bot-position"></pre><h3>Trade history</h3><div id="bot-history"></div>
-    </section><section data-section="settings" hidden><h3>Risk settings and morning report (UTC)</h3><pre id="bot-report"></pre></section>`;
+    </section><section data-section="settings" hidden><h3>Markets to scan</h3><p>Choose optional markets. Multiple markets can be scanned together; the bot still holds at most one paper position.</p><div id="bot-market-options"></div><button type="button" data-bot="markets">Apply market selection</button><p id="bot-market-status"></p><h3>Risk settings and morning report (UTC)</h3><pre id="bot-report"></pre></section>`;
   (document.getElementById('bunBotMount') || document.querySelector('main') || document.body).append(panel);
   let pending=0,latestRequest=0,notifyEnabled=false,seenIds=null;
+  const marketSymbols=['BTC/USD','ETH/USD','SOL/USD','LTC/USD','DOGE/USD','ADA/USD','XRP/USD','AVAX/USD','LINK/USD'];
+  const marketOptions=document.getElementById('bot-market-options');
+  marketSymbols.forEach(symbol=>{const label=document.createElement('label');label.style.cssText='display:inline-flex;gap:5px;align-items:center;margin:5px 10px 5px 0';const input=document.createElement('input');input.type='checkbox';input.value=symbol;input.checked=['BTC/USD','ETH/USD'].includes(symbol);label.append(input,document.createTextNode(symbol));marketOptions.append(label);});
   function showTab(name){panel.querySelectorAll('[data-section]').forEach(x=>x.hidden=x.dataset.section!==name);panel.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));}
   panel.addEventListener('click',e=>{const tab=e.target.closest('[data-tab]');if(tab)showTab(tab.dataset.tab);});
   document.getElementById('bot-notify').addEventListener('click',async()=>{
@@ -39,6 +42,8 @@
   }
   function render(s){
     el('bot-mode').value=s.mode;
+    marketOptions.querySelectorAll('input').forEach(input=>{input.checked=(s.enabled_symbols||['BTC/USD','ETH/USD']).includes(input.value);});
+    el('bot-market-status').textContent='Scanning: '+(s.enabled_symbols||['BTC/USD','ETH/USD']).join(', ')+' · Maximum one open paper position';
     el('bot-message').textContent=`${s.status} · ${s.mode} · Emergency ${s.emergency?'ON':'off'} · Last completed cycle ${s.last_cycle?new Date(s.last_cycle*1000).toISOString():'never'}${s.last_error?' · '+s.last_error:''}`;
     el('bot-account').textContent=`Paper cash ${money(s.cash)} · Equity ${money(s.equity)} · Realized P/L ${money(s.realized)} · Unrealized P/L ${money(s.unrealized)} · Daily loss ${money(s.daily_loss_usage)} / ${money(s.day_equity*s.risk.daily_loss_fraction)} · Entries ${s.day_entries}/${s.risk.daily_trades} · Daily shutdown ${s.day_shutdown?'ON':'off'}`;
     el('bot-position').textContent=s.position?JSON.stringify(s.position,null,2):'No open position';
@@ -80,7 +85,7 @@
     }catch(error){if(requestId===latestRequest)el('bot-message').textContent=error.message;}
     finally{pending--;if(!pending)panel.querySelectorAll('button').forEach(b=>b.disabled=false);}
   }
-  panel.addEventListener('click',e=>{const b=e.target.closest('[data-bot]');if(b)request(b.dataset.bot,b.dataset.bot==='mode'?el('bot-mode').value:b.dataset.proposal);});
+  panel.addEventListener('click',e=>{const b=e.target.closest('[data-bot]');if(b)request(b.dataset.bot,b.dataset.bot==='mode'?el('bot-mode').value:b.dataset.bot==='markets'?Array.from(marketOptions.querySelectorAll('input:checked')).map(x=>x.value).join(','):b.dataset.proposal);});
   panel.addEventListener('toggle',()=>{if(panel.open)request();});
   setInterval(()=>{if(panel.open)request();},15000);
   const style=document.createElement('style');
