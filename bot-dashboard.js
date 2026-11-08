@@ -16,7 +16,7 @@
     <div class="bot-stats"><div>💰 Equity <strong id="bot-equity">—</strong></div><div>📈 P/L <strong id="bot-profit">—</strong></div><div>🔔 Pending <strong id="bot-pending-count">0</strong></div><div>🛡️ Risk <strong id="bot-risk">—</strong></div></div><nav class="bot-tabs"><button type="button" data-tab="overview">🏠 Overview</button><button type="button" data-tab="approvals">🔔 Approvals</button><button type="button" data-tab="signals">📊 Signals</button><button type="button" data-tab="trades">💼 Trades</button><button type="button" data-tab="settings">⚙️ Settings</button></nav><section data-section="overview"><h3>Account overview</h3><div id="bot-account"></div></section><section data-section="approvals" hidden><h3>Pending approvals</h3><button type="button" id="bot-notify">🔔 Enable browser alerts</button><p id="bot-notify-info">Alerts work while this page is open and connected.</p><div id="bot-approvals"></div>
     </section><section data-section="signals" hidden><h3>Signals (sell signals close held longs; no short selling)</h3><div id="bot-signals"></div><h3>Trade plans</h3><div id="bot-plans"></div>
     </section><section data-section="trades" hidden><h3>Open position</h3><pre id="bot-position"></pre><h3>Trade history</h3><div id="bot-history"></div>
-    </section><section data-section="settings" hidden><h3>Markets to scan</h3><p>Choose optional markets. Multiple markets can be scanned together; the bot still holds at most one paper position.</p><div id="bot-market-options"></div><button type="button" data-bot="markets">Apply market selection</button><p id="bot-market-status"></p><h3>Risk settings and morning report (UTC)</h3><pre id="bot-report"></pre></section>`;
+    </section><section data-section="settings" hidden><h3>Markets to scan</h3><p>Choose optional markets. Multiple markets can be scanned together; choose up to five simultaneous paper positions with independent stops.</p><div id="bot-market-options"></div><button type="button" data-bot="markets">Apply market selection</button><p id="bot-market-status"></p><h3>Simultaneous paper trades</h3><label>Maximum open positions <select id="bot-max-positions"><option value="1">1 (default)</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label><button type="button" data-bot="max-positions">Apply position limit</button><p id="bot-position-limit-info">Combined planned open risk is capped at 2.5% of paper equity; daily entries remain capped at 3.</p><h3>Risk settings and morning report (UTC)</h3><pre id="bot-report"></pre></section>`;
   (document.getElementById('bunBotMount') || document.querySelector('main') || document.body).append(panel);
   let pending=0,latestRequest=0,notifyEnabled=false,seenIds=null;
   const marketSymbols=['BTC/USD','ETH/USD','SOL/USD','LTC/USD','DOGE/USD','ADA/USD','XRP/USD','AVAX/USD','LINK/USD'];
@@ -42,11 +42,13 @@
   }
   function render(s){
     el('bot-mode').value=s.mode;
+    el('bot-max-positions').value=String(s.max_open_positions||1);
+    el('bot-position-limit-info').textContent=`Open ${s.positions?.length||0} / ${s.max_open_positions||1} positions · Combined planned risk ${money((s.positions||[]).reduce((sum,p)=>sum+(p.planned_risk||0),0))} · Limit ${((s.risk?.max_open_risk_fraction||0.025)*100).toFixed(1)}% of paper equity · ${s.risk?.daily_trades||3} entries/day`;
     marketOptions.querySelectorAll('input').forEach(input=>{input.checked=(s.enabled_symbols||['BTC/USD','ETH/USD']).includes(input.value);});
-    el('bot-market-status').textContent='Scanning: '+(s.enabled_symbols||['BTC/USD','ETH/USD']).join(', ')+' · Maximum one open paper position';
+    el('bot-market-status').textContent='Scanning: '+(s.enabled_symbols||['BTC/USD','ETH/USD']).join(', ')+' · Up to ${s.max_open_positions||1} simultaneous paper positions';
     el('bot-message').textContent=`${s.status} · ${s.mode} · Emergency ${s.emergency?'ON':'off'} · Last completed cycle ${s.last_cycle?new Date(s.last_cycle*1000).toISOString():'never'}${s.last_error?' · '+s.last_error:''}`;
     el('bot-account').textContent=`Paper cash ${money(s.cash)} · Equity ${money(s.equity)} · Realized P/L ${money(s.realized)} · Unrealized P/L ${money(s.unrealized)} · Daily loss ${money(s.daily_loss_usage)} / ${money(s.day_equity*s.risk.daily_loss_fraction)} · Entries ${s.day_entries}/${s.risk.daily_trades} · Daily shutdown ${s.day_shutdown?'ON':'off'}`;
-    el('bot-position').textContent=s.position?JSON.stringify(s.position,null,2):'No open position';
+    el('bot-position').textContent=s.positions?.length?JSON.stringify(s.positions,null,2):'No open position';
     el('bot-equity').textContent=money(s.equity);
     const pl=(Number(s.realized)||0)+(Number(s.unrealized)||0);
     el('bot-profit').textContent=money(pl);
@@ -85,7 +87,7 @@
     }catch(error){if(requestId===latestRequest)el('bot-message').textContent=error.message;}
     finally{pending--;if(!pending)panel.querySelectorAll('button').forEach(b=>b.disabled=false);}
   }
-  panel.addEventListener('click',e=>{const b=e.target.closest('[data-bot]');if(b)request(b.dataset.bot,b.dataset.bot==='mode'?el('bot-mode').value:b.dataset.bot==='markets'?Array.from(marketOptions.querySelectorAll('input:checked')).map(x=>x.value).join(','):b.dataset.proposal);});
+  panel.addEventListener('click',e=>{const b=e.target.closest('[data-bot]');if(b)request(b.dataset.bot,b.dataset.bot==='mode'?el('bot-mode').value:b.dataset.bot==='markets'?Array.from(marketOptions.querySelectorAll('input:checked')).map(x=>x.value).join(','):b.dataset.bot==='max-positions'?el('bot-max-positions').value:b.dataset.proposal);});
   panel.addEventListener('toggle',()=>{if(panel.open)request();});
   setInterval(()=>{if(panel.open)request();},15000);
   const style=document.createElement('style');
