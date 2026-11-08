@@ -1,7 +1,7 @@
 "use strict";
 // Dedicated, fail-closed Coinbase Exchange public market-data adapter for the paper bot.
 // No API credentials, synthetic timestamps, or fallback to stale daily quotes.
-const PRODUCTS = Object.freeze({ "BTC/USD": "BTC-USD", "ETH/USD": "ETH-USD" });
+const PRODUCTS = Object.freeze({ "BTC/USD": "BTC-USD", "ETH/USD": "ETH-USD", "SOL/USD": "SOL-USD", "LTC/USD": "LTC-USD", "DOGE/USD": "DOGE-USD", "ADA/USD": "ADA-USD", "XRP/USD": "XRP-USD", "AVAX/USD": "AVAX-USD", "LINK/USD": "LINK-USD" });
 class FeedError extends Error {
   constructor(message, status = 502) { super(message); this.status = status; }
 }
