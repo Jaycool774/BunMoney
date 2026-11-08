@@ -38,6 +38,58 @@ class BotTests(unittest.TestCase):
     def state(self):return self.e.snapshot()
     def pending(self):return next(p for p in self.state()['proposals'].values() if p['status']=='pending')
 
+    def test_simultaneous_positions_and_independent_exit(self):
+        self.e.controls('max-positions', '3')
+        self.start()
+        state=self.state()
+        self.assertEqual(len(state['positions']), 2)
+        self.assertEqual({p['symbol'] for p in state['positions']}, {'BTC/USD','ETH/USD'})
+        self.assertLessEqual(sum(p['planned_risk'] for p in state['positions']), state['equity']*0.025+0.1)
+        self.assertEqual(state['position'], state['positions'][0])
+        original=self.market.quote
+        def quote(symbol):
+            q=original(symbol)
+            return replace(q,price=104 if symbol=='BTC/USD' else 100)
+        self.market.quote=quote
+        self.e.cycle()
+        state=self.state()
+        self.assertEqual(len(state['positions']),1)
+        self.assertEqual(state['positions'][0]['symbol'],'ETH/USD')
+        self.assertEqual(state['trades'][0]['symbol'],'BTC/USD')
+        self.assertEqual(state['trades'][0]['reason'],'take_profit')
+
+    def test_position_limit_cannot_drop_below_open_positions(self):
+        self.e.controls('max-positions','2')
+        self.start()
+        with self.assertRaises(Blocked):
+            self.e.controls('max-positions','1')
+        self.assertEqual(len(self.state()['positions']),2)
+        for value in ('0','6','2.5','bad'):
+            with self.assertRaises(Blocked):
+                self.e.controls('max-positions',value)
+
+    def test_multiple_positions_survive_restart_and_reconcile(self):
+        self.e.controls('max-positions','2')
+        self.start()
+        before=self.state()
+        self.e.db.close()
+        self.e=Engine(self.path,self.market,lambda:self.clock[0])
+        state=self.state()
+        self.assertEqual(state['status'],'paused')
+        self.assertEqual(state['positions'],before['positions'])
+        self.assertIsNone(state['equity'])
+        self.e.controls('start')
+        self.e.cycle()
+        self.assertEqual(len(self.state()['positions']),2)
+
+    def test_no_duplicate_symbol_even_with_more_slots(self):
+        self.e.controls('max-positions','5')
+        self.start()
+        self.assertEqual(len(self.state()['positions']),2)
+        self.clock[0]+=300
+        self.e.cycle()
+        self.assertEqual(len(self.state()['positions']),2)
+
     def test_strategy_crossovers_and_warmup(self):
         self.assertEqual(signal(self.market.candles('BTC/USD')),'buy')
         bars=self.market.candles('BTC/USD');bars[-1]=replace(bars[-1],close=90)

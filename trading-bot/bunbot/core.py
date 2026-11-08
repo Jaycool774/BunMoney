@@ -63,7 +63,8 @@ class Settings:
     risk_fraction: float = 0.005
     daily_loss_fraction: float = 0.02
     daily_trades: int = 3
-    max_positions: int = 1
+    max_positions: int = 5
+    max_open_risk_fraction: float = 0.025
     fee_fraction: float = 0.001  # 10 bps each side
     slippage_fraction: float = 0.0005  # adverse 5 bps each side
     stop_fraction: float = 0.01
@@ -99,7 +100,7 @@ class Engine:
             if not s:
                 s.update(cash=settings.starting_balance, status='stopped', mode='manual', emergency=False,
                          position=None, orders={}, proposals={}, signals={}, trades=[], marks={},
-                         enabled_symbols=['BTC/USD','ETH/USD'],
+                         enabled_symbols=['BTC/USD','ETH/USD'], max_open_positions=1, positions=[],
                          day='', day_equity=settings.starting_balance, day_entries=0, day_shutdown=False,
                          last_error=None, last_cycle=None)
             else:
@@ -108,6 +109,9 @@ class Engine:
                 self.cancel(s, 'restart')
                 self.event('recovery', {'message': 'Recovered paper ledger; explicit start required'})
             s.setdefault('enabled_symbols', ['BTC/USD','ETH/USD'])
+            s.setdefault('max_open_positions', 1)
+            s.setdefault('positions', [s['position']] if s.get('position') else [])
+            self.sync_position(s)
             self.verify(s)
             if s['emergency']:
                 self.halt_requested.set()
@@ -130,11 +134,27 @@ class Engine:
         self.db.execute('INSERT INTO events(at,kind,data) VALUES (?,?,?)',
                         (self.now(), kind, json.dumps(data, allow_nan=False)))
 
+    def sync_position(self, s):
+        # Legacy single-position field remains a read-only-compatible first-position view.
+        s['position'] = s['positions'][0] if s['positions'] else None
+
+    def positions(self, s):
+        return s['positions']
+
+    def open_risk(self, s):
+        return sum(max(0, p['planned_risk']) for p in self.positions(s))
+
     def verify(self, s):
         if not math.isfinite(s['cash']) or s['cash'] < -1e-7:
             raise Blocked('Paper account cannot be verified')
-        p = s['position']
-        if p:
+        positions = self.positions(s)
+        if not 1 <= s['max_open_positions'] <= self.settings.max_positions or len(positions) > s['max_open_positions']:
+            raise Blocked('Invalid position limit')
+        if len({p['symbol'] for p in positions}) != len(positions) or len({p['id'] for p in positions}) != len(positions):
+            raise Blocked('Duplicate paper position')
+        if s['position'] != (positions[0] if positions else None):
+            raise Blocked('Position summary mismatch')
+        for p in positions:
             if p['symbol'] not in SYMBOLS or not 0 < p['stop'] < p['entry'] < p['target']:
                 raise Blocked('Paper position cannot be verified')
             positive(p['qty'])
@@ -163,9 +183,9 @@ class Engine:
                 raise Blocked('Paper exit has no entry')
         if abs(expected - s['cash']) > 1e-6:
             raise Blocked('Paper cash ledger cannot be reconciled')
-        if unmatched != ([p['id']] if p else []):
+        if sorted(unmatched) != sorted(p['id'] for p in positions):
             raise Blocked('Paper inventory cannot be reconciled')
-        if p:
+        for p in positions:
             entry = s['orders'][p['id']]
             if any(abs(p[a]-entry[b]) > 1e-9 for a,b in [('qty','qty'),('entry','price'),('entry_fee','fee')]):
                 raise Blocked('Paper position differs from entry fill')
@@ -181,14 +201,13 @@ class Engine:
         return q
 
     def equity(self, s, quote=None):
-        p = s['position']
-        if not p:
-            return s['cash']
-        price = quote.price if quote and quote.symbol == p['symbol'] else s['marks'].get(p['symbol'], {}).get('price')
-        if price is None:
-            raise Blocked('Open position valuation unavailable')
-        # Liquidation equity includes estimated adverse slippage and exit fees.
-        return s['cash'] + p['qty'] * price * (1-self.settings.slippage_fraction) * (1-self.settings.fee_fraction)
+        total = s['cash']
+        for p in self.positions(s):
+            price = quote.price if quote and quote.symbol == p['symbol'] else s['marks'].get(p['symbol'], {}).get('price')
+            if price is None:
+                raise Blocked('Open position valuation unavailable')
+            total += p['qty'] * price * (1-self.settings.slippage_fraction) * (1-self.settings.fee_fraction)
+        return total
 
     def daily(self, s, equity):
         day = datetime.fromtimestamp(self.now(), timezone.utc).date().isoformat()
@@ -226,6 +245,15 @@ class Engine:
                     raise Blocked('Invalid market selection')
                 s['enabled_symbols'] = [x for x in SYMBOLS if x in symbols]
                 self.cancel(s, 'market selection changed')
+            elif action == 'max-positions':
+                try:
+                    limit = int(value)
+                except (TypeError, ValueError):
+                    raise Blocked('Invalid position limit') from None
+                if str(limit) != value or not 1 <= limit <= self.settings.max_positions or limit < len(self.positions(s)):
+                    raise Blocked('Position limit must be 1–5 and not below current open positions')
+                s['max_open_positions'] = limit
+                self.cancel(s, 'position limit changed')
             elif action == 'mode':
                 if value not in MODES:
                     raise Blocked('Unknown mode')
@@ -272,7 +300,8 @@ class Engine:
         loss_per_unit = entry*(1+cfg.fee_fraction) - stop*(1-cfg.slippage_fraction)*(1-cfg.fee_fraction)
         equity = self.equity(s)
         remaining = s['day_equity']*cfg.daily_loss_fraction - max(0,s['day_equity']-equity)
-        budget = min(equity * cfg.risk_fraction, remaining)
+        combined_remaining = max(0, equity * cfg.max_open_risk_fraction - self.open_risk(s))
+        budget = min(equity * cfg.risk_fraction, remaining, combined_remaining)
         positive(budget)
         qty = min(budget/loss_per_unit, s['cash']/(entry*(1+cfg.fee_fraction)))
         return dict(id=key, side='buy', symbol=symbol, entry=entry, stop=stop, target=target, qty=qty,
@@ -284,14 +313,14 @@ class Engine:
             return self.enter(s, proposal, quote)
         self.verify(s)
         self.validate_quote(quote, proposal['symbol'])
-        position = s['position']
+        position = next((p for p in self.positions(s) if p['id'] == proposal['position_id']), None)
         if (s['status'] != 'running' or s['mode'] == 'manual' or s['emergency']
                 or self.halt_requested.is_set() or self.now() >= proposal['expires']
                 or not position or position['id'] != proposal['position_id']):
             raise Blocked('Sale proposal is no longer eligible')
         if abs(quote.price/proposal['entry']-1) > 0.002:
             raise Blocked('Price moved outside approved sale')
-        self.exit(s, quote, 'sma_sell')
+        self.exit(s, quote, 'sma_sell', position)
         self.daily(s, self.equity(s))
 
     def enter(self, s, p, q):
@@ -302,7 +331,10 @@ class Engine:
         self.daily(s, equity)
         if self.halt_requested.is_set() or s['emergency'] or s['status'] != 'running' or s['mode'] == 'manual':
             raise Blocked('Entries disabled')
-        if s['day_shutdown'] or s['day_entries'] >= cfg.daily_trades or s['position']:
+        if (s['day_shutdown'] or s['day_entries'] >= cfg.daily_trades
+                or len(self.positions(s)) >= s['max_open_positions']
+                or any(pos['symbol'] == p['symbol'] for pos in self.positions(s))
+                or p['symbol'] not in s['enabled_symbols']):
             raise Blocked('Risk limit reached')
         if p['id'] in s['orders'] or self.now() >= p['expires']:
             raise Blocked('Duplicate or expired order')
@@ -312,7 +344,8 @@ class Engine:
             raise Blocked('Price moved outside approved plan')
         loss = entry*(1+cfg.fee_fraction)-p['stop']*(1-cfg.slippage_fraction)*(1-cfg.fee_fraction)
         remaining = s['day_equity']*cfg.daily_loss_fraction-max(0,s['day_equity']-equity)
-        qty = min(p['qty'], min(equity*cfg.risk_fraction,remaining)/loss, s['cash']/(entry*(1+cfg.fee_fraction)))
+        combined_remaining = max(0, equity*cfg.max_open_risk_fraction-self.open_risk(s))
+        qty = min(p['qty'], min(equity*cfg.risk_fraction,remaining,combined_remaining)/loss, s['cash']/(entry*(1+cfg.fee_fraction)))
         positive(qty)
         notional, fee = qty*entry, qty*entry*cfg.fee_fraction
         order = dict(id=p['id'], side='buy', status='created', at=self.now())
@@ -320,14 +353,17 @@ class Engine:
         self.event('order_created', order)
         order.update(status='filled', notional=notional, fee=fee, price=entry, qty=qty)
         s['cash'] -= notional+fee
-        s['position'] = dict(p, entry=entry, qty=qty, entry_fee=fee, opened=self.now(), planned_risk=qty*loss)
+        s['positions'].append(dict(p, entry=entry, qty=qty, entry_fee=fee, opened=self.now(), planned_risk=qty*loss))
+        self.sync_position(s)
         s['marks'][q.symbol] = asdict(q)
         s['day_entries'] += 1
         self.event('order_filled', order)
         self.verify(s)
 
-    def exit(self, s, q, reason):
-        p, cfg = s['position'], self.settings
+    def exit(self, s, q, reason, p=None):
+        p, cfg = p or s['position'], self.settings
+        if not p or not any(x['id'] == p['id'] for x in self.positions(s)):
+            raise Blocked('Position not open')
         self.validate_quote(q, p['symbol'])
         if self.halt_requested.is_set() or s['emergency']:
             raise Blocked('Emergency stop active')
@@ -345,7 +381,8 @@ class Engine:
         s['cash'] += notional-fee
         trade = dict(p, exit=price, closed=self.now(), pnl=pnl, fees=fee+p['entry_fee'], reason=reason)
         s['trades'].append(trade)
-        s['position'] = None
+        s['positions'] = [x for x in self.positions(s) if x['id'] != p['id']]
+        self.sync_position(s)
         self.event('order_filled', order)
         self.event('trade_closed', trade)
         self.verify(s)
@@ -359,17 +396,15 @@ class Engine:
                 if s['emergency']:
                     return
                 active = tuple(s['enabled_symbols'])
-                position_symbol = s['position']['symbol'] if s['position'] else None
-                quote_symbols = tuple(dict.fromkeys((*active, *((position_symbol,) if position_symbol else ()))))
+                quote_symbols = tuple(dict.fromkeys((*active, *(p['symbol'] for p in self.positions(s)))))
                 quotes = {symbol:self.checked_quote(symbol) for symbol in quote_symbols}
                 s['marks'] = {symbol:asdict(q) for symbol,q in quotes.items()}
                 self.daily(s, self.equity(s))
-                p = s['position']
-                if p:
+                for p in list(self.positions(s)):
                     q = quotes[p['symbol']]
                     reason = 'stop_loss' if q.price <= p['stop'] else 'take_profit' if q.price >= p['target'] else 'daily_loss' if s['day_shutdown'] else None
                     if reason:
-                        self.exit(s, q, reason)
+                        self.exit(s, q, reason, p)
                         self.daily(s, self.equity(s))
                 if s['status'] != 'running':
                     s['last_cycle'] = self.now()
@@ -389,15 +424,16 @@ class Engine:
                     s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol)
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
-                        position = s['position']
-                        if not position or position['symbol'] != symbol:
+                        position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
+                        if not position:
                             continue
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
                                         entry=quotes[symbol].price, stop=position['stop'], target=position['target'],
                                         qty=position['qty'], planned_risk=0, risk_reward=None,
                                         created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
                     else:
-                        if s['position'] or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades:
+                        if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
+                                or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
                     if s['mode'] == 'manual':
@@ -434,12 +470,12 @@ class Engine:
             self.expire(s)
             result = json.loads(json.dumps(s))
             try:
-                p = s['position']
-                mark = s['marks'].get(p['symbol']) if p else None
-                if p and (not mark or not 0 <= self.now()-mark['timestamp'] <= self.settings.quote_max_age):
-                    raise Blocked('Valuation stale')
+                for p in self.positions(s):
+                    mark = s['marks'].get(p['symbol'])
+                    if not mark or not 0 <= self.now()-mark['timestamp'] <= self.settings.quote_max_age:
+                        raise Blocked('Valuation stale')
                 equity = self.equity(s)
-                unrealized = equity - s['cash'] - (p['qty']*p['entry']+p['entry_fee'] if p else 0)
+                unrealized = equity - s['cash'] - sum(p['qty']*p['entry']+p['entry_fee'] for p in self.positions(s))
             except Blocked:
                 equity = unrealized = None
             realized = sum(t['pnl'] for t in s['trades'])
