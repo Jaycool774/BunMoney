@@ -98,7 +98,8 @@ class Engine:
         with self.transaction() as s:
             if not s:
                 s.update(cash=settings.starting_balance, status='stopped', mode='manual', emergency=False,
-                         position=None, orders={}, proposals={}, signals={}, trades=[], marks={},\n                         enabled_symbols=['BTC/USD','ETH/USD'],
+                         position=None, orders={}, proposals={}, signals={}, trades=[], marks={},
+                         enabled_symbols=['BTC/USD','ETH/USD'],
                          day='', day_equity=settings.starting_balance, day_entries=0, day_shutdown=False,
                          last_error=None, last_cycle=None)
             else:
