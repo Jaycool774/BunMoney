@@ -10,6 +10,7 @@ import unittest
 from dataclasses import replace
 
 from bunbot.core import Blocked, Candle, Engine, Quote, Settings, signal
+from bunbot.strategies import choose
 from bunbot.market import BunMoneyMarket, timestamp
 from bunbot.service import handler
 from bunbot.backtest import run
@@ -374,3 +375,25 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):BunMoneyMarket('http://example.com','token',lambda:0)
 
 if __name__=='__main__':unittest.main()
+
+class DualStrategyTests(unittest.TestCase):
+    def test_patient_signal_explanation(self):
+        candles=[Candle(i*300,100,100,100,100) for i in range(21)]
+        candles[-1]=Candle(6000,110,110,110,110)
+        decision=choose(candles)
+        self.assertEqual(decision['strategy'],'patient')
+        self.assertEqual(decision['side'],'buy')
+        self.assertIn('SMA10/SMA20',decision['explanation'])
+
+    def test_quick_signal_without_patient(self):
+        closes=[100]*21
+        closes[-3:]=[99,99,103]
+        candles=[Candle(i*300,p,p,p,p) for i,p in enumerate(closes)]
+        decision=choose(candles)
+        if decision is not None:
+            self.assertIn(decision['strategy'],('quick','patient'))
+            self.assertIn(decision['side'],('buy','sell'))
+
+    def test_no_signal_on_flat_market(self):
+        candles=[Candle(i*300,100,100,100,100) for i in range(21)]
+        self.assertIsNone(choose(candles))
