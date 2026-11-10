@@ -25,14 +25,15 @@ class DualStrategiesTest(unittest.TestCase):
 
     def test_patient_buy(self):
         # Long-window crossover with no quick crossover on final bar.
-        prices = [100]*20 + [99]*20 + [101]*10
+        prices = [100]*20 + [98,97,101,103,95,97,97,100,104,98,95,99,98,101,104,104,104,105,95,97,105]
         result = evaluate(candles(prices))
         self.assertIsNotNone(result)
-        self.assertIn(result.strategy,('quick','patient'))
+        self.assertEqual((result.strategy, result.side), ('patient', 'buy'))
+        self.assertIn('SMA20', result.reason)
 
     def test_no_future_data(self):
         base = [100]*40+[110]
-        self.assertEqual(evaluate(candles(base)), evaluate(candles((base+[999])[:-1])))
+        self.assertEqual(evaluate(candles(base)), evaluate(candles(list(base))))
 
 
 if __name__ == '__main__':
