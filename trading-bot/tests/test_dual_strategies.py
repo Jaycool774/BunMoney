@@ -32,7 +32,7 @@ class DualStrategiesTest(unittest.TestCase):
 
     def test_no_future_data(self):
         base = [100]*40+[110]
-        self.assertEqual(evaluate(candles(base)),evaluate(candles(base+[999])[:-1]) if False else evaluate(candles(base)))
+        self.assertEqual(evaluate(candles(base)), evaluate(candles((base+[999])[:-1])))
 
 
 if __name__ == '__main__':
