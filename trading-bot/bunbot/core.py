@@ -9,6 +9,7 @@ import math
 import sqlite3
 import threading
 from typing import Protocol
+from .strategies import choose
 
 SYMBOLS = ('BTC/USD', 'ETH/USD', 'SOL/USD', 'LTC/USD', 'DOGE/USD', 'ADA/USD', 'XRP/USD', 'AVAX/USD', 'LINK/USD')
 MODES = ('manual', 'approval', 'automatic')
@@ -379,7 +380,8 @@ class Engine:
         order.update(status='filled', notional=notional, fee=fee, price=price, qty=p['qty'])
         s['orders'][key] = order
         s['cash'] += notional-fee
-        trade = dict(p, exit=price, closed=self.now(), pnl=pnl, fees=fee+p['entry_fee'], reason=reason)
+        trade = dict(p, exit=price, closed=self.now(), pnl=pnl, fees=fee+p['entry_fee'], reason=reason,
+                     outcome_explanation=f"{p.get('strategy','legacy')} paper trade closed: {reason}; net P/L {pnl:.2f} after simulated fees and slippage")
         s['trades'].append(trade)
         s['positions'] = [x for x in self.positions(s) if x['id'] != p['id']]
         self.sync_position(s)
@@ -415,13 +417,14 @@ class Engine:
                     self.validate_candles(candles)
                 for symbol in active:
                     candles = histories[symbol]
-                    side = signal(candles)
-                    if not side:
+                    decision = choose(candles)
+                    if not decision:
                         continue
-                    key = f'{symbol}:{candles[-1].timestamp}:{side}'
+                    side = decision['side']
+                    key = f"{symbol}:{candles[-1].timestamp}:{side}:{decision['strategy']}"
                     if key in s['signals']:
                         continue
-                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol)
+                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, strategy=decision['strategy'], explanation=decision['explanation'])
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
@@ -430,12 +433,14 @@ class Engine:
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
                                         entry=quotes[symbol].price, stop=position['stop'], target=position['target'],
                                         qty=position['qty'], planned_risk=0, risk_reward=None,
-                                        created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
+                                        created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending',
+                                        strategy=decision['strategy'], explanation=decision['explanation'])
                     else:
                         if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
+                        proposal.update(strategy=decision['strategy'], explanation=decision['explanation'])
                     if s['mode'] == 'manual':
                         proposal['status'] = 'manual'
                     s['proposals'][key] = proposal

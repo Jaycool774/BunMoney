@@ -45,8 +45,17 @@ def run(candles, symbol='BTC/USD'):
                 e.exit(s,Quote(symbol,candles[-1].close,clock[0]),'backtest_end')
         result=e.snapshot()
         e.db.close()
+        by_strategy={}
+        for trade in result['trades']:
+            name=trade.get('strategy','legacy')
+            stats=by_strategy.setdefault(name,{'trades':0,'wins':0,'net_pnl':0.0,'fees':0.0})
+            stats['trades']+=1
+            stats['wins']+=int(trade['pnl']>0)
+            stats['net_pnl']+=trade['pnl']
+            stats['fees']+=trade['fees']
         return {'assumptions':'next-open fills; 10bps fee and adverse 5bps slippage each side; stop first on ambiguous bars; final position liquidated',
                 'balance':result['cash'],'pnl':result['realized'],'trades':result['trades'],
+                'strategy_performance':by_strategy,
                 'fees':sum(o['fee'] for o in result['orders'].values()),'last_error':result['last_error']}
 
 

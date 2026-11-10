@@ -55,8 +55,8 @@
     el('bot-profit').textContent=money(pl);
     el('bot-profit').style.color=pl<0?'#fda4af':'#86efac';
     el('bot-risk').textContent=money(s.daily_loss_usage)+' / '+money(s.day_equity*s.risk.daily_loss_fraction);
-    table(el('bot-history'),s.trades.slice(-50).reverse(),['symbol','entry','exit','qty','pnl','fees','reason']);
-    table(el('bot-signals'),Object.values(s.signals).slice(-20).reverse(),['symbol','side','at']);
+    table(el('bot-history'),s.trades.slice(-50).reverse(),['symbol','strategy','entry','exit','qty','pnl','fees','reason','outcome_explanation']);
+    table(el('bot-signals'),Object.values(s.signals).slice(-20).reverse(),['symbol','side','strategy','explanation','at']);
     table(el('bot-plans'),Object.values(s.proposals).slice(-20).reverse(),['symbol','side','status','reason','entry','stop','target','qty','planned_risk','risk_reward']);
     el('bot-report').textContent=JSON.stringify({settings:s.risk,morning_report:s.report},null,2);
     const waiting=Object.values(s.proposals).filter(p=>p.status==='pending');
