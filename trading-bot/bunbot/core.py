@@ -9,6 +9,7 @@ import math
 import sqlite3
 import threading
 from typing import Protocol
+from .strategies import evaluate
 
 SYMBOLS = ('BTC/USD', 'ETH/USD', 'SOL/USD', 'LTC/USD', 'DOGE/USD', 'ADA/USD', 'XRP/USD', 'AVAX/USD', 'LINK/USD')
 MODES = ('manual', 'approval', 'automatic')
@@ -379,7 +380,12 @@ class Engine:
         order.update(status='filled', notional=notional, fee=fee, price=price, qty=p['qty'])
         s['orders'][key] = order
         s['cash'] += notional-fee
-        trade = dict(p, exit=price, closed=self.now(), pnl=pnl, fees=fee+p['entry_fee'], reason=reason)
+        trade = dict(p, exit=price, closed=self.now(), pnl=pnl, fees=fee+p['entry_fee'], reason=reason,
+                     outcome='profit' if pnl > 0 else 'loss' if pnl < 0 else 'breakeven',
+                     explanation={'stop_loss':'Price reached the protective stop', 'take_profit':'Price reached the profit target',
+                                  'daily_loss':'Daily loss protection triggered', 'sma_sell':'A strategy sell signal closed the position',
+                                  'backtest_stop':'Historical candle reached the stop', 'backtest_target':'Historical candle reached the target',
+                                  'backtest_end':'Historical test ended'}.get(reason, reason))
         s['trades'].append(trade)
         s['positions'] = [x for x in self.positions(s) if x['id'] != p['id']]
         self.sync_position(s)
@@ -415,19 +421,21 @@ class Engine:
                     self.validate_candles(candles)
                 for symbol in active:
                     candles = histories[symbol]
-                    side = signal(candles)
-                    if not side:
+                    decision = evaluate(candles)
+                    if not decision:
                         continue
+                    side = decision.side
                     key = f'{symbol}:{candles[-1].timestamp}:{side}'
                     if key in s['signals']:
                         continue
-                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol)
+                    s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, strategy=decision.strategy, reason=decision.reason)
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
                         if not position:
                             continue
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
+                                        strategy=decision.strategy, explanation=decision.reason,
                                         entry=quotes[symbol].price, stop=position['stop'], target=position['target'],
                                         qty=position['qty'], planned_risk=0, risk_reward=None,
                                         created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
@@ -436,13 +444,18 @@ class Engine:
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
+                        proposal.update(strategy=decision.strategy, explanation=decision.reason)
                     if s['mode'] == 'manual':
                         proposal['status'] = 'manual'
                     s['proposals'][key] = proposal
                     self.event('proposal_created', proposal)
                     if s['mode'] == 'automatic':
-                        self.execute_proposal(s, proposal, quotes[symbol])
-                        proposal['status'] = 'executed'
+                        try:
+                            self.execute_proposal(s, proposal, quotes[symbol])
+                            proposal['status'] = 'executed'
+                        except Blocked as exc:
+                            proposal.update(status='blocked', reason=str(exc))
+                            self.event('proposal_blocked', proposal)
                 s.update(last_cycle=self.now(), last_error=None)
             except Exception as exc:
                 # A recoverable feed outage blocks entries until an explicit start.

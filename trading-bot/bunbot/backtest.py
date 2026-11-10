@@ -21,7 +21,7 @@ def run(candles, symbol='BTC/USD'):
         def quote(self, market_symbol):
             return Quote(market_symbol,candles[self.index].open,clock[0])
         def candles(self, market_symbol):
-            rows=candles[max(0,self.index-40):self.index]
+            rows=candles[max(0,self.index-100):self.index]
             # Other market has no crossover; only the selected instrument trades.
             return rows if market_symbol==symbol else [Candle(c.timestamp,100,100,100,100) for c in rows]
     market=HistoricalMarket()
@@ -47,7 +47,10 @@ def run(candles, symbol='BTC/USD'):
         e.db.close()
         return {'assumptions':'next-open fills; 10bps fee and adverse 5bps slippage each side; stop first on ambiguous bars; final position liquidated',
                 'balance':result['cash'],'pnl':result['realized'],'trades':result['trades'],
-                'fees':sum(o['fee'] for o in result['orders'].values()),'last_error':result['last_error']}
+                'fees':sum(o['fee'] for o in result['orders'].values()),'last_error':result['last_error'],
+                'strategy_summary':{name:{'trades':len(rows),'pnl':sum(t['pnl'] for t in rows),
+                    'wins':sum(t['pnl']>0 for t in rows)} for name in ('quick','patient')
+                    for rows in [[t for t in result['trades'] if t.get('strategy')==name]]}}
 
 
 def main():
