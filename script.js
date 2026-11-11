@@ -1142,6 +1142,63 @@ function viewSpikeMarket(symbol) {
 }
 setInterval(() => { if (spikeDetections.length) renderSpikes(); },15000);
 
+
+/* On-demand watchlist scanner. Observed five-minute bars only; no trading actions. */
+let bunScannerBusy = false;
+async function runBunScanner(mode) {
+  const modes = ['movers','breakouts','volatility','leaders','gems'];
+  if (!modes.includes(mode) || bunScannerBusy) return;
+  const status = document.getElementById('bun-scanner-status');
+  const output = document.getElementById('bun-scanner-results');
+  if (!status || !output) return;
+  const symbols = [...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,8);
+  output.replaceChildren();
+  if (!symbols.length) { status.textContent='Save favorite symbols before scanning.'; return; }
+  bunScannerBusy = true;
+  document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=true);
+  status.textContent='Checking '+symbols.length+' saved favorites…';
+  const rows = []; let unavailable=0;
+  try {
+    for (const symbol of symbols) {
+      try {
+        const data = await marketEngineRequest('/time_series',{symbol,interval:'5min',outputsize:50});
+        if (data.meta?.symbol && String(data.meta.symbol).toUpperCase()!==symbol) throw Error('Unexpected market');
+        const bars = Trading.candles(data.values);
+        if (bars.length < 22) throw Error('Insufficient candles');
+        const recent=bars.slice(-21),last=recent[recent.length-1],prior=recent[0];
+        const change=100*(last.close/prior.close-1);
+        const swings=recent.slice(1).map((c,i)=>Math.abs(100*(c.close/recent[i].close-1)));
+        const volatility=swings.reduce((a,b)=>a+b,0)/swings.length;
+        const high=Math.max(...recent.slice(0,-1).map(c=>c.high));
+        const low=Math.min(...recent.slice(0,-1).map(c=>c.low));
+        const breakout=last.close>high?'Above 20-bar high':last.close<low?'Below 20-bar low':'Within range';
+        const momentum=100*(last.close/recent[recent.length-6].close-1);
+        rows.push({symbol,change,volatility,breakout,momentum,close:last.close});
+      } catch (_) { unavailable++; }
+    }
+    let ranked=rows;
+    if(mode==='movers') ranked=rows.slice().sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='volatility') ranked=rows.slice().sort((a,b)=>b.volatility-a.volatility);
+    if(mode==='leaders') ranked=rows.slice().sort((a,b)=>b.momentum-a.momentum);
+    if(mode==='breakouts') ranked=rows.filter(x=>x.breakout!=='Within range').sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='gems') ranked=rows.filter(x=>x.momentum>0&&x.change>0&&x.breakout==='Within range').sort((a,b)=>b.momentum-a.momentum);
+    for(const item of ranked) {
+      const card=document.createElement('article');card.className='feature-card';
+      const title=document.createElement('strong');title.textContent=item.symbol;
+      const details=document.createElement('p');
+      details.textContent='20-bar change '+item.change.toFixed(2)+'% · 5-bar momentum '+item.momentum.toFixed(2)+'% · Mean 5-min move '+item.volatility.toFixed(2)+'% · '+item.breakout;
+      const button=document.createElement('button');button.type='button';button.textContent='View chart';button.addEventListener('click',()=>viewSpikeMarket(item.symbol));
+      card.append(title,details,button);output.append(card);
+    }
+    if(!ranked.length) output.textContent='No matching favorites in this scan.';
+    status.textContent=(demoMarketEnabled?'DEMO DATA · ':'')+rows.length+' favorites analyzed · '+unavailable+' unavailable · '+new Date().toLocaleTimeString()+' · Observational screen, not a trade recommendation.';
+  } finally {
+    bunScannerBusy=false;
+    document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=false);
+  }
+}
+document.querySelectorAll('[data-scanner-mode]').forEach(button=>button.addEventListener('click',()=>runBunScanner(button.dataset.scannerMode)));
+
 function startArena() {
   if (arenaRunning) { showPopup("Trading Arena", "The arena is already running."); return; }
   arenaRunning = true;
