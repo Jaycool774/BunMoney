@@ -5,7 +5,7 @@
   else root.BunBotInsights=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  function num(x){const n=Number(x);return Number.isFinite(n)?n:null;}
+  function num(x){if(x===null||x===undefined||x==='')return null;const n=Number(x);return Number.isFinite(n)?n:null;}
   function leaderboard(trades){
     return ['quick','patient'].map(strategy=>{
       const rows=(Array.isArray(trades)?trades:[]).filter(t=>t.strategy===strategy&&num(t.pnl)!==null);
