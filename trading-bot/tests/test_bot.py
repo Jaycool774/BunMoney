@@ -38,6 +38,80 @@ class BotTests(unittest.TestCase):
     def state(self):return self.e.snapshot()
     def pending(self):return next(p for p in self.state()['proposals'].values() if p['status']=='pending')
 
+    def test_manual_news_blackout_blocks_new_entries_but_preserves_exits(self):
+        now = self.clock[0]
+        self.e.controls('news-blackouts', [{'start': now-60, 'end': now+3600, 'label': 'Verified high impact event'}])
+        self.start()
+        state = self.state()
+        self.assertFalse(state['positions'])
+        self.assertTrue(any(a['decision'] == 'blocked' and 'blackout' in a['reason'].lower() for a in state['activity']))
+        self.assertEqual(state['day_entries'], 0)
+        self.e.controls('news-blackouts', [])
+        self.assertEqual(self.state()['news_blackouts'], [])
+        self.assertEqual(self.state()['status'], 'running')
+
+    def test_news_blackout_allows_existing_protective_stop(self):
+        self.start()
+        self.assertEqual(len(self.state()['positions']), 1)
+        now = self.clock[0]
+        self.e.controls('news-blackouts', [{'start': now-30, 'end': now+3600, 'label': 'High impact event'}])
+        self.market.price = 80
+        self.clock[0] += 30
+        self.e.cycle()
+        state = self.state()
+        self.assertEqual(len(state['positions']), 0)
+        self.assertTrue(any(t['reason'] == 'stop_loss' for t in state['trades']))
+        self.assertEqual(state['day_entries'], 1)
+
+    def test_manual_news_blackout_validation_and_restart_persistence(self):
+        now = self.clock[0]
+        for bad in ([{'start': now-60, 'end': now+3600, 'label': ''}],
+                    [{'start': now+60, 'end': now+8*86400, 'label': 'too far'}],
+                    [{'start': now-60, 'end': now+7*3600, 'label': 'too long'}]):
+            with self.assertRaises(Blocked):
+                self.e.controls('news-blackouts', bad)
+        windows = [{'start': now-60, 'end': now+1800, 'label': 'CPI'}]
+        self.e.controls('news-blackouts', windows)
+        self.e.db.close()
+        self.e = Engine(self.path, self.market, lambda:self.clock[0])
+        self.assertEqual(self.state()['news_blackouts'], windows)
+        self.assertEqual(self.state()['status'], 'paused')
+
+    def test_activity_records_execution_and_successful_cycle(self):
+        self.start()
+        state = self.state()
+        self.assertEqual(state['last_successful_cycle'], self.clock[0])
+        self.assertTrue(state['activity'])
+        self.assertEqual({a['symbol'] for a in state['activity'][:2]}, {'BTC/USD', 'ETH/USD'})
+        self.assertTrue(all(a['strategy'] == 'quick' for a in state['activity'][:2]))
+        self.assertEqual({a['decision'] for a in state['activity'][:2]}, {'executed', 'blocked'})
+        self.assertEqual(len(state['positions']), 1)  # Default single-position risk limit
+
+    def test_activity_records_wait_and_preserves_success_after_error(self):
+        self.market.trend = False
+        self.start()
+        state = self.state()
+        self.assertTrue(all(a['decision'] == 'wait' for a in state['activity'][:2]))
+        last_success = state['last_successful_cycle']
+        self.clock[0] += 30
+        self.market.failure = True
+        self.e.cycle()
+        state = self.state()
+        self.assertEqual(state['last_successful_cycle'], last_success)
+        self.assertEqual(state['status'], 'paused')
+        self.assertIsNotNone(state['last_error'])
+
+    def test_activity_is_bounded_and_does_not_change_risk(self):
+        self.market.trend = False
+        self.start()
+        for i in range(505):
+            self.clock[0] += 1
+            self.e.cycle()
+        state = self.state()
+        self.assertLessEqual(self.e.db.execute("SELECT count(*) FROM events WHERE kind='scan_activity'").fetchone()[0], 1000)
+        self.assertEqual(state['cash'], 1000)
+        self.assertEqual(state['day_entries'], 0)
+
     def test_simultaneous_positions_and_independent_exit(self):
         self.e.controls('max-positions', '3')
         self.start()

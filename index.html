@@ -40,13 +40,13 @@
     <section id="bun-scanner-guide" class="bun-market-hub" aria-label="Market scanner navigation">
       <div class="bun-market-hub-heading"><div><span class="bun-eyebrow">MARKET INTELLIGENCE</span><h3>◉ Market Scanner</h3></div><span class="bun-scan-status">Watchlist tools · Paper only</span></div>
       <div class="bun-scan-grid">
-        <a href="#spikeBoard"><strong>🔥 Top Movers</strong><small>Scan recent moves in saved favorites</small></a>
-        <a href="#mainChartCard"><strong>↗ Breakout Watch</strong><small>Review chart levels and momentum</small></a>
-        <a href="#spikeBoard"><strong>⚡ High Volatility</strong><small>Check recent 5-minute spikes</small></a>
-        <a href="#homeSearch"><strong>🏆 Market Leaders</strong><small>Analyze a symbol of your choice</small></a>
-        <a href="#homeSearch"><strong>💎 Potential Gems</strong><small>Research emerging symbols manually</small></a>
+        <button type="button" data-scanner-mode="movers"><strong>🔥 Top Movers</strong><small>Rank recent changes in favorites</small></button>
+        <button type="button" data-scanner-mode="breakouts"><strong>↗ Breakout Watch</strong><small>Find closes beyond recent ranges</small></button>
+        <button type="button" data-scanner-mode="volatility"><strong>⚡ High Volatility</strong><small>Rank recent 5-minute price swings</small></button>
+        <button type="button" data-scanner-mode="leaders"><strong>🏆 Market Leaders</strong><small>Rank momentum in saved favorites</small></button>
+        <button type="button" data-scanner-mode="gems"><strong>💎 Potential Gems</strong><small>Flag watchlist momentum candidates</small></button>
       </div>
-      <p class="bun-scan-disclaimer">These are shortcuts to existing tools, not live market-wide rankings. Expanded crypto, stocks, forex and metals scanning is planned separately.</p>
+      <p class="bun-scan-disclaimer">On-demand scans of up to eight saved favorites, not market-wide rankings or investment recommendations. Results depend on available provider data.</p><div class="bun-market-presets"><strong>Forex & metals watchlist</strong><p>Add popular symbols for charting and manual scans. Not supported by the automatic crypto paper bot.</p><div id="bun-market-presets" class="bun-preset-grid"></div></div><div id="bun-scanner-status" role="status" aria-live="polite">Choose a scan above.</div><div id="bun-scanner-results"></div>
     </section>
       </aside>
       <div class="bun-command-chart">
@@ -124,7 +124,7 @@
         </div>
       </div>
 
-      <div class="chart-wrap">
+      <div class="bun-godmode-controls"><label><input id="bunGodMode" type="checkbox"> ⚡ God Mode — technical signal overlay</label><span id="bunGodModeStatus" role="status">Off · Indicators only, not predictive</span></div><section class="bun-god-performance" id="bunGodPerformance" hidden aria-live="polite"><h4>⚡ God Mode historical performance</h4><p id="bunGodPerformanceSummary">Enable God Mode to analyze the chart.</p><div id="bunGodPerformanceMetrics"></div><small>Historical simulation only. Results depend on available candles and do not predict future returns.</small></section><div class="chart-wrap">
         <canvas id="chart"></canvas>
       </div>
 
@@ -432,6 +432,8 @@
   </div>
   <script src="trading-core.js"></script>
   <script src="coinbase-feed.js"></script>
+  <script src="bot-insights.js"></script>
+  <script src="godmode-performance.js"></script>
   <script src="script.js"></script>
 
 <script src="bot-dashboard.js?v=positions-v1" defer></script>

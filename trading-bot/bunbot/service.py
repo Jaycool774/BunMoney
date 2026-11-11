@@ -64,7 +64,7 @@ def handler(engine, token):
                 body = json.loads(self.rfile.read(size))
                 if not isinstance(body,dict) or set(body)-{'action','value'} or not isinstance(body.get('action'),str):
                     raise Blocked('Invalid control')
-                if body.get('value') is not None and not isinstance(body['value'],str):
+                if body.get('value') is not None and not (isinstance(body['value'],str) or (body['action']=='news-blackouts' and isinstance(body['value'],list))):
                     raise Blocked('Invalid value')
                 engine.controls(body['action'],body.get('value'))
                 self.reply(200,engine.snapshot())

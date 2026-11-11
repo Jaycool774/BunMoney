@@ -109,6 +109,7 @@ class Engine:
                 s['marks'] = {}
                 self.cancel(s, 'restart')
                 self.event('recovery', {'message': 'Recovered paper ledger; explicit start required'})
+            s.setdefault('news_blackouts', [])
             s.setdefault('enabled_symbols', ['BTC/USD','ETH/USD'])
             s.setdefault('max_open_positions', 1)
             s.setdefault('positions', [s['position']] if s.get('position') else [])
@@ -238,7 +239,27 @@ class Engine:
         with self.transaction() as s:
             self.verify(s)
             self.expire(s)
-            if action == 'markets':
+            if action == 'news-blackouts':
+                # Authenticated manually curated UTC windows; no calendar API is assumed.
+                # At most 20 windows, no more than 7 days into the future.
+                if not isinstance(value, list) or len(value) > 20:
+                    raise Blocked('Provide at most 20 UTC blackout windows')
+                windows = []
+                for item in value:
+                    if not isinstance(item, dict) or set(item) != {'start', 'end', 'label'}:
+                        raise Blocked('Invalid blackout window')
+                    start, end, label = item['start'], item['end'], item['label']
+                    if (isinstance(start, bool) or isinstance(end, bool)
+                            or not isinstance(start, (int, float)) or not isinstance(end, (int, float))
+                            or not math.isfinite(start) or not math.isfinite(end)
+                            or not self.now()-3600 <= start < end <= self.now()+7*86400
+                            or end-start > 6*3600 or not isinstance(label, str)
+                            or not 1 <= len(label.strip()) <= 80):
+                        raise Blocked('Blackout window must be within seven days and at most six hours')
+                    windows.append({'start': start, 'end': end, 'label': label.strip()})
+                s['news_blackouts'] = windows
+                self.cancel(s, 'news blackout schedule changed')
+            elif action == 'markets':
                 if not isinstance(value,str):
                     raise Blocked('Choose markets')
                 symbols = value.split(',')
@@ -324,6 +345,9 @@ class Engine:
         self.exit(s, quote, 'sma_sell', position)
         self.daily(s, self.equity(s))
 
+    def news_blocked(self, s):
+        return any(w['start'] <= self.now() < w['end'] for w in s.get('news_blackouts', []))
+
     def enter(self, s, p, q):
         self.verify(s)
         self.validate_quote(q, p['symbol'])
@@ -332,6 +356,8 @@ class Engine:
         self.daily(s, equity)
         if self.halt_requested.is_set() or s['emergency'] or s['status'] != 'running' or s['mode'] == 'manual':
             raise Blocked('Entries disabled')
+        if self.news_blocked(s):
+            raise Blocked('Entry blocked by configured economic news window')
         if (s['day_shutdown'] or s['day_entries'] >= cfg.daily_trades
                 or len(self.positions(s)) >= s['max_open_positions']
                 or any(pos['symbol'] == p['symbol'] for pos in self.positions(s))
@@ -393,6 +419,15 @@ class Engine:
         self.event('trade_closed', trade)
         self.verify(s)
 
+    def activity(self, symbol, strategy, decision, reason, candle=None):
+        """Bounded, non-sensitive per-cycle audit for the authenticated dashboard."""
+        self.event('scan_activity', dict(symbol=symbol, strategy=strategy,
+                   decision=decision, reason=reason, candle=candle))
+        # Keep the audit compact even on an always-running paper service.
+        self.db.execute("""DELETE FROM events WHERE kind='scan_activity' AND id NOT IN
+                          (SELECT id FROM events WHERE kind='scan_activity'
+                           ORDER BY id DESC LIMIT 1000)""")
+
     def cycle(self):
         # Market reads and ledger mutations share one lock, including controls.
         with self.transaction() as s:
@@ -423,16 +458,19 @@ class Engine:
                     candles = histories[symbol]
                     decision = evaluate(candles)
                     if not decision:
+                        self.activity(symbol, 'quick / patient', 'wait', 'No qualifying completed-candle crossover', candles[-1].timestamp)
                         continue
                     side = decision.side
                     key = f'{symbol}:{candles[-1].timestamp}:{side}'
                     if key in s['signals']:
+                        self.activity(symbol, decision.strategy, 'duplicate', 'Signal already processed for this candle', candles[-1].timestamp)
                         continue
                     s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, strategy=decision.strategy, reason=decision.reason)
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
                         if not position:
+                            self.activity(symbol, decision.strategy, 'skip', 'Sell signal but no long position is held', candles[-1].timestamp)
                             continue
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
                                         strategy=decision.strategy, explanation=decision.reason,
@@ -440,8 +478,12 @@ class Engine:
                                         qty=position['qty'], planned_risk=0, risk_reward=None,
                                         created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
                     else:
+                        if self.news_blocked(s):
+                            self.activity(symbol, decision.strategy, 'blocked', 'Configured economic news blackout', candles[-1].timestamp)
+                            continue
                         if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
+                            self.activity(symbol, decision.strategy, 'blocked', 'Open position, daily shutdown or daily entry limit', candles[-1].timestamp)
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
                         proposal.update(strategy=decision.strategy, explanation=decision.reason)
@@ -456,7 +498,8 @@ class Engine:
                         except Blocked as exc:
                             proposal.update(status='blocked', reason=str(exc))
                             self.event('proposal_blocked', proposal)
-                s.update(last_cycle=self.now(), last_error=None)
+                    self.activity(symbol, decision.strategy, proposal['status'], proposal.get('reason') or decision.reason, candles[-1].timestamp)
+                s.update(last_cycle=self.now(), last_successful_cycle=self.now(), last_error=None)
             except Exception as exc:
                 # A recoverable feed outage blocks entries until an explicit start.
                 s.update(status='paused', last_error=f'{type(exc).__name__}: {exc}')
@@ -495,7 +538,8 @@ class Engine:
             since = self.now()-86400
             day_trades = [t for t in s['trades'] if since <= t['closed'] <= self.now()]
             errors = self.db.execute("SELECT at,data FROM events WHERE kind='error' AND at>=? ORDER BY id DESC LIMIT 20", (since,)).fetchall()
-            result.update(equity=equity, unrealized=unrealized, realized=realized, risk=asdict(self.settings),
+            activity_rows = self.db.execute("SELECT at,data FROM events WHERE kind='scan_activity' ORDER BY id DESC LIMIT 40").fetchall()
+            result.update(activity=[{'at':at, **json.loads(data)} for at,data in activity_rows], equity=equity, unrealized=unrealized, realized=realized, risk=asdict(self.settings),
                           daily_loss_usage=max(0,s['day_equity']-equity) if equity is not None else None,
                           report=dict(period='last 24 hours (UTC)', generated=self.now(), trades=len(day_trades), wins=sum(t['pnl']>0 for t in day_trades),
                                       losses=sum(t['pnl']<0 for t in day_trades), fees=sum(o['fee'] for o in s['orders'].values() if since <= o['at'] <= self.now()),
