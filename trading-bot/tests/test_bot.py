@@ -45,7 +45,8 @@ class BotTests(unittest.TestCase):
         self.assertTrue(state['activity'])
         self.assertEqual({a['symbol'] for a in state['activity'][:2]}, {'BTC/USD', 'ETH/USD'})
         self.assertTrue(all(a['strategy'] == 'quick' for a in state['activity'][:2]))
-        self.assertTrue(all(a['decision'] == 'executed' for a in state['activity'][:2]))
+        self.assertEqual({a['decision'] for a in state['activity'][:2]}, {'executed', 'blocked'})
+        self.assertEqual(len(state['positions']), 1)  # Default single-position risk limit
 
     def test_activity_records_wait_and_preserves_success_after_error(self):
         self.market.trend = False
