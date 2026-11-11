@@ -124,7 +124,7 @@
         </div>
       </div>
 
-      <div class="bun-godmode-controls"><label><input id="bunGodMode" type="checkbox"> ⚡ God Mode — technical signal overlay</label><span id="bunGodModeStatus" role="status">Off · Indicators only, not predictive</span></div><div class="chart-wrap">
+      <div class="bun-godmode-controls"><label><input id="bunGodMode" type="checkbox"> ⚡ God Mode — technical signal overlay</label><span id="bunGodModeStatus" role="status">Off · Indicators only, not predictive</span></div><section class="bun-god-performance" id="bunGodPerformance" hidden aria-live="polite"><h4>⚡ God Mode historical performance</h4><p id="bunGodPerformanceSummary">Enable God Mode to analyze the chart.</p><div id="bunGodPerformanceMetrics"></div><small>Historical simulation only. Results depend on available candles and do not predict future returns.</small></section><div class="chart-wrap">
         <canvas id="chart"></canvas>
       </div>
 
@@ -432,6 +432,7 @@
   </div>
   <script src="trading-core.js"></script>
   <script src="coinbase-feed.js"></script>
+  <script src="godmode-performance.js"></script>
   <script src="script.js"></script>
 
 <script src="bot-dashboard.js?v=positions-v1" defer></script>
