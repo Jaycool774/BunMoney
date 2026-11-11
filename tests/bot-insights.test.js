@@ -35,8 +35,8 @@ test('health is not 24/7 guarantee and detects stale cycles',()=>{
 
 test('unknown equity and heartbeat are unavailable, never zero or healthy',()=>{
   const risk=x.risk({positions:[],equity:null,day_equity:null,daily_loss_usage:null,risk:{daily_loss_fraction:.02,max_open_risk_fraction:.025,daily_trades:3}});
-  assert.equal(r.openRiskLimit,null);
-  assert.equal(r.dailyRemaining,null);
+  assert.equal(risk.openRiskLimit,null);
+  assert.equal(risk.dailyRemaining,null);
   const health=x.health({status:'running',last_successful_cycle:null,last_error:null},200);
   assert.equal(health.ageSeconds,null);
   assert.equal(health.healthy,false);
