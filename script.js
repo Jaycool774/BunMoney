@@ -568,9 +568,63 @@ if (
   }
 }
 
+
+/* God Mode: historical SMA crossover overlay, not forecasts or orders.
+   Uses only the candles passed to the chart; markers are confirmed at close. */
+let bunGodModeEnabled = false;
+function godModeSignals(candles) {
+  if(!Array.isArray(candles)||candles.length<21) return [];
+  const closes=candles.map(c=>Number(c.close));
+  const fast=calculateSMA(closes,10),slow=calculateSMA(closes,20);
+  return closes.map((price,i)=>{
+    if(i<20||!Number.isFinite(fast[i-1])||!Number.isFinite(slow[i-1])) return null;
+    if(fast[i-1]<=slow[i-1]&&fast[i]>slow[i]&&price>fast[i]) return 'BUY';
+    if(fast[i-1]>=slow[i-1]&&fast[i]<slow[i]&&price<fast[i]) return 'SELL';
+    return null;
+  });
+}
+function renderGodPerformance(candles) {
+  const panel=document.getElementById('bunGodPerformance');
+  const summary=document.getElementById('bunGodPerformanceSummary');
+  const metrics=document.getElementById('bunGodPerformanceMetrics');
+  if(!panel||!summary||!metrics)return;
+  panel.hidden=!bunGodModeEnabled;
+  if(!bunGodModeEnabled)return;
+  if(!window.BunGodPerformance){summary.textContent='Performance evaluator unavailable.';metrics.replaceChildren();return;}
+  const result=window.BunGodPerformance.evaluate(candles);
+  metrics.replaceChildren();
+  if(result.error){summary.textContent=result.error;return;}
+  summary.textContent=result.count+' historical non-overlapping signals evaluated · '+result.assumptions;
+  const values=[
+    ['Win rate',result.winRate===null?'N/A':result.winRate.toFixed(1)+'%'],
+    ['Winning / losing',result.wins+' / '+result.losses],
+    ['Average net R',result.averageR===null?'N/A':result.averageR.toFixed(2)+'R'],
+    ['Average win / loss',result.averageWinR===null||result.averageLossR===null?'N/A':result.averageWinR.toFixed(2)+'R / '+result.averageLossR.toFixed(2)+'R'],
+    ['Realized reward / risk',result.realizedRR===null?'N/A':result.realizedRR.toFixed(2)+':1'],
+    ['Total net R',result.totalR.toFixed(2)+'R']
+  ];
+  for(const [label,value] of values){
+    const card=document.createElement('div');card.className='bun-god-metric';
+    const name=document.createElement('span');name.textContent=label;
+    const val=document.createElement('strong');val.textContent=value;
+    card.append(name,val);metrics.append(card);
+  }
+}
+function setGodMode(enabled) {
+  bunGodModeEnabled=Boolean(enabled);
+  const status=document.getElementById('bunGodModeStatus');
+  if(status) status.textContent=bunGodModeEnabled
+    ? 'On · Historical SMA10/20 crossovers, not predictions or trade instructions'
+    : 'Off · Indicators only, not predictive';
+  if(window.lastCandles?.length) redrawChart();
+  else renderGodPerformance([]);
+}
+document.getElementById('bunGodMode')?.addEventListener('change',e=>setGodMode(e.target.checked));
+
 function drawChart(candles, support, resistance, entry, stop, target, breakoutIndex, retestIndex, sma10Values, sma20Values) {
   const canvas = document.getElementById("chart");
   if (!canvas || !candles.length) return;
+  if(bunGodModeEnabled) renderGodPerformance(candles);
   const ctx = canvas.getContext("2d");
   const width = canvas.clientWidth || 350;
   const height = canvas.clientHeight || 340;
@@ -621,6 +675,18 @@ const minPrice = Math.min(...extents);
   }
   ctx.textAlign = "left";
 
+  if(bunGodModeEnabled) {
+    // Shade the *historical* SMA relationship, without projecting future prices.
+    for(let i=0;i<visible.length;i++) {
+      const index=start+i,fast=sma10Values?.[index],slow=sma20Values?.[index];
+      if(!Number.isFinite(fast)||!Number.isFinite(slow)) continue;
+      ctx.fillStyle=fast>slow?'rgba(34,197,94,.075)':'rgba(239,68,68,.075)';
+      const left=i===0?padding:(xPosition(i-1)+xPosition(i))/2;
+      const right=i===visible.length-1?width-padding:(xPosition(i)+xPosition(i+1))/2;
+      ctx.fillRect(left,padding,right-left,height-2*padding);
+    }
+  }
+
   visible.forEach((candle, i) => {
     const open = Number(candle.open), close = Number(candle.close), high = Number(candle.high), low = Number(candle.low);
     const x = xPosition(i);
@@ -636,6 +702,21 @@ const minPrice = Math.min(...extents);
     ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
   });
 
+  if(bunGodModeEnabled) {
+    const signals=godModeSignals(candles);
+    for(let i=0;i<visible.length;i++) {
+      const side=signals[start+i];
+      if(!side) continue;
+      const candle=visible[i],isBuy=side==='BUY';
+      const y=yPosition(isBuy?Number(candle.low):Number(candle.high));
+      const markerY=Math.max(18,Math.min(height-12,y+(isBuy?16:-16)));
+      ctx.fillStyle=isBuy?'#86efac':'#fca5a5';
+      ctx.font='bold 11px Arial';
+      ctx.textAlign='center';
+      ctx.fillText(side,xPosition(i),markerY);
+    }
+    ctx.textAlign='left';
+  }
   drawIndicatorLine(ctx, visible, start, sma10Values, xPosition, yPosition, "#facc15");
   drawIndicatorLine(ctx, visible, start, sma20Values, xPosition, yPosition, "#c084fc");
 
@@ -1141,6 +1222,110 @@ function viewSpikeMarket(symbol) {
   document.getElementById("homeSearch")?.scrollIntoView({behavior:"smooth",block:"start"});
 }
 setInterval(() => { if (spikeDetections.length) renderSpikes(); },15000);
+
+
+
+/* Market presets only extend the chart/watchlist scanner, not the paper bot's
+   verified Coinbase-only symbol allowlist. Provider availability varies by plan. */
+const BUN_MARKET_PRESETS = [
+  ['EUR/USD','Euro / US Dollar'], ['GBP/USD','British Pound / US Dollar'],
+  ['USD/JPY','US Dollar / Japanese Yen'], ['GBP/JPY','British Pound / Japanese Yen'],
+  ['AUD/USD','Australian Dollar / US Dollar'], ['USD/CAD','US Dollar / Canadian Dollar'],
+  ['USD/CHF','US Dollar / Swiss Franc'], ['NZD/USD','New Zealand Dollar / US Dollar'],
+  ['XAU/USD','Spot Gold / US Dollar'], ['XAG/USD','Spot Silver / US Dollar']
+];
+function setupMarketPresets() {
+  const root=document.getElementById('bun-market-presets');
+  if(!root) return;
+  for(const [symbol,name] of BUN_MARKET_PRESETS) {
+    const button=document.createElement('button');
+    button.type='button';
+    button.textContent='+ '+symbol;
+    button.title=name+' — add to favorites after quote verification';
+    button.addEventListener('click',async()=>{
+      if(bunFavorites.includes(symbol)){
+        document.getElementById('bun-scanner-status').textContent=symbol+' is already in favorites.';
+        return;
+      }
+      if(demoMarketEnabled){
+        document.getElementById('bun-scanner-status').textContent='Switch to live provider mode to verify '+symbol+' before saving.';
+        return;
+      }
+      button.disabled=true;
+      try {
+        const quote=await marketEngineRequest('/price',{symbol});
+        if(!Trading.positive(Number(quote.price))||
+           (quote.symbol&&String(quote.symbol).toUpperCase()!==symbol))
+          throw Error('Quote verification failed');
+        if(bunFavorites.length>=50) throw Error('Favorites limit reached');
+        if(!bunFavorites.includes(symbol)){
+          bunFavorites.push(symbol);saveFavorites();renderFavorites();
+        }
+        document.getElementById('bun-scanner-status').textContent=symbol+' added to favorites. You can now scan or chart it; automatic paper trading remains crypto-only.';
+      } catch(e) {
+        document.getElementById('bun-scanner-status').textContent='Could not add '+symbol+': '+(e.message||'Provider unavailable')+'. Check Twelve Data plan and market hours.';
+      } finally {button.disabled=false;}
+    });
+    root.append(button);
+  }
+}
+setupMarketPresets();
+
+/* On-demand watchlist scanner. Observed five-minute bars only; no trading actions. */
+let bunScannerBusy = false;
+async function runBunScanner(mode) {
+  const modes = ['movers','breakouts','volatility','leaders','gems'];
+  if (!modes.includes(mode) || bunScannerBusy) return;
+  const status = document.getElementById('bun-scanner-status');
+  const output = document.getElementById('bun-scanner-results');
+  if (!status || !output) return;
+  const symbols = [...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,8);
+  output.replaceChildren();
+  if (!symbols.length) { status.textContent='Save favorite symbols before scanning.'; return; }
+  bunScannerBusy = true;
+  document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=true);
+  status.textContent='Checking '+symbols.length+' saved favorites…';
+  const rows = []; let unavailable=0;
+  try {
+    for (const symbol of symbols) {
+      try {
+        const data = await marketEngineRequest('/time_series',{symbol,interval:'5min',outputsize:50});
+        if (data.meta?.symbol && String(data.meta.symbol).toUpperCase()!==symbol) throw Error('Unexpected market');
+        const bars = Trading.candles(data.values);
+        if (bars.length < 22) throw Error('Insufficient candles');
+        const recent=bars.slice(-21),last=recent[recent.length-1],prior=recent[0];
+        const change=100*(last.close/prior.close-1);
+        const swings=recent.slice(1).map((c,i)=>Math.abs(100*(c.close/recent[i].close-1)));
+        const volatility=swings.reduce((a,b)=>a+b,0)/swings.length;
+        const high=Math.max(...recent.slice(0,-1).map(c=>c.high));
+        const low=Math.min(...recent.slice(0,-1).map(c=>c.low));
+        const breakout=last.close>high?'Above 20-bar high':last.close<low?'Below 20-bar low':'Within range';
+        const momentum=100*(last.close/recent[recent.length-6].close-1);
+        rows.push({symbol,change,volatility,breakout,momentum,close:last.close});
+      } catch (_) { unavailable++; }
+    }
+    let ranked=rows;
+    if(mode==='movers') ranked=rows.slice().sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='volatility') ranked=rows.slice().sort((a,b)=>b.volatility-a.volatility);
+    if(mode==='leaders') ranked=rows.slice().sort((a,b)=>b.momentum-a.momentum);
+    if(mode==='breakouts') ranked=rows.filter(x=>x.breakout!=='Within range').sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='gems') ranked=rows.filter(x=>x.momentum>0&&x.change>0&&x.breakout==='Within range').sort((a,b)=>b.momentum-a.momentum);
+    for(const item of ranked) {
+      const card=document.createElement('article');card.className='feature-card';
+      const title=document.createElement('strong');title.textContent=item.symbol;
+      const details=document.createElement('p');
+      details.textContent='20-bar change '+item.change.toFixed(2)+'% · 5-bar momentum '+item.momentum.toFixed(2)+'% · Mean 5-min move '+item.volatility.toFixed(2)+'% · '+item.breakout;
+      const button=document.createElement('button');button.type='button';button.textContent='View chart';button.addEventListener('click',()=>viewSpikeMarket(item.symbol));
+      card.append(title,details,button);output.append(card);
+    }
+    if(!ranked.length) output.textContent='No matching favorites in this scan.';
+    status.textContent=(demoMarketEnabled?'DEMO DATA · ':'')+rows.length+' favorites analyzed · '+unavailable+' unavailable · '+new Date().toLocaleTimeString()+' · Observational screen, not a trade recommendation.';
+  } finally {
+    bunScannerBusy=false;
+    document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=false);
+  }
+}
+document.querySelectorAll('[data-scanner-mode]').forEach(button=>button.addEventListener('click',()=>runBunScanner(button.dataset.scannerMode)));
 
 function startArena() {
   if (arenaRunning) { showPopup("Trading Arena", "The arena is already running."); return; }
