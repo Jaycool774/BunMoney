@@ -53,7 +53,7 @@
   el('bot-journal-export').addEventListener('click',()=>{
     const rows=Array.isArray(lastSnapshot?.trades)?lastSnapshot.trades:[];
     const keys=['symbol','strategy','side','entry','exit','qty','pnl','fees','reason','closed'];
-    const csv=[keys.join(','),...rows.map(t=>keys.map(k=>csvCell(t[k])).join(','))].join('\\r\\n');
+    const csv=[keys.join(','),...rows.map(t=>keys.map(k=>csvCell(t[k])).join(','))].join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download='bunmoney-paper-journal.csv';a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
