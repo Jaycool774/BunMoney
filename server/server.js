@@ -145,6 +145,8 @@ function createApp({
     "trading-core.js",
     "coinbase-feed.js",
     "bot-dashboard.js",
+    "bot-insights.js",
+    "godmode-performance.js",
   ])
     app.get(
       name === "index.html" ? ["/", "/index.html"] : `/${name}`,
