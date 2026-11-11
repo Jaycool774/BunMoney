@@ -109,6 +109,7 @@ class Engine:
                 s['marks'] = {}
                 self.cancel(s, 'restart')
                 self.event('recovery', {'message': 'Recovered paper ledger; explicit start required'})
+            s.setdefault('news_blackouts', [])
             s.setdefault('enabled_symbols', ['BTC/USD','ETH/USD'])
             s.setdefault('max_open_positions', 1)
             s.setdefault('positions', [s['position']] if s.get('position') else [])
@@ -238,7 +239,27 @@ class Engine:
         with self.transaction() as s:
             self.verify(s)
             self.expire(s)
-            if action == 'markets':
+            if action == 'news-blackouts':
+                # Authenticated manually curated UTC windows; no calendar API is assumed.
+                # At most 20 windows, no more than 7 days into the future.
+                if not isinstance(value, list) or len(value) > 20:
+                    raise Blocked('Provide at most 20 UTC blackout windows')
+                windows = []
+                for item in value:
+                    if not isinstance(item, dict) or set(item) != {'start', 'end', 'label'}:
+                        raise Blocked('Invalid blackout window')
+                    start, end, label = item['start'], item['end'], item['label']
+                    if (isinstance(start, bool) or isinstance(end, bool)
+                            or not isinstance(start, (int, float)) or not isinstance(end, (int, float))
+                            or not math.isfinite(start) or not math.isfinite(end)
+                            or not self.now()-3600 <= start < end <= self.now()+7*86400
+                            or end-start > 6*3600 or not isinstance(label, str)
+                            or not 1 <= len(label.strip()) <= 80):
+                        raise Blocked('Blackout window must be within seven days and at most six hours')
+                    windows.append({'start': start, 'end': end, 'label': label.strip()})
+                s['news_blackouts'] = windows
+                self.cancel(s, 'news blackout schedule changed')
+            elif action == 'markets':
                 if not isinstance(value,str):
                     raise Blocked('Choose markets')
                 symbols = value.split(',')
@@ -324,6 +345,9 @@ class Engine:
         self.exit(s, quote, 'sma_sell', position)
         self.daily(s, self.equity(s))
 
+    def news_blocked(self, s):
+        return any(w['start'] <= self.now() < w['end'] for w in s.get('news_blackouts', []))
+
     def enter(self, s, p, q):
         self.verify(s)
         self.validate_quote(q, p['symbol'])
@@ -332,6 +356,8 @@ class Engine:
         self.daily(s, equity)
         if self.halt_requested.is_set() or s['emergency'] or s['status'] != 'running' or s['mode'] == 'manual':
             raise Blocked('Entries disabled')
+        if self.news_blocked(s):
+            raise Blocked('Entry blocked by configured economic news window')
         if (s['day_shutdown'] or s['day_entries'] >= cfg.daily_trades
                 or len(self.positions(s)) >= s['max_open_positions']
                 or any(pos['symbol'] == p['symbol'] for pos in self.positions(s))
@@ -452,6 +478,9 @@ class Engine:
                                         qty=position['qty'], planned_risk=0, risk_reward=None,
                                         created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
                     else:
+                        if self.news_blocked(s):
+                            self.activity(symbol, decision.strategy, 'blocked', 'Configured economic news blackout', candles[-1].timestamp)
+                            continue
                         if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
                             self.activity(symbol, decision.strategy, 'blocked', 'Open position, daily shutdown or daily entry limit', candles[-1].timestamp)
