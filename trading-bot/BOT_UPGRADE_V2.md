@@ -40,7 +40,7 @@ npm run test:browser --prefix server
 
 ### Not yet safe to claim complete
 
-**Economic News Protection:** a warning panel is present, but no authoritative, time-zone-correct economic-calendar ingestion or server-side blackout is implemented. It does **not** block entries around CPI, NFP, FOMC or central-bank announcements. Do not claim the bot is news-protected.
+**Economic News Protection:** authenticated manually entered UTC blackout windows are now enforced by the Python entry engine (including approval fills); existing protective exits remain available. The user must independently verify event times, enter windows, and maintain them. There is still **no authoritative automatic calendar feed**, so unconfigured or missed events are **not protected**. Never claim automatic CPI/NFP/FOMC protection.
 
 **24/7:** Codespaces can stop; an always-on host, persistent storage, secured access, supervision and external heartbeat alerts are still required. Restart-paused protection remains unchanged.
 
@@ -56,3 +56,13 @@ PYTHONPATH=trading-bot python3 -m unittest discover -s trading-bot/tests -v
 ```
 
 Manually verify authenticated dashboard tabs, CSV export, replay step-by-step, all four timeframe provider responses, missing data, disconnects, stale scans, and mobile layout. No claims of CI success until verified.
+
+### Manually configured economic-event blackout
+
+In the dashboard Safety tab, paste one window per line in the form
+`2026-11-12T12:00:00Z,2026-11-12T15:00:00Z,Verified major event`
+and click Apply. Timestamps **must** end in `Z` (UTC). The backend validates at most 20 windows, each no longer than six hours and no more than seven days ahead. All configured windows are persisted with the paper account. Empty schedule means no news-event protection. Existing protective exits are never blocked by these windows. **This is not an automatically populated calendar.** A verified data provider, staleness handling, time-zone validation and server-side feed-health policy would be required for unattended economic-news protection.
+
+### 24/7 deployment readiness
+
+Existing `trading-bot/deploy/bunmoney-paper-bot.service` and `bot.env.example` provide a Linux systemd starting point. This PR does not purchase a server, install systemd, provision HTTPS or create an external alert receiver. Do not claim a 24/7 running bot merely because the Health tab is green. For any VPS, use the deployment checklist in `trading-bot/README.md`, keep the service loopback-only, retain independent secrets, back up the persistent SQLite ledger, configure external health checks and verify the restart-paused invariant.
