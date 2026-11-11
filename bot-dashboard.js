@@ -97,7 +97,7 @@
   });
   function applyNewsWindows(clear=false){
     try{
-      const lines=clear?[]:el('bot-news-windows').value.split('\\n').map(x=>x.trim()).filter(Boolean);
+      const lines=clear?[]:el('bot-news-windows').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       const windows=lines.map(line=>{
         const [start,end,...label]=line.split(',');
         const a=Date.parse(start),b=Date.parse(end);
