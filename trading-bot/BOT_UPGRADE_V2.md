@@ -27,3 +27,32 @@ npm run check --prefix server
 npm test --prefix server
 npm run test:browser --prefix server
 ```
+
+## November v2 analytics additions (read-only)
+
+- **Strategy leaderboard:** summarizes completed paper trades by Quick and Patient strategy; net P/L, win rate, profit factor, and closed-trade drawdown. It does not mix in God Mode historical simulations.
+- **Multi-timeframe comparison:** on-demand 5m, 15m, 1H and 4H SMA trend read from the selected chart symbol through the existing market provider. Informational only; the Python execution engine is still based on verified 5m crypto candles.
+- **Advanced risk panel:** remaining planned open risk, daily loss headroom, daily entry capacity and active symbols, using the existing authenticated bot snapshot. It does not change risk settings.
+- **Trade journal:** read-only completed-trade table and user-triggered CSV export. No credentials are exported.
+- **Smart alerts:** opt-in in-dashboard health warnings while the dashboard is open; not push notifications and not a guaranteed delivery system.
+- **Market replay:** offline step-through of user-supplied OHLC JSON, without accessing future candles or placing trades.
+- **Health monitor:** reports age of last successful cycle, error/paused state, and freshness; does not itself provide 24/7 hosting.
+
+### Not yet safe to claim complete
+
+**Economic News Protection:** a warning panel is present, but no authoritative, time-zone-correct economic-calendar ingestion or server-side blackout is implemented. It does **not** block entries around CPI, NFP, FOMC or central-bank announcements. Do not claim the bot is news-protected.
+
+**24/7:** Codespaces can stop; an always-on host, persistent storage, secured access, supervision and external heartbeat alerts are still required. Restart-paused protection remains unchanged.
+
+**Automatic strategy gating:** multi-timeframe and God Mode remain read-only and do not modify the execution engine. Any server-side changes require separate data-validation and risk tests.
+
+### Validation before merging
+
+```sh
+npm run check --prefix server
+npm test --prefix server
+npm run test:browser --prefix server
+PYTHONPATH=trading-bot python3 -m unittest discover -s trading-bot/tests -v
+```
+
+Manually verify authenticated dashboard tabs, CSV export, replay step-by-step, all four timeframe provider responses, missing data, disconnects, stale scans, and mobile layout. No claims of CI success until verified.
