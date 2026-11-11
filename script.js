@@ -583,6 +583,33 @@ function godModeSignals(candles) {
     return null;
   });
 }
+function renderGodPerformance(candles) {
+  const panel=document.getElementById('bunGodPerformance');
+  const summary=document.getElementById('bunGodPerformanceSummary');
+  const metrics=document.getElementById('bunGodPerformanceMetrics');
+  if(!panel||!summary||!metrics)return;
+  panel.hidden=!bunGodModeEnabled;
+  if(!bunGodModeEnabled)return;
+  if(!window.BunGodPerformance){summary.textContent='Performance evaluator unavailable.';metrics.replaceChildren();return;}
+  const result=window.BunGodPerformance.evaluate(candles);
+  metrics.replaceChildren();
+  if(result.error){summary.textContent=result.error;return;}
+  summary.textContent=result.count+' historical non-overlapping signals evaluated · '+result.assumptions;
+  const values=[
+    ['Win rate',result.winRate===null?'N/A':result.winRate.toFixed(1)+'%'],
+    ['Winning / losing',result.wins+' / '+result.losses],
+    ['Average net R',result.averageR===null?'N/A':result.averageR.toFixed(2)+'R'],
+    ['Average win / loss',result.averageWinR===null||result.averageLossR===null?'N/A':result.averageWinR.toFixed(2)+'R / '+result.averageLossR.toFixed(2)+'R'],
+    ['Realized reward / risk',result.realizedRR===null?'N/A':result.realizedRR.toFixed(2)+':1'],
+    ['Total net R',result.totalR.toFixed(2)+'R']
+  ];
+  for(const [label,value] of values){
+    const card=document.createElement('div');card.className='bun-god-metric';
+    const name=document.createElement('span');name.textContent=label;
+    const val=document.createElement('strong');val.textContent=value;
+    card.append(name,val);metrics.append(card);
+  }
+}
 function setGodMode(enabled) {
   bunGodModeEnabled=Boolean(enabled);
   const status=document.getElementById('bunGodModeStatus');
@@ -590,12 +617,14 @@ function setGodMode(enabled) {
     ? 'On · Historical SMA10/20 crossovers, not predictions or trade instructions'
     : 'Off · Indicators only, not predictive';
   if(window.lastCandles?.length) redrawChart();
+  else renderGodPerformance([]);
 }
 document.getElementById('bunGodMode')?.addEventListener('change',e=>setGodMode(e.target.checked));
 
 function drawChart(candles, support, resistance, entry, stop, target, breakoutIndex, retestIndex, sma10Values, sma20Values) {
   const canvas = document.getElementById("chart");
   if (!canvas || !candles.length) return;
+  if(bunGodModeEnabled) renderGodPerformance(candles);
   const ctx = canvas.getContext("2d");
   const width = canvas.clientWidth || 350;
   const height = canvas.clientHeight || 340;
