@@ -50,6 +50,19 @@ class BotTests(unittest.TestCase):
         self.assertEqual(self.state()['news_blackouts'], [])
         self.assertEqual(self.state()['status'], 'running')
 
+    def test_news_blackout_allows_existing_protective_stop(self):
+        self.start()
+        self.assertEqual(len(self.state()['positions']), 1)
+        now = self.clock[0]
+        self.e.controls('news-blackouts', [{'start': now-30, 'end': now+3600, 'label': 'High impact event'}])
+        self.market.price = 80
+        self.clock[0] += 30
+        self.e.cycle()
+        state = self.state()
+        self.assertEqual(len(state['positions']), 0)
+        self.assertTrue(any(t['reason'] == 'stop_loss' for t in state['trades']))
+        self.assertEqual(state['day_entries'], 1)
+
     def test_manual_news_blackout_validation_and_restart_persistence(self):
         now = self.clock[0]
         for bad in ([{'start': now-60, 'end': now+3600, 'label': ''}],
