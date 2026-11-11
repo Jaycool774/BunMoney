@@ -1143,6 +1143,53 @@ function viewSpikeMarket(symbol) {
 setInterval(() => { if (spikeDetections.length) renderSpikes(); },15000);
 
 
+
+/* Market presets only extend the chart/watchlist scanner, not the paper bot's
+   verified Coinbase-only symbol allowlist. Provider availability varies by plan. */
+const BUN_MARKET_PRESETS = [
+  ['EUR/USD','Euro / US Dollar'], ['GBP/USD','British Pound / US Dollar'],
+  ['USD/JPY','US Dollar / Japanese Yen'], ['GBP/JPY','British Pound / Japanese Yen'],
+  ['AUD/USD','Australian Dollar / US Dollar'], ['USD/CAD','US Dollar / Canadian Dollar'],
+  ['USD/CHF','US Dollar / Swiss Franc'], ['NZD/USD','New Zealand Dollar / US Dollar'],
+  ['XAU/USD','Spot Gold / US Dollar'], ['XAG/USD','Spot Silver / US Dollar']
+];
+function setupMarketPresets() {
+  const root=document.getElementById('bun-market-presets');
+  if(!root) return;
+  for(const [symbol,name] of BUN_MARKET_PRESETS) {
+    const button=document.createElement('button');
+    button.type='button';
+    button.textContent='+ '+symbol;
+    button.title=name+' — add to favorites after quote verification';
+    button.addEventListener('click',async()=>{
+      if(bunFavorites.includes(symbol)){
+        document.getElementById('bun-scanner-status').textContent=symbol+' is already in favorites.';
+        return;
+      }
+      if(demoMarketEnabled){
+        document.getElementById('bun-scanner-status').textContent='Switch to live provider mode to verify '+symbol+' before saving.';
+        return;
+      }
+      button.disabled=true;
+      try {
+        const quote=await marketEngineRequest('/price',{symbol});
+        if(!Trading.positive(Number(quote.price))||
+           (quote.symbol&&String(quote.symbol).toUpperCase()!==symbol))
+          throw Error('Quote verification failed');
+        if(bunFavorites.length>=50) throw Error('Favorites limit reached');
+        if(!bunFavorites.includes(symbol)){
+          bunFavorites.push(symbol);saveFavorites();renderFavorites();
+        }
+        document.getElementById('bun-scanner-status').textContent=symbol+' added to favorites. You can now scan or chart it; automatic paper trading remains crypto-only.';
+      } catch(e) {
+        document.getElementById('bun-scanner-status').textContent='Could not add '+symbol+': '+(e.message||'Provider unavailable')+'. Check Twelve Data plan and market hours.';
+      } finally {button.disabled=false;}
+    });
+    root.append(button);
+  }
+}
+setupMarketPresets();
+
 /* On-demand watchlist scanner. Observed five-minute bars only; no trading actions. */
 let bunScannerBusy = false;
 async function runBunScanner(mode) {
