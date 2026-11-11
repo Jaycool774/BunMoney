@@ -38,6 +38,33 @@ class BotTests(unittest.TestCase):
     def state(self):return self.e.snapshot()
     def pending(self):return next(p for p in self.state()['proposals'].values() if p['status']=='pending')
 
+    def test_manual_news_blackout_blocks_new_entries_but_preserves_exits(self):
+        now = self.clock[0]
+        self.e.controls('news-blackouts', [{'start': now-60, 'end': now+3600, 'label': 'Verified high impact event'}])
+        self.start()
+        state = self.state()
+        self.assertFalse(state['positions'])
+        self.assertTrue(any(a['decision'] == 'blocked' and 'blackout' in a['reason'].lower() for a in state['activity']))
+        self.assertEqual(state['day_entries'], 0)
+        self.e.controls('news-blackouts', [])
+        self.clock[0] += 30
+        self.e.cycle()
+        self.assertTrue(self.state()['positions'])
+
+    def test_manual_news_blackout_validation_and_restart_persistence(self):
+        now = self.clock[0]
+        for bad in ([{'start': now-60, 'end': now+3600, 'label': ''}],
+                    [{'start': now+60, 'end': now+8*86400, 'label': 'too far'}],
+                    [{'start': now-60, 'end': now+7*3600, 'label': 'too long'}]):
+            with self.assertRaises(Blocked):
+                self.e.controls('news-blackouts', bad)
+        windows = [{'start': now-60, 'end': now+1800, 'label': 'CPI'}]
+        self.e.controls('news-blackouts', windows)
+        self.e.db.close()
+        self.e = Engine(self.path, self.market, lambda:self.clock[0])
+        self.assertEqual(self.state()['news_blackouts'], windows)
+        self.assertEqual(self.state()['status'], 'paused')
+
     def test_activity_records_execution_and_successful_cycle(self):
         self.start()
         state = self.state()
