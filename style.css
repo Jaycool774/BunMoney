@@ -1614,3 +1614,13 @@ body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.
 .bun-godmode-controls label{font-size:13px;font-weight:700;color:#c8f7a1;cursor:pointer}
 .bun-godmode-controls input{accent-color:#a3e635}
 #bunGodModeStatus{font-size:11px;color:#b5cbb8}
+
+/* Historical God Mode performance panel (simulation, not trade advice). */
+.bun-god-performance{margin:10px 0;padding:12px;border:1px solid #45653b;border-radius:12px;background:#101c15}
+.bun-god-performance[hidden]{display:none}
+.bun-god-performance h4{margin:0 0 8px;color:#c9f9a4}
+.bun-god-performance p,.bun-god-performance small{font-size:11px;line-height:1.5;color:#b5cbb8}
+#bunGodPerformanceMetrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}
+.bun-god-metric{display:flex;flex-direction:column;gap:5px;padding:9px;border:1px solid #34583c;border-radius:8px}
+.bun-god-metric span{font-size:11px;color:#b5cbb8}
+.bun-god-metric strong{font-size:14px;color:#e8f8e4}
