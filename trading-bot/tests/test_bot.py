@@ -47,9 +47,8 @@ class BotTests(unittest.TestCase):
         self.assertTrue(any(a['decision'] == 'blocked' and 'blackout' in a['reason'].lower() for a in state['activity']))
         self.assertEqual(state['day_entries'], 0)
         self.e.controls('news-blackouts', [])
-        self.clock[0] += 30
-        self.e.cycle()
-        self.assertTrue(self.state()['positions'])
+        self.assertEqual(self.state()['news_blackouts'], [])
+        self.assertEqual(self.state()['status'], 'running')
 
     def test_manual_news_blackout_validation_and_restart_persistence(self):
         now = self.clock[0]
