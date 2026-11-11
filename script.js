@@ -568,6 +568,31 @@ if (
   }
 }
 
+
+/* God Mode: historical SMA crossover overlay, not forecasts or orders.
+   Uses only the candles passed to the chart; markers are confirmed at close. */
+let bunGodModeEnabled = false;
+function godModeSignals(candles) {
+  if(!Array.isArray(candles)||candles.length<21) return [];
+  const closes=candles.map(c=>Number(c.close));
+  const fast=calculateSMA(closes,10),slow=calculateSMA(closes,20);
+  return closes.map((price,i)=>{
+    if(i<20||!Number.isFinite(fast[i-1])||!Number.isFinite(slow[i-1])) return null;
+    if(fast[i-1]<=slow[i-1]&&fast[i]>slow[i]&&price>fast[i]) return 'BUY';
+    if(fast[i-1]>=slow[i-1]&&fast[i]<slow[i]&&price<fast[i]) return 'SELL';
+    return null;
+  });
+}
+function setGodMode(enabled) {
+  bunGodModeEnabled=Boolean(enabled);
+  const status=document.getElementById('bunGodModeStatus');
+  if(status) status.textContent=bunGodModeEnabled
+    ? 'On · Historical SMA10/20 crossovers, not predictions or trade instructions'
+    : 'Off · Indicators only, not predictive';
+  if(window.lastCandles?.length) redrawChart();
+}
+document.getElementById('bunGodMode')?.addEventListener('change',e=>setGodMode(e.target.checked));
+
 function drawChart(candles, support, resistance, entry, stop, target, breakoutIndex, retestIndex, sma10Values, sma20Values) {
   const canvas = document.getElementById("chart");
   if (!canvas || !candles.length) return;
@@ -621,6 +646,18 @@ const minPrice = Math.min(...extents);
   }
   ctx.textAlign = "left";
 
+  if(bunGodModeEnabled) {
+    // Shade the *historical* SMA relationship, without projecting future prices.
+    for(let i=0;i<visible.length;i++) {
+      const index=start+i,fast=sma10Values?.[index],slow=sma20Values?.[index];
+      if(!Number.isFinite(fast)||!Number.isFinite(slow)) continue;
+      ctx.fillStyle=fast>slow?'rgba(34,197,94,.075)':'rgba(239,68,68,.075)';
+      const left=i===0?padding:(xPosition(i-1)+xPosition(i))/2;
+      const right=i===visible.length-1?width-padding:(xPosition(i)+xPosition(i+1))/2;
+      ctx.fillRect(left,padding,right-left,height-2*padding);
+    }
+  }
+
   visible.forEach((candle, i) => {
     const open = Number(candle.open), close = Number(candle.close), high = Number(candle.high), low = Number(candle.low);
     const x = xPosition(i);
@@ -636,6 +673,21 @@ const minPrice = Math.min(...extents);
     ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
   });
 
+  if(bunGodModeEnabled) {
+    const signals=godModeSignals(candles);
+    for(let i=0;i<visible.length;i++) {
+      const side=signals[start+i];
+      if(!side) continue;
+      const candle=visible[i],isBuy=side==='BUY';
+      const y=yPosition(isBuy?Number(candle.low):Number(candle.high));
+      const markerY=Math.max(18,Math.min(height-12,y+(isBuy?16:-16)));
+      ctx.fillStyle=isBuy?'#86efac':'#fca5a5';
+      ctx.font='bold 11px Arial';
+      ctx.textAlign='center';
+      ctx.fillText(side,xPosition(i),markerY);
+    }
+    ctx.textAlign='left';
+  }
   drawIndicatorLine(ctx, visible, start, sma10Values, xPosition, yPosition, "#facc15");
   drawIndicatorLine(ctx, visible, start, sma20Values, xPosition, yPosition, "#c084fc");
 
