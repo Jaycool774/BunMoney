@@ -1608,3 +1608,9 @@ body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.
 .bun-preset-grid button{font:inherit;font-size:11px;padding:7px 9px;border-radius:8px;border:1px solid #3e6840;background:#12261a;color:#e5f8e3;cursor:pointer}
 .bun-preset-grid button:hover,.bun-preset-grid button:focus-visible{border-color:#a3f72d;outline-offset:2px}
 .bun-preset-grid button:disabled{opacity:.55;cursor:wait}
+
+/* Opt-in historical God Mode overlay, never an execution control. */
+.bun-godmode-controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:9px 12px;background:#101d15;border:1px solid #36593a;border-radius:10px;margin:8px 0}
+.bun-godmode-controls label{font-size:13px;font-weight:700;color:#c8f7a1;cursor:pointer}
+.bun-godmode-controls input{accent-color:#a3e635}
+#bunGodModeStatus{font-size:11px;color:#b5cbb8}
