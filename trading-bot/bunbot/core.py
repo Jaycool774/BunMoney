@@ -393,6 +393,15 @@ class Engine:
         self.event('trade_closed', trade)
         self.verify(s)
 
+    def activity(self, symbol, strategy, decision, reason, candle=None):
+        """Bounded, non-sensitive per-cycle audit for the authenticated dashboard."""
+        self.event('scan_activity', dict(symbol=symbol, strategy=strategy,
+                   decision=decision, reason=reason, candle=candle))
+        # Keep the audit compact even on an always-running paper service.
+        self.db.execute("""DELETE FROM events WHERE kind='scan_activity' AND id NOT IN
+                          (SELECT id FROM events WHERE kind='scan_activity'
+                           ORDER BY id DESC LIMIT 1000)""")
+
     def cycle(self):
         # Market reads and ledger mutations share one lock, including controls.
         with self.transaction() as s:
@@ -423,16 +432,19 @@ class Engine:
                     candles = histories[symbol]
                     decision = evaluate(candles)
                     if not decision:
+                        self.activity(symbol, 'quick / patient', 'wait', 'No qualifying completed-candle crossover', candles[-1].timestamp)
                         continue
                     side = decision.side
                     key = f'{symbol}:{candles[-1].timestamp}:{side}'
                     if key in s['signals']:
+                        self.activity(symbol, decision.strategy, 'duplicate', 'Signal already processed for this candle', candles[-1].timestamp)
                         continue
                     s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, strategy=decision.strategy, reason=decision.reason)
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
                         if not position:
+                            self.activity(symbol, decision.strategy, 'skip', 'Sell signal but no long position is held', candles[-1].timestamp)
                             continue
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
                                         strategy=decision.strategy, explanation=decision.reason,
@@ -442,6 +454,7 @@ class Engine:
                     else:
                         if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
+                            self.activity(symbol, decision.strategy, 'blocked', 'Open position, daily shutdown or daily entry limit', candles[-1].timestamp)
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
                         proposal.update(strategy=decision.strategy, explanation=decision.reason)
@@ -456,7 +469,8 @@ class Engine:
                         except Blocked as exc:
                             proposal.update(status='blocked', reason=str(exc))
                             self.event('proposal_blocked', proposal)
-                s.update(last_cycle=self.now(), last_error=None)
+                    self.activity(symbol, decision.strategy, proposal['status'], proposal.get('reason') or decision.reason, candles[-1].timestamp)
+                s.update(last_cycle=self.now(), last_successful_cycle=self.now(), last_error=None)
             except Exception as exc:
                 # A recoverable feed outage blocks entries until an explicit start.
                 s.update(status='paused', last_error=f'{type(exc).__name__}: {exc}')
@@ -495,7 +509,8 @@ class Engine:
             since = self.now()-86400
             day_trades = [t for t in s['trades'] if since <= t['closed'] <= self.now()]
             errors = self.db.execute("SELECT at,data FROM events WHERE kind='error' AND at>=? ORDER BY id DESC LIMIT 20", (since,)).fetchall()
-            result.update(equity=equity, unrealized=unrealized, realized=realized, risk=asdict(self.settings),
+            activity_rows = self.db.execute("SELECT at,data FROM events WHERE kind='scan_activity' ORDER BY id DESC LIMIT 40").fetchall()
+            result.update(activity=[{'at':at, **json.loads(data)} for at,data in activity_rows], equity=equity, unrealized=unrealized, realized=realized, risk=asdict(self.settings),
                           daily_loss_usage=max(0,s['day_equity']-equity) if equity is not None else None,
                           report=dict(period='last 24 hours (UTC)', generated=self.now(), trades=len(day_trades), wins=sum(t['pnl']>0 for t in day_trades),
                                       losses=sum(t['pnl']<0 for t in day_trades), fees=sum(o['fee'] for o in s['orders'].values() if since <= o['at'] <= self.now()),
