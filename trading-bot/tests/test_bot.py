@@ -38,6 +38,40 @@ class BotTests(unittest.TestCase):
     def state(self):return self.e.snapshot()
     def pending(self):return next(p for p in self.state()['proposals'].values() if p['status']=='pending')
 
+    def test_activity_records_execution_and_successful_cycle(self):
+        self.start()
+        state = self.state()
+        self.assertEqual(state['last_successful_cycle'], self.clock[0])
+        self.assertTrue(state['activity'])
+        self.assertEqual({a['symbol'] for a in state['activity'][:2]}, {'BTC/USD', 'ETH/USD'})
+        self.assertTrue(all(a['strategy'] == 'quick' for a in state['activity'][:2]))
+        self.assertTrue(all(a['decision'] == 'executed' for a in state['activity'][:2]))
+
+    def test_activity_records_wait_and_preserves_success_after_error(self):
+        self.market.trend = False
+        self.start()
+        state = self.state()
+        self.assertTrue(all(a['decision'] == 'wait' for a in state['activity'][:2]))
+        last_success = state['last_successful_cycle']
+        self.clock[0] += 30
+        self.market.failure = True
+        self.e.cycle()
+        state = self.state()
+        self.assertEqual(state['last_successful_cycle'], last_success)
+        self.assertEqual(state['status'], 'paused')
+        self.assertIsNotNone(state['last_error'])
+
+    def test_activity_is_bounded_and_does_not_change_risk(self):
+        self.market.trend = False
+        self.start()
+        for i in range(505):
+            self.clock[0] += 1
+            self.e.cycle()
+        state = self.state()
+        self.assertLessEqual(self.e.db.execute("SELECT count(*) FROM events WHERE kind='scan_activity'").fetchone()[0], 1000)
+        self.assertEqual(state['cash'], 1000)
+        self.assertEqual(state['day_entries'], 0)
+
     def test_simultaneous_positions_and_independent_exit(self):
         self.e.controls('max-positions', '3')
         self.start()
