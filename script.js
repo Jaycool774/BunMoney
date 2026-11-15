@@ -3,27 +3,66 @@
    Prototype / Paper Trading / Analysis Assistant
 ========================================================= */
 
-const API_KEY = "";
-// Production: set MARKET_ENGINE_URL to your secure backend. Leave blank for CodePen prototype mode.
-const MARKET_ENGINE_URL = window.BUNMONEY_MARKET_ENGINE_URL || (location.protocol !== "file:" && !/codepen\.io$/i.test(location.hostname) ? "/api/market" : "");
-// Set this to your deployed BunMoney backend URL in production. Keep provider secrets server-side.
+const MARKET_ENGINE_URL = "/api/market";
+const Trading = window.BunTrading;
+const quoteCache = new Map();
+const QUOTE_MAX_AGE = 20000;
+const ANALYSIS_MAX_AGE = 120000;
+let stateBlocked = false;
+let engineToken = ""; // Memory only; never included in backups or local storage.
+let liveUpdateRunning = false;
+let candleRefreshTimer = null;
+let coinbaseFeed = null;
 
-async function marketEngineRequest(endpoint, params = {}) {
-  const query = new URLSearchParams(params).toString();
-  if (MARKET_ENGINE_URL) {
-    const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${query}`);
-    const data = await response.json();
-    if (!response.ok || data.status === "error") throw new Error(data.message || "Market engine request failed");
-    return data;
+async function marketEngineRequest(endpoint, params = {}, options = {}) {
+  if (demoMarketEnabled) {
+    if (options.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    if (endpoint === "/time_series") return demoCandles(params.symbol, params.interval, params.outputsize);
+    if (endpoint === "/price") return { price: demoLivePrice(params.symbol) };
+    throw new Error("Unsupported demo request.");
   }
-  if (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY") throw new Error("Market data is not configured. Add a provider key for prototype mode or connect BunMoney Market Engine.");
-  const response = await fetch(`https://api.twelvedata.com${endpoint}?${query}&apikey=${encodeURIComponent(API_KEY)}`);
+  const timeout = AbortSignal.timeout(15000);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const headers = { ...options.headers };
+  if (engineToken) headers.Authorization = `Bearer ${engineToken}`;
+  const response = await fetch(`${MARKET_ENGINE_URL}${endpoint}?${new URLSearchParams(params)}`, { ...options, headers, signal });
   const data = await response.json();
-  if (!response.ok || data.status === "error") throw new Error(data.message || "Market data request failed");
+  if (!response.ok || data.status === "error") throw new Error(data.error || data.message || "Market engine request failed");
   return data;
+}
+function unlockMarketEngine() {
+  const input = document.getElementById("engineToken");
+  engineToken = input?.value || "";
+  if (input) input.value = "";
+  analyze(true);
+}
+function marketSource() { return demoMarketEnabled ? "demo" : "live"; }
+function selectedSymbol() { return document.getElementById("ticker")?.value.toUpperCase().trim() || ""; }
+function acceptPrice(symbol, price, time = Date.now()) {
+  if (!Trading.validSymbol(symbol) || !Trading.positive(price)) return;
+  quoteCache.set(symbol, { price, time, source:marketSource() });
+  if (quoteCache.size > 100) quoteCache.delete(quoteCache.keys().next().value);
+  if (symbol === selectedSymbol()) {
+    lastLivePrice = price; window.lastLivePrice = price; lastMarketDataTime = time;
+    setText("price", formatMoney(price));
+  }
+  updatePaperPL(price, symbol, marketSource());
+}
+function invalidateAnalysis() {
+  analyzeRequestId++;
+  analyzeAbortController?.abort();
+  lastAnalysis = null; lastLivePrice = null; window.lastLivePrice = undefined;
+  window.lastCandles = [];
+  window.lastEntry = window.lastStop = window.lastTarget = undefined;
+  coinbaseFeed?.stop();
+  setText("price", "$—"); setText("reason", "Analyze this market before opening a position.");
+  ["entry","stop","target","rr","potentialLoss","potentialProfit","tradePlanEntry","tradePlanStop","tradePlanTarget","tradePlanScore","tradePlanDirection","trend","support","resistance","sma10","sma20","rsi","volumeRatio","breakout","retest","setupQuality","marketOutlook"].forEach(id => setText(id,"—"));
+  updateTradePlan();
 }
 
 let selectedTimeframe = "5min";
+let analyzeRequestId = 0;
+let analyzeAbortController = null;
 let chartZoom = 25;
 let arcadeBank = 0;
 let arcadeTimer = null;
@@ -37,6 +76,7 @@ let arenaRunning = false;
 let arenaTimer = null;
 let lastAnalysis = null;
 let lastMarketDataTime = 0;
+let lastLivePrice = null;
 
 window.lastCandles = [];
 window.lastSupport = undefined;
@@ -54,7 +94,7 @@ function setText(id, value) {
   if (element) element.textContent = value;
 }
 function formatMoney(value) {
-  if (!Number.isFinite(Number(value))) return "$—";
+  if (value == null || !Number.isFinite(Number(value))) return "$—";
   return "$" + Number(value).toFixed(2);
 }
 function average(values) {
@@ -78,36 +118,30 @@ function closePopup() {
 function showScreen(screenName) {
   const target = document.getElementById(screenName);
   if (!target) return;
-
-  document.querySelectorAll(".screen").forEach(screen => {
-    screen.classList.toggle("active", screen.id === screenName);
-  });
-
+  document.querySelectorAll(".screen").forEach(screen => screen.classList.remove("active"));
+  if (target) target.classList.add("active");
   document.querySelectorAll(".nav-button").forEach(button => {
-    button.classList.toggle("active", button.dataset.screen === screenName);
+    button.classList.remove("active");
+    if (button.dataset.screen === screenName || button.getAttribute("data-screen") === screenName) {
+      button.classList.add("active");
+    }
   });
-
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setTimeframe(timeframe) {
+  if (selectedTimeframe === timeframe) return;
+
   selectedTimeframe = timeframe;
+
   document.querySelectorAll(".timeframes button").forEach(button => {
-    button.classList.remove("active");
-    const text = button.textContent.toLowerCase().replace(/\s/g, "");
-    if (
-      text === "1m" && timeframe === "1min" ||
-      text === "5m" && timeframe === "5min" ||
-      text === "15m" && timeframe === "15min" ||
-      text === "1h" && timeframe === "1h" ||
-      text === "4h" && timeframe === "4h" ||
-      text === "1d" && timeframe === "1day" ||
-      text === "1w" && timeframe === "1week" ||
-      text === "1m" && timeframe === "1month" ||
-      text === "max" && timeframe === "max"
-    ) button.classList.add("active");
+    button.classList.toggle(
+      "active",
+      button.dataset.timeframe === timeframe
+    );
   });
-  analyze();
+
+  analyze(true);
 }
 
 function calculateSMA(values, period) {
@@ -130,29 +164,45 @@ function calculateRSI(values, period = 14) {
   }
   let avgGain = gains / period;
   let avgLoss = losses / period;
-  rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  rsi[period] = avgLoss === 0 ? (avgGain === 0 ? 50 : 100) : 100 - 100 / (1 + avgGain / avgLoss);
   for (let i = period + 1; i < values.length; i++) {
     const change = values[i] - values[i - 1];
     const gain = Math.max(change, 0);
     const loss = Math.max(-change, 0);
     avgGain = (avgGain * (period - 1) + gain) / period;
     avgLoss = (avgLoss * (period - 1) + loss) / period;
-    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    rsi[i] = avgLoss === 0 ? (avgGain === 0 ? 50 : 100) : 100 - 100 / (1 + avgGain / avgLoss);
   }
   return rsi;
 }
 
 async function analyze(force = false) {
+  const requestId = ++analyzeRequestId;
+
+  // Cancel the previous market request immediately.
+  if (analyzeAbortController) {
+    analyzeAbortController.abort();
+  }
+
+  analyzeAbortController = new AbortController();
+  const signal = analyzeAbortController.signal;
+
   const tickerElement = document.getElementById("ticker");
   if (!tickerElement) return;
   const ticker = tickerElement.value.toUpperCase().trim();
-  if (!ticker) { setText("reason", "Enter a ticker symbol first."); return; }
+  lastAnalysis = null;
+  if (!Trading.validSymbol(ticker)) { setText("reason", "Enter a ticker symbol first."); return; }
   setText("symbol", ticker);
   setText("decision", "LOADING MARKET DATA...");
   setText("reason", "BunAI is analyzing the market...");
   try {
     const interval = selectedTimeframe === "max" ? "1month" : selectedTimeframe;
-    const data = await marketEngineRequest("/time_series", { symbol: ticker, interval, outputsize: 80 });
+   const data = await marketEngineRequest(
+  "/time_series",
+  { symbol: ticker, interval, outputsize: selectedTimeframe === "max" ? 5000 : 80 },
+  { signal }
+);
+    if (requestId !== analyzeRequestId) return;
     if (data.status === "error" || !data.values || !data.values.length) {
       if (data.message && data.message.toLowerCase().includes("credits")) {
         throw new Error("Twelve Data credits are exhausted for today.");
@@ -160,14 +210,41 @@ async function analyze(force = false) {
       throw new Error(data.message || "No market data returned.");
     }
 
-    const candles = [...data.values].reverse();
-    const closes = candles.map(c => Number(c.close));
-    const highs = candles.map(c => Number(c.high));
-    const lows = candles.map(c => Number(c.low));
-    const volumes = candles.map(c => Number(c.volume || 0));
-    const currentPrice = closes[closes.length - 1];
-    const previousPrice = closes.length > 1 ? closes[closes.length - 2] : currentPrice;
-    const changePercent = previousPrice === 0 ? 0 : ((currentPrice - previousPrice) / previousPrice) * 100;
+    if (data.meta?.symbol && data.meta.symbol.toUpperCase() !== ticker) throw new Error("Provider returned a different symbol.");
+    const candles = Trading.candles(data.values);
+const closes = candles.map(c => Number(c.close));
+const highs = candles.map(c => Number(c.high));
+const lows = candles.map(c => Number(c.low));
+const volumes = candles.map(c => Number(c.volume || 0));
+
+const lastCandlePrice = closes[closes.length - 1];
+let currentPrice = lastCandlePrice;
+
+try {
+  const quote = await marketEngineRequest(
+  "/price",
+  { symbol: ticker },
+  { signal }
+);
+  if (requestId !== analyzeRequestId || ticker !== selectedSymbol()) return;
+  if (Trading.positive(Number(quote.price))) {
+    currentPrice = Number(quote.price);
+    acceptPrice(ticker, currentPrice);
+  }
+} catch (quoteError) {
+  if (quoteError.name === "AbortError") throw quoteError;
+  quoteCache.delete(ticker);
+  console.log("Live quote unavailable; analysis uses candle close, trading remains locked.");
+}
+
+if (requestId !== analyzeRequestId || ticker !== selectedSymbol()) return;
+const previousPrice = closes.length > 1
+  ? closes[closes.length - 2]
+  : lastCandlePrice;
+
+const changePercent = previousPrice === 0
+  ? 0
+  : ((currentPrice - previousPrice) / previousPrice) * 100;
 
     const sma10Values = calculateSMA(closes, 10);
     const sma20Values = calculateSMA(closes, 20);
@@ -192,53 +269,191 @@ async function analyze(force = false) {
     }
 
     let breakout = "NO CONFIRMATION";
-    let breakoutIndex = null;
-    if (candles.length >= 21) {
-      const priorResistance = Math.max(...highs.slice(-21, -1));
-      if (currentPrice > priorResistance) {
-        breakout = "POSSIBLE BREAKOUT";
-        breakoutIndex = candles.length - 1;
-      }
-    }
+let breakoutIndex = null;
+let breakoutDirection = null;
 
-    let retest = "WAITING";
-    let retestIndex = null;
-    if (breakoutIndex !== null) {
-      const distance = Math.abs(currentPrice - resistance);
-      const tolerance = currentPrice * 0.01;
-      if (distance <= tolerance) {
-        retest = "RETEST AREA";
-        retestIndex = candles.length - 1;
-      }
-    }
+// Compare with levels that exclude the candidate candle. A retest must occur later.
+const priorResistance = Math.max(...highs.slice(-21, -1));
+const priorSupport = Math.min(...lows.slice(-21, -1));
+if (currentPrice > priorResistance) {
+  breakout = "POSSIBLE BREAKOUT"; breakoutIndex = candles.length - 1; breakoutDirection = "BULLISH";
+} else if (currentPrice < priorSupport) {
+  breakout = "POSSIBLE BREAKDOWN"; breakoutIndex = candles.length - 1; breakoutDirection = "BEARISH";
+}
+let retest = "WAITING", retestIndex = null;
+if (breakoutIndex === null) {
+  for (let i = candles.length - 2; i >= Math.max(20, candles.length - 6); i--) {
+    const upper = Math.max(...highs.slice(i - 20, i));
+    const lower = Math.min(...lows.slice(i - 20, i));
+    const tolerance = currentPrice * 0.005;
+    if (closes[i] > upper && lows.at(-1) <= upper + tolerance && currentPrice >= upper) {
+      breakoutDirection = "BULLISH";
+    } else if (closes[i] < lower && highs.at(-1) >= lower - tolerance && currentPrice <= lower) {
+      breakoutDirection = "BEARISH";
+    } else continue;
+    retest = "RETEST AREA"; retestIndex = candles.length - 1; breakoutIndex = i; break;
+  }
+}
 
     let entry = currentPrice;
-    let stop = Math.min(support, currentPrice * 0.98);
-    let target = Math.max(resistance, currentPrice * 1.04);
-    if (target <= entry) target = entry * 1.03;
-    if (stop >= entry) stop = entry * 0.98;
-    const risk = entry - stop;
-    const reward = target - entry;
-    const rr = risk > 0 ? reward / risk : 0;
+let stop;
+let target;
+
+// Build the direction from the market conditions first.
+const preliminaryLong =
+  trend === "BULLISH" ||
+  breakout === "POSSIBLE BREAKOUT" ||
+  (retest === "RETEST AREA" && breakoutDirection === "BULLISH");
+
+const preliminaryShort =
+  trend === "BEARISH" &&
+  !preliminaryLong;
+
+if (preliminaryShort) {
+  // SHORT: stop above entry, target below entry.
+  stop = Math.max(resistance, currentPrice * 1.02);
+  target = Math.min(support, currentPrice * 0.96);
+
+  if (stop <= entry) stop = entry * 1.02;
+  if (target >= entry) target = entry * 0.96;
+} else {
+  // LONG: stop below entry, target above entry.
+  stop = Math.min(support, currentPrice * 0.98);
+  target = Math.max(resistance, currentPrice * 1.04);
+
+  if (target <= entry) target = entry * 1.03;
+  if (stop >= entry) stop = entry * 0.98;
+}
+
+const risk = preliminaryShort
+  ? stop - entry
+  : entry - stop;
+
+const reward = preliminaryShort
+  ? entry - target
+  : target - entry;
+
+const rr = risk > 0 ? reward / risk : 0;
+
+    const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
+    const potentialLoss = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
+      ? tradeAmount * (risk / entry) + tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE)
+      : null;
+    const potentialProfit = Number.isFinite(tradeAmount) && tradeAmount > 0 && entry > 0
+      ? tradeAmount * (reward / entry) - tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE)
+      : null;
 
     let score = 0;
-    if (trend === "BULLISH") score += 2;
-    if (trend === "BEARISH") score -= 2;
-    if (Number.isFinite(rsi) && rsi > 50 && rsi < 70) score += 1;
-    if (Number.isFinite(rsi) && rsi < 30) score += 1;
-    if (Number.isFinite(rsi) && rsi > 75) score -= 1;
-    if (volumeRatio >= 1.5) score += 1;
-    if (breakout === "POSSIBLE BREAKOUT") score += 2;
-    if (retest === "RETEST AREA") score += 2;
-    if (rr >= 2) score += 1;
 
-    let decision = "WAIT";
-    if (score >= 5) decision = "WATCH FOR LONG";
-    else if (score <= -3) decision = "WATCH FOR SHORT";
+const signalFactors = {
+  trend: 0,
+  rsi: 0,
+  volume: 0,
+  breakout: 0,
+  retest: 0,
+  riskReward: 0
+};
 
-    let setupQuality = "LOW";
-    if (score >= 2) setupQuality = "MODERATE";
-    if (score >= 5) setupQuality = "HIGH";
+// Trend
+if (trend === "BULLISH") signalFactors.trend = 2;
+if (trend === "BEARISH") signalFactors.trend = -2;
+
+// RSI
+if (Number.isFinite(rsi)) {
+  if (trend === "BULLISH") {
+    if (rsi > 50 && rsi < 70) signalFactors.rsi = 1;
+    if (rsi >= 70 && rsi <= 75) signalFactors.rsi = -1;
+    if (rsi > 75) signalFactors.rsi = -2;
+    if (rsi < 30) signalFactors.rsi = 1;
+  }
+
+  if (trend === "BEARISH") {
+    if (rsi >= 30 && rsi < 50) signalFactors.rsi = -1;
+    if (rsi < 30 && rsi >= 25) signalFactors.rsi = 1;
+    if (rsi < 25) signalFactors.rsi = 2;
+    if (rsi >= 70) signalFactors.rsi = -1;
+  }
+}
+
+// Volume strength confirms the existing trend.
+if (volumeRatio >= 3) {
+  if (trend === "BULLISH") signalFactors.volume = 3;
+  if (trend === "BEARISH") signalFactors.volume = -3;
+} else if (volumeRatio >= 2) {
+  if (trend === "BULLISH") signalFactors.volume = 2;
+  if (trend === "BEARISH") signalFactors.volume = -2;
+} else if (volumeRatio >= 1.5) {
+  if (trend === "BULLISH") signalFactors.volume = 1;
+  if (trend === "BEARISH") signalFactors.volume = -1;
+}
+
+// Breakout / breakdown.
+if (breakout === "POSSIBLE BREAKOUT") {
+  signalFactors.breakout = 2;
+}
+
+if (breakout === "POSSIBLE BREAKDOWN") {
+  signalFactors.breakout = -2;
+}
+
+// Retest.
+if (retest === "RETEST AREA") {
+  if (breakoutDirection === "BULLISH") signalFactors.retest = 2;
+  if (breakoutDirection === "BEARISH") signalFactors.retest = -2;
+}
+
+// Reward-to-risk.
+if (rr >= 2) {
+  signalFactors.riskReward = 1;
+}
+
+score =
+  signalFactors.trend +
+  signalFactors.rsi +
+  signalFactors.volume +
+  signalFactors.breakout +
+  signalFactors.retest +
+  signalFactors.riskReward;
+
+    // Directional confirmation gate.
+// A strong score alone is not enough; price must confirm the direction.
+const longConfirmed =
+  trend === "BULLISH" &&
+  (
+    breakout === "POSSIBLE BREAKOUT" ||
+    (retest === "RETEST AREA" && breakoutDirection === "BULLISH")
+  );
+
+const shortConfirmed =
+  trend === "BEARISH" &&
+  (
+    breakout === "POSSIBLE BREAKDOWN" ||
+    (retest === "RETEST AREA" && breakoutDirection === "BEARISH")
+  );
+
+let decision = "WAIT";
+
+if (longConfirmed && score >= 5) {
+  decision = "WATCH FOR LONG";
+} else if (shortConfirmed && score <= -3) {
+  decision = "WATCH FOR SHORT";
+}
+
+let setupQuality = "LOW";
+
+if (
+  (longConfirmed && score >= 3) ||
+  (shortConfirmed && score <= -3)
+) {
+  setupQuality = "MODERATE";
+}
+
+if (
+  (longConfirmed && score >= 5) ||
+  (shortConfirmed && score <= -5)
+) {
+  setupQuality = "HIGH";
+}
 
     let outlook = "Market conditions are mixed.";
     if (trend === "BULLISH") outlook = "Momentum currently favors buyers.";
@@ -252,7 +467,10 @@ async function analyze(force = false) {
     if (decision === "WAIT") reason += "There is not enough confirmation yet, so waiting is safer.";
     else reason += "This is an analysis signal, not a guaranteed prediction.";
 
+    // Candle-only prices are display values, never execution quotes.
     setText("price", formatMoney(currentPrice));
+    setText("paperCurrentPrice", formatMoney(currentPrice));
+    // Position exits are processed only from symbol-tagged fresh quotes.
     setText("change", `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(2)}%`);
     setText("trend", trend);
     setText("volume", currentVolume ? currentVolume.toLocaleString() : "—");
@@ -268,6 +486,8 @@ async function analyze(force = false) {
     setText("stop", formatMoney(stop));
     setText("target", formatMoney(target));
     setText("rr", rr ? rr.toFixed(2) + ":1" : "—");
+    setText("potentialLoss", potentialLoss !== null ? "-" + formatMoney(potentialLoss) : "—");
+    setText("potentialProfit", potentialProfit !== null ? "+" + formatMoney(potentialProfit) : "—");
     setText("decision", decision);
     setText("reason", reason);
     setText("setupQuality", setupQuality);
@@ -281,9 +501,34 @@ async function analyze(force = false) {
       else decisionElement.classList.add("wait");
     }
 
-    lastAnalysis = { ticker, currentPrice, changePercent, trend, support, resistance, rsi, sma10, sma20, volumeRatio, breakout, retest, entry, stop, target, rr, score, decision, setupQuality, outlook, timestamp: Date.now() };
-    lastMarketDataTime = Date.now();
+    lastAnalysis = {
+  ticker,
+  currentPrice,
+  changePercent,
+  trend,
+  support,
+  resistance,
+  rsi,
+  sma10,
+  sma20,
+  volumeRatio,
+  breakout,
+  breakoutDirection,
+  retest,
+  entry,
+  stop,
+  target,
+  rr,
+  score,
+  signalFactors,
+  decision,
+  setupQuality,
+  outlook,
+  source: marketSource(),
+  timestamp: Date.now()
+};
 
+    if (!demoMarketEnabled && coinbaseFeed?.symbol !== ticker) coinbaseFeed?.start(ticker);
     window.lastCandles = candles;
     window.lastSupport = support;
     window.lastResistance = resistance;
@@ -306,8 +551,13 @@ async function analyze(force = false) {
     } catch (error) {
       console.log("Could not save local analysis.");
     }
-  } catch (error) {
-    console.error("Market analysis error:", error);
+    } catch (error) {
+    if (error.name === "AbortError") return;
+    if (requestId !== analyzeRequestId) return;
+
+    lastAnalysis = null;
+    updateTradePlan();
+    console.error("Market analysis error:", error); 
     setText("decision", "MARKET DATA UNAVAILABLE");
     setText("reason", error.message.includes("credits")
       ? "The market-data provider has reached its current limit. BunMoney will work again when the provider allowance resets."
@@ -318,9 +568,63 @@ async function analyze(force = false) {
   }
 }
 
+
+/* God Mode: historical SMA crossover overlay, not forecasts or orders.
+   Uses only the candles passed to the chart; markers are confirmed at close. */
+let bunGodModeEnabled = false;
+function godModeSignals(candles) {
+  if(!Array.isArray(candles)||candles.length<21) return [];
+  const closes=candles.map(c=>Number(c.close));
+  const fast=calculateSMA(closes,10),slow=calculateSMA(closes,20);
+  return closes.map((price,i)=>{
+    if(i<20||!Number.isFinite(fast[i-1])||!Number.isFinite(slow[i-1])) return null;
+    if(fast[i-1]<=slow[i-1]&&fast[i]>slow[i]&&price>fast[i]) return 'BUY';
+    if(fast[i-1]>=slow[i-1]&&fast[i]<slow[i]&&price<fast[i]) return 'SELL';
+    return null;
+  });
+}
+function renderGodPerformance(candles) {
+  const panel=document.getElementById('bunGodPerformance');
+  const summary=document.getElementById('bunGodPerformanceSummary');
+  const metrics=document.getElementById('bunGodPerformanceMetrics');
+  if(!panel||!summary||!metrics)return;
+  panel.hidden=!bunGodModeEnabled;
+  if(!bunGodModeEnabled)return;
+  if(!window.BunGodPerformance){summary.textContent='Performance evaluator unavailable.';metrics.replaceChildren();return;}
+  const result=window.BunGodPerformance.evaluate(candles);
+  metrics.replaceChildren();
+  if(result.error){summary.textContent=result.error;return;}
+  summary.textContent=result.count+' historical non-overlapping signals evaluated · '+result.assumptions;
+  const values=[
+    ['Win rate',result.winRate===null?'N/A':result.winRate.toFixed(1)+'%'],
+    ['Winning / losing',result.wins+' / '+result.losses],
+    ['Average net R',result.averageR===null?'N/A':result.averageR.toFixed(2)+'R'],
+    ['Average win / loss',result.averageWinR===null||result.averageLossR===null?'N/A':result.averageWinR.toFixed(2)+'R / '+result.averageLossR.toFixed(2)+'R'],
+    ['Realized reward / risk',result.realizedRR===null?'N/A':result.realizedRR.toFixed(2)+':1'],
+    ['Total net R',result.totalR.toFixed(2)+'R']
+  ];
+  for(const [label,value] of values){
+    const card=document.createElement('div');card.className='bun-god-metric';
+    const name=document.createElement('span');name.textContent=label;
+    const val=document.createElement('strong');val.textContent=value;
+    card.append(name,val);metrics.append(card);
+  }
+}
+function setGodMode(enabled) {
+  bunGodModeEnabled=Boolean(enabled);
+  const status=document.getElementById('bunGodModeStatus');
+  if(status) status.textContent=bunGodModeEnabled
+    ? 'On · Historical SMA10/20 crossovers, not predictions or trade instructions'
+    : 'Off · Indicators only, not predictive';
+  if(window.lastCandles?.length) redrawChart();
+  else renderGodPerformance([]);
+}
+document.getElementById('bunGodMode')?.addEventListener('change',e=>setGodMode(e.target.checked));
+
 function drawChart(candles, support, resistance, entry, stop, target, breakoutIndex, retestIndex, sma10Values, sma20Values) {
   const canvas = document.getElementById("chart");
   if (!canvas || !candles.length) return;
+  if(bunGodModeEnabled) renderGodPerformance(candles);
   const ctx = canvas.getContext("2d");
   const width = canvas.clientWidth || 350;
   const height = canvas.clientHeight || 340;
@@ -334,8 +638,13 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
   const visible = candles.slice(start);
   const highs = visible.map(c => Number(c.high));
   const lows = visible.map(c => Number(c.low));
-  const maxPrice = Math.max(...highs, resistance, target);
-  const minPrice = Math.min(...lows, support, stop);
+  const chartPosition = position?.symbol === lastAnalysis?.ticker ? position : null;
+  const chartRangeStop = chartPosition?.stop ?? stop;
+const chartRangeTarget = chartPosition?.target ?? target;
+
+const extents = [...highs,...lows,resistance,support,chartRangeStop,chartRangeTarget,chartPosition?.entry,window.lastLivePrice].filter(Trading.positive);
+const maxPrice = Math.max(...extents);
+const minPrice = Math.min(...extents);
   const padding = 22;
   const range = maxPrice - minPrice || 1;
 
@@ -353,6 +662,31 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
     ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(width - padding, y); ctx.stroke();
   }
 
+  // Price scale: show readable numeric levels on the right side of the chart.
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.font = "10px Arial";
+  for (let i = 0; i <= 5; i++) {
+    const ratio = i / 5;
+    const priceLevel = maxPrice - ratio * range;
+    const y = padding + ratio * (height - padding * 2);
+    ctx.fillStyle = "rgba(255,255,255,.62)";
+    ctx.fillText(formatMoney(priceLevel), width - 4, y);
+  }
+  ctx.textAlign = "left";
+
+  if(bunGodModeEnabled) {
+    // Shade the *historical* SMA relationship, without projecting future prices.
+    for(let i=0;i<visible.length;i++) {
+      const index=start+i,fast=sma10Values?.[index],slow=sma20Values?.[index];
+      if(!Number.isFinite(fast)||!Number.isFinite(slow)) continue;
+      ctx.fillStyle=fast>slow?'rgba(34,197,94,.075)':'rgba(239,68,68,.075)';
+      const left=i===0?padding:(xPosition(i-1)+xPosition(i))/2;
+      const right=i===visible.length-1?width-padding:(xPosition(i)+xPosition(i+1))/2;
+      ctx.fillRect(left,padding,right-left,height-2*padding);
+    }
+  }
+
   visible.forEach((candle, i) => {
     const open = Number(candle.open), close = Number(candle.close), high = Number(candle.high), low = Number(candle.low);
     const x = xPosition(i);
@@ -368,6 +702,21 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
     ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
   });
 
+  if(bunGodModeEnabled) {
+    const signals=godModeSignals(candles);
+    for(let i=0;i<visible.length;i++) {
+      const side=signals[start+i];
+      if(!side) continue;
+      const candle=visible[i],isBuy=side==='BUY';
+      const y=yPosition(isBuy?Number(candle.low):Number(candle.high));
+      const markerY=Math.max(18,Math.min(height-12,y+(isBuy?16:-16)));
+      ctx.fillStyle=isBuy?'#86efac':'#fca5a5';
+      ctx.font='bold 11px Arial';
+      ctx.textAlign='center';
+      ctx.fillText(side,xPosition(i),markerY);
+    }
+    ctx.textAlign='left';
+  }
   drawIndicatorLine(ctx, visible, start, sma10Values, xPosition, yPosition, "#facc15");
   drawIndicatorLine(ctx, visible, start, sma20Values, xPosition, yPosition, "#c084fc");
 
@@ -384,9 +733,51 @@ function drawChart(candles, support, resistance, entry, stop, target, breakoutIn
 
   drawLevel(ctx, width, yPosition(support), "rgba(34,197,94,.75)", "SUPPORT");
   drawLevel(ctx, width, yPosition(resistance), "rgba(239,68,68,.75)", "RESISTANCE");
-  drawLevel(ctx, width, yPosition(entry), "rgba(255,255,255,.75)", "ENTRY");
-  drawLevel(ctx, width, yPosition(stop), "rgba(239,68,68,.9)", "STOP");
-  drawLevel(ctx, width, yPosition(target), "rgba(132,204,22,.9)", "TARGET");
+ const activePosition = chartPosition;
+const chartEntry = chartPosition?.entry ?? entry;
+const chartStop = chartPosition?.stop ?? stop;
+const chartTarget = chartPosition?.target ?? target;
+const chartSide = chartPosition?.side || "PLAN";
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartEntry),
+  "rgba(255,255,255,.75)",
+  chartSide === "PLAN" ? "ENTRY" : `${chartSide} ENTRY`
+);
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartStop),
+  "rgba(239,68,68,.9)",
+  chartSide === "PLAN" ? "STOP" : `${chartSide} STOP`
+);
+
+drawLevel(
+  ctx,
+  width,
+  yPosition(chartTarget),
+  "rgba(132,204,22,.9)",
+  chartSide === "PLAN" ? "TARGET" : `${chartSide} TARGET`
+);
+
+  const currentPrice = Number(window.lastLivePrice);
+  if (Number.isFinite(currentPrice) && currentPrice >= minPrice && currentPrice <= maxPrice) {
+    const y = yPosition(currentPrice);
+    ctx.strokeStyle = "rgba(255,255,255,.45)";
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(width - 20, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(17,21,30,.95)";
+    ctx.fillRect(width - 76, y - 10, 70, 20);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "right";
+    ctx.fillText("NOW " + formatMoney(currentPrice), width - 10, y);
+    ctx.textAlign = "left";
+  }
 
   if (breakoutIndex !== null && breakoutIndex !== undefined) {
     const localIndex = breakoutIndex - start;
@@ -437,37 +828,35 @@ function changeChartZoom(value) {
 }
 
 let livePriceTimer = null;
+async function updateLivePrice() {
+  if (liveUpdateRunning) return;
+  liveUpdateRunning = true;
+  const source = marketSource();
+  const symbols = [...new Set([selectedSymbol(), position?.symbol].filter(Trading.validSymbol))];
+  try {
+    await Promise.allSettled(symbols.map(async symbol => {
+      if (!demoMarketEnabled && coinbaseFeed?.fresh(symbol)) return;
+      try {
+        const data = await marketEngineRequest("/price", {symbol});
+        if (source === marketSource()) acceptPrice(symbol, Number(data.price));
+      } catch { setText("feedStatus", "Price unavailable; stale quotes cannot open or close trades."); }
+    }));
+    if (window.lastCandles?.length) redrawChart();
+  } finally { liveUpdateRunning = false; }
+}
+function redrawChart() {
+  drawChart(window.lastCandles,window.lastSupport,window.lastResistance,window.lastEntry,window.lastStop,window.lastTarget,window.lastBreakoutIndex,window.lastRetestIndex,window.lastSma10,window.lastSma20);
+}
 function startLivePrice() {
   if (livePriceTimer) clearInterval(livePriceTimer);
-  livePriceTimer = setInterval(async () => {
-    const tickerElement = document.getElementById("ticker");
-    if (!tickerElement) return;
-    const ticker = tickerElement.value.toUpperCase().trim();
-    if (!ticker) return;
-    if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) return;
-    try {
-      const data = await marketEngineRequest("/price", { symbol: ticker });
-      if (data.price && Number.isFinite(Number(data.price))) {
-        const newPrice = Number(data.price);
-        setText("price", formatMoney(newPrice));
-        updatePaperPL(newPrice);
-      }
-    } catch (error) { console.log("Live price unavailable."); }
-  }, 60000);
-}
-
-async function askBunAIFromUI() {
-  const input = document.getElementById("bunAiInput");
-  const reply = document.getElementById("bunAiReply");
-  const question = input?.value?.trim();
-  if (!question) { if (reply) reply.textContent = "Type a question first."; return; }
-  if (reply) reply.textContent = "BunAI is thinking…";
-  try {
-    const data = await askBunAI(question, lastAnalysis || {});
-    if (reply) reply.textContent = data.text || "BunAI has no response right now.";
-  } catch (error) {
-    if (reply) reply.textContent = error.message || "BunAI is unavailable right now.";
-  }
+  if (!coinbaseFeed && window.BunCoinbaseFeed) coinbaseFeed = new window.BunCoinbaseFeed({
+    onPrice:(symbol,price,time) => { if (!demoMarketEnabled) { acceptPrice(symbol,price,time); if(window.lastCandles?.length) redrawChart(); } },
+    onStatus:status => setText("feedStatus",status)
+  });
+  updateLivePrice();
+  livePriceTimer = setInterval(updateLivePrice,15000);
+  if (candleRefreshTimer) clearInterval(candleRefreshTimer);
+  candleRefreshTimer = setInterval(() => { if (Trading.validSymbol(selectedSymbol())) analyze(true); },60000);
 }
 
 async function askBunAI(message, context = {}) {
@@ -484,40 +873,94 @@ async function askBunAI(message, context = {}) {
   return data;
 }
 
-function paperBuy() {
-  if (position) { setText("reason", "You already have an open paper position."); return; }
-  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
-  const price = Number(priceText);
-  if (!Number.isFinite(price)) { setText("reason", "Analyze a market before opening a paper trade."); return; }
-  position = { side: "LONG", entry: price, amount: tradingBalance };
-  setText("position", "LONG @ " + formatMoney(price));
-  setText("reason", "Paper long opened. Bun is tracking the position. 🐰");
-  mascotReaction("Position opened. Protect the bag. 🐰💰");
+function getCurrentPrice(symbol = position?.symbol || selectedSymbol()) {
+  const quote = quoteCache.get(symbol);
+  return quote && quote.source === marketSource() && Date.now() - quote.time <= QUOTE_MAX_AGE ? quote.price : null;
 }
-function paperSell() {
-  if (!position) { setText("reason", "There is no open paper position."); return; }
-  const priceText = document.getElementById("price")?.textContent?.replace("$", "");
-  const price = Number(priceText);
-  if (!Number.isFinite(price)) return;
-  const percentageMove = (price - position.entry) / position.entry;
-  const profit = position.amount * percentageMove;
-  tradingBalance += profit;
-  tradeHistory.push({ side: position.side, entry: position.entry, exit: price, profit: profit, time: new Date().toLocaleString() });
+function getDisplayedPrice() { return getCurrentPrice(selectedSymbol()); }
+function openPaperPosition(side) {
+  if (stateBlocked) return setText("reason", "Saved state needs recovery. Export your backup, then reset before trading.");
+  if (position) {
+    if (position.side === side) return setText("reason", `You already have an open ${side} position.`);
+    return closePaperPosition(getCurrentPrice(position.symbol));
+  }
+  try {
+    const symbol = selectedSymbol(), price = getCurrentPrice(symbol);
+    if (!Trading.positive(price) || !lastAnalysis || lastAnalysis.ticker !== symbol || lastAnalysis.source !== marketSource() || Date.now() - lastAnalysis.timestamp > ANALYSIS_MAX_AGE) throw new Error("Analyze this symbol and obtain a fresh quote before trading.");
+    const amount = Number(document.getElementById("paperTradeAmount")?.value);
+    if (!Trading.positive(amount) || amount * (1 + Trading.FEE) > tradingBalance) throw new Error("Enter a positive amount within your balance, including the entry fee.");
+    const entry = Trading.fill(price,side,true);
+    position = { ...Trading.levels(side,entry,lastAnalysis), amount, symbol, source:marketSource(), entryFee:amount * Trading.FEE };
+    tradingBalance -= amount + position.entryFee;
+    setText("position", `${side} ${symbol} @ ${formatMoney(entry)}`);
+    syncPaperBalance(); updatePaperPL(price,symbol,marketSource());
+    setText("reason", `${side} paper position opened. Fees and adverse slippage apply.`);
+    if(window.lastCandles?.length) redrawChart();
+    saveGameState();
+  } catch(error) { setText("reason",error.message); }
+}
+function syncPaperBalance() {
+  setText("tradingBalance",formatMoney(tradingBalance)); setText("paperBalance",formatMoney(tradingBalance));
+}
+function paperBuy() { openPaperPosition("LONG"); }
+function paperSell() { openPaperPosition("SHORT"); }
+function closePaperPosition(price, closeReason = "MANUAL") {
+  if (!position || !Trading.positive(price)) return setText("reason","A fresh quote for the position symbol is required to close.");
+  const closed = position;
+  const result = Trading.settlement(closed,price);
+  // Preserve the ledger, including negative equity after extreme short gaps.
+  tradingBalance += result.returned;
+  tradeHistory.push({ side:closed.side,symbol:closed.symbol,entry:closed.entry,exit:result.exit,amount:closed.amount,profit:result.profit,fees:result.fees,reason:closeReason,time:new Date().toISOString() });
   position = null;
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("position", "NONE");
-  setText("paperPL", formatMoney(profit));
-  rewardPoints += profit > 0 ? 25 : 5;
-  updateConfidence(); updateLevel(); updateRewards();
-  setText("reason", `Paper trade closed with ${profit >= 0 ? "a profit" : "a loss"} of ${formatMoney(Math.abs(profit))}.`);
-  mascotReaction(profit >= 0 ? "Nice trade! Stack those wins. 🐰📈" : "Loss taken. Learn from it and protect the next trade. 🐰");
+  syncPaperBalance(); setText("position","NONE");
+  setText("paperPL",`${result.profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(result.profit))}`);
+  setText("paperPLMessage",`${closeReason}: net ${formatMoney(result.profit)} after fees. Filled at observed price with slippage.`);
+  setText("reason",`${closed.side} ${closed.symbol} closed: ${closeReason}.`);
+  renderTradeHistory(); updateConfidence(); updateLevel(); updateProfile(); updateAchievements();
+  if(window.lastCandles?.length) redrawChart();
+  saveGameState();
 }
 
-function updatePaperPL(price) {
-  if (!position) return;
-  const move = (price - position.entry) / position.entry;
-  const pl = position.amount * move;
-  setText("paperPL", formatMoney(pl));
+function updatePotentialRiskReward() {
+  const entry = Number(window.lastEntry);
+  const stop = Number(window.lastStop);
+  const target = Number(window.lastTarget);
+  const tradeAmount = Number(document.getElementById("paperTradeAmount")?.value);
+
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(stop) ||
+    !Number.isFinite(target) ||
+    !Number.isFinite(tradeAmount) ||
+    tradeAmount <= 0 ||
+    entry <= 0
+  ) {
+    setText("potentialLoss", "—");
+    setText("potentialProfit", "—");
+    return;
+  }
+
+  const risk = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+
+  const potentialLoss = tradeAmount * (risk / entry) + tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE);
+  const potentialProfit = tradeAmount * (reward / entry) - tradeAmount * 2 * (Trading.FEE + Trading.SLIPPAGE);
+
+  setText("potentialLoss", "-" + formatMoney(potentialLoss));
+  setText("potentialProfit", "+" + formatMoney(potentialProfit));
+}
+
+function updatePaperPL(price, symbol, source) {
+  if (!Trading.positive(price) || !position || symbol !== position.symbol || source !== position.source) return;
+  const result = Trading.settlement(position,price);
+  setText("paperCurrentPrice",formatMoney(price));
+  setText("paperPL",`${result.profit >= 0 ? "+" : "-"}${formatMoney(Math.abs(result.profit))}`);
+  setText("paperPLPercent",`${(result.profit / position.amount * 100).toFixed(2)}%`);
+  const stop = position.side === "SHORT" ? price >= position.stop : price <= position.stop;
+  const target = position.side === "SHORT" ? price <= position.target : price >= position.target;
+  if (stop || target) return closePaperPosition(price,stop ? "STOP LOSS" : "TAKE PROFIT");
+  if (result.returned <= 0) return closePaperPosition(price,"COLLATERAL EXHAUSTED");
+  setText("paperPLMessage",`${position.symbol}: estimated net P/L after fees and slippage. Browser must remain open for exits.`);
 }
 
 function updateConfidence() {
@@ -562,7 +1005,13 @@ function updateRank() {
   const rankIcon = document.getElementById("rankIcon");
   if (rankIcon) {
     const icons = { BRONZE: "🥉", SILVER: "🥈", GOLD: "🥇", PLATINUM: "💎", DIAMOND: "💠" };
-    rankIcon.textContent = icons[rank];
+    const img = rankIcon.querySelector("img");
+    if (img && ["GOLD","PLATINUM","DIAMOND"].includes(rank)) { img.src = `assets/rank_${rank.toLowerCase()}.webp`; img.alt = `${rank} Bun rank`; }
+    else rankIcon.textContent = icons[rank];
+  }
+  const profileImg = document.getElementById("profileAvatarImage");
+  if (profileImg && !localStorage.getItem("bunmoney_pfp_asset")) {
+    profileImg.src = DEFAULT_PFP_URL;
   }
 }
 function updateRewards() { setText("rewardPoints", rewardPoints); }
@@ -637,30 +1086,24 @@ const bots = {
   SniperBot: { name: "SniperBot", message: "Waits for precise breakout and retest conditions." },
   ScalperBot: { name: "ScalperBot", message: "Focused on short-term price movement." },
   MoonBot: { name: "MoonBot", message: "Aggressive speculative analysis. High risk." },
-  EmperorBunny: { name: "👑 Emperor Bunny", message: "Owner-only intelligence system. Backend connection required." }
 };
 function selectBot(botName) {
   if (!bots[botName]) return;
   activeBot = botName;
   const bot = bots[botName];
   setText("activeBot", bot.name); setText("botMessage", bot.message);
-  if (botName === "EmperorBunny") {
-    showPopup("👑 Emperor Bunny", "Emperor Bunny is owner-only and requires the secure BunMoney backend before its advanced capabilities can be activated.");
-    mascotReaction("The Emperor is waiting for his throne room. 👑🐰");
-    return;
-  }
   showPopup(bot.name, bot.message);
 }
 
 async function scanMarket() {
-  const symbols = ["GRAB", "SOUN", "BBAI"];
+  const symbols = bunFavorites.slice(0,10);
   const container = document.getElementById("scanner");
   if (!container) return;
   container.innerHTML = `<div class="alert empty">Scanning watchlist...</div>`;
   const results = [];
   for (const symbol of symbols) {
     try {
-      if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) throw new Error("Market data is not configured");
+      if (!MARKET_ENGINE_URL && !demoMarketEnabled) throw new Error("Market data is not configured");
       const data = await marketEngineRequest("/price", { symbol });
       if (data.price && Number.isFinite(Number(data.price))) results.push({ symbol, price: Number(data.price) });
     } catch (error) { console.log("Scanner error:", symbol); }
@@ -671,6 +1114,218 @@ async function scanMarket() {
   }
   container.innerHTML = results.map(result => `<div class="feature-card"><strong>${result.symbol}</strong><p>${formatMoney(result.price)}</p></div>`).join("");
 }
+
+/* Recent market spikes: observed provider candles, never invented market events.
+   Detection timestamp is local scan time, not the precise time of a price jump. */
+const BUN_SPIKE_THRESHOLD = 1.5;
+const BUN_SPIKE_CANDLE_COUNT = 30;
+const BUN_SPIKE_SCAN_LIMIT = 8;
+let spikeScanBusy = false;
+let spikeDetections = [];
+
+function spikeTimeAgo(time) {
+  const secs = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (secs < 60) return secs + " seconds ago";
+  if (secs < 3600) return Math.floor(secs / 60) + " minutes ago";
+  return Math.floor(secs / 3600) + " hours ago";
+}
+function renderSpikes() {
+  const container = document.getElementById("spikeResults");
+  if (!container) return;
+  container.replaceChildren();
+  if (!spikeDetections.length) {
+    const empty = document.createElement("div");
+    empty.className = "spike-empty";
+    empty.textContent = "No spikes detected among the checked favorites. Try again later or add other markets.";
+    container.append(empty);
+    return;
+  }
+  for (const spike of spikeDetections) {
+    const card = document.createElement("article");
+    card.className = "spike-card " + (spike.change >= 0 ? "spike-up" : "spike-down");
+    const top = document.createElement("div");
+    top.className = "spike-top";
+    const market = document.createElement("strong");
+    market.textContent = spike.symbol;
+    const move = document.createElement("strong");
+    move.className = "spike-move";
+    move.textContent = (spike.change >= 0 ? "+" : "") + spike.change.toFixed(2) + "% " + (spike.change >= 0 ? "▲ Spike" : "▼ Drop");
+    top.append(market,move);
+    const info = document.createElement("p");
+    info.textContent = "5-minute candle: " + formatMoney(spike.previous) + " → " + formatMoney(spike.close);
+    const timestamp = document.createElement("p");
+    timestamp.className = "spike-time";
+    timestamp.textContent = "Detected " + spikeTimeAgo(spike.detectedAt) + " · Candle: " + spike.candleTime + " (provider time)";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "View " + spike.symbol + " chart →";
+    button.dataset.action = "viewSpikeMarket";
+    button.dataset.symbol = spike.symbol;
+    card.append(top,info,timestamp,button);
+    container.append(card);
+  }
+}
+async function scanSpikes() {
+  if (spikeScanBusy) return;
+  const status = document.getElementById("spikeStatus");
+  const btn = document.getElementById("scanSpikesButton");
+  const symbols = [...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,BUN_SPIKE_SCAN_LIMIT);
+  if (!symbols.length) {
+    spikeDetections = []; renderSpikes();
+    if (status) status.textContent = "No favorites yet. Save a ticker to start scanning.";
+    return;
+  }
+  spikeScanBusy = true;
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Checking " + symbols.length + " favorite markets…";
+  const detections = [];
+  let completed = 0, failed = 0;
+  try {
+    // Sequential requests reduce the chance of hitting a provider credit burst.
+    for (const symbol of symbols) {
+      try {
+        const data = await marketEngineRequest("/time_series", {
+          symbol, interval:"5min", outputsize:BUN_SPIKE_CANDLE_COUNT
+        });
+        if (data.meta?.symbol && String(data.meta.symbol).toUpperCase() !== symbol) throw new Error("Unexpected symbol");
+        const candles = Trading.candles(data.values);
+        completed++;
+        // Restrict to recent candles; provider times can be exchange-local without an offset.
+        // Scan the last six 5-minute candles. No false exact-time estimates.
+        for (let i = Math.max(1,candles.length-6); i < candles.length; i++) {
+          const previous = candles[i-1].close;
+          const close = candles[i].close;
+          if (!Trading.positive(previous) || !Trading.positive(close)) continue;
+          const change = ((close - previous) / previous) * 100;
+          if (Math.abs(change) < BUN_SPIKE_THRESHOLD) continue;
+          detections.push({ symbol, previous, close, change,
+            candleTime:String(candles[i].datetime), detectedAt:Date.now(),
+            source: demoMarketEnabled ? "demo" : "live" });
+        }
+      } catch (error) { failed++; }
+    }
+    detections.sort((a,b) => Math.abs(b.change)-Math.abs(a.change));
+    spikeDetections = detections.slice(0,20);
+    renderSpikes();
+    if (status) status.textContent = (demoMarketEnabled ? "SIMULATED data · " : "") +
+      completed + " checked, " + failed + " unavailable · " + detections.length +
+      " unusual candle moves found (±" + BUN_SPIKE_THRESHOLD + "% threshold). " +
+      "Checked " + new Date().toLocaleTimeString() + ".";
+  } finally {
+    spikeScanBusy = false;
+    if (btn) btn.disabled = false;
+  }
+}
+function viewSpikeMarket(symbol) {
+  if (!Trading.validSymbol(symbol)) return;
+  analyzeTicker(symbol);
+  document.getElementById("homeSearch")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+setInterval(() => { if (spikeDetections.length) renderSpikes(); },15000);
+
+
+
+/* Market presets only extend the chart/watchlist scanner, not the paper bot's
+   verified Coinbase-only symbol allowlist. Provider availability varies by plan. */
+const BUN_MARKET_PRESETS = [
+  ['EUR/USD','Euro / US Dollar'], ['GBP/USD','British Pound / US Dollar'],
+  ['USD/JPY','US Dollar / Japanese Yen'], ['GBP/JPY','British Pound / Japanese Yen'],
+  ['AUD/USD','Australian Dollar / US Dollar'], ['USD/CAD','US Dollar / Canadian Dollar'],
+  ['USD/CHF','US Dollar / Swiss Franc'], ['NZD/USD','New Zealand Dollar / US Dollar'],
+  ['XAU/USD','Spot Gold / US Dollar'], ['XAG/USD','Spot Silver / US Dollar']
+];
+function setupMarketPresets() {
+  const root=document.getElementById('bun-market-presets');
+  if(!root) return;
+  for(const [symbol,name] of BUN_MARKET_PRESETS) {
+    const button=document.createElement('button');
+    button.type='button';
+    button.textContent='+ '+symbol;
+    button.title=name+' — add to favorites after quote verification';
+    button.addEventListener('click',async()=>{
+      if(bunFavorites.includes(symbol)){
+        document.getElementById('bun-scanner-status').textContent=symbol+' is already in favorites.';
+        return;
+      }
+      if(demoMarketEnabled){
+        document.getElementById('bun-scanner-status').textContent='Switch to live provider mode to verify '+symbol+' before saving.';
+        return;
+      }
+      button.disabled=true;
+      try {
+        const quote=await marketEngineRequest('/price',{symbol});
+        if(!Trading.positive(Number(quote.price))||
+           (quote.symbol&&String(quote.symbol).toUpperCase()!==symbol))
+          throw Error('Quote verification failed');
+        if(bunFavorites.length>=50) throw Error('Favorites limit reached');
+        if(!bunFavorites.includes(symbol)){
+          bunFavorites.push(symbol);saveFavorites();renderFavorites();
+        }
+        document.getElementById('bun-scanner-status').textContent=symbol+' added to favorites. You can now scan or chart it; automatic paper trading remains crypto-only.';
+      } catch(e) {
+        document.getElementById('bun-scanner-status').textContent='Could not add '+symbol+': '+(e.message||'Provider unavailable')+'. Check Twelve Data plan and market hours.';
+      } finally {button.disabled=false;}
+    });
+    root.append(button);
+  }
+}
+setupMarketPresets();
+
+/* On-demand watchlist scanner. Observed five-minute bars only; no trading actions. */
+let bunScannerBusy = false;
+async function runBunScanner(mode) {
+  const modes = ['movers','breakouts','volatility','leaders','gems'];
+  if (!modes.includes(mode) || bunScannerBusy) return;
+  const status = document.getElementById('bun-scanner-status');
+  const output = document.getElementById('bun-scanner-results');
+  if (!status || !output) return;
+  const symbols = [...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,8);
+  output.replaceChildren();
+  if (!symbols.length) { status.textContent='Save favorite symbols before scanning.'; return; }
+  bunScannerBusy = true;
+  document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=true);
+  status.textContent='Checking '+symbols.length+' saved favorites…';
+  const rows = []; let unavailable=0;
+  try {
+    for (const symbol of symbols) {
+      try {
+        const data = await marketEngineRequest('/time_series',{symbol,interval:'5min',outputsize:50});
+        if (data.meta?.symbol && String(data.meta.symbol).toUpperCase()!==symbol) throw Error('Unexpected market');
+        const bars = Trading.candles(data.values);
+        if (bars.length < 22) throw Error('Insufficient candles');
+        const recent=bars.slice(-21),last=recent[recent.length-1],prior=recent[0];
+        const change=100*(last.close/prior.close-1);
+        const swings=recent.slice(1).map((c,i)=>Math.abs(100*(c.close/recent[i].close-1)));
+        const volatility=swings.reduce((a,b)=>a+b,0)/swings.length;
+        const high=Math.max(...recent.slice(0,-1).map(c=>c.high));
+        const low=Math.min(...recent.slice(0,-1).map(c=>c.low));
+        const breakout=last.close>high?'Above 20-bar high':last.close<low?'Below 20-bar low':'Within range';
+        const momentum=100*(last.close/recent[recent.length-6].close-1);
+        rows.push({symbol,change,volatility,breakout,momentum,close:last.close});
+      } catch (_) { unavailable++; }
+    }
+    let ranked=rows;
+    if(mode==='movers') ranked=rows.slice().sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='volatility') ranked=rows.slice().sort((a,b)=>b.volatility-a.volatility);
+    if(mode==='leaders') ranked=rows.slice().sort((a,b)=>b.momentum-a.momentum);
+    if(mode==='breakouts') ranked=rows.filter(x=>x.breakout!=='Within range').sort((a,b)=>Math.abs(b.change)-Math.abs(a.change));
+    if(mode==='gems') ranked=rows.filter(x=>x.momentum>0&&x.change>0&&x.breakout==='Within range').sort((a,b)=>b.momentum-a.momentum);
+    for(const item of ranked) {
+      const card=document.createElement('article');card.className='feature-card';
+      const title=document.createElement('strong');title.textContent=item.symbol;
+      const details=document.createElement('p');
+      details.textContent='20-bar change '+item.change.toFixed(2)+'% · 5-bar momentum '+item.momentum.toFixed(2)+'% · Mean 5-min move '+item.volatility.toFixed(2)+'% · '+item.breakout;
+      const button=document.createElement('button');button.type='button';button.textContent='View chart';button.addEventListener('click',()=>viewSpikeMarket(item.symbol));
+      card.append(title,details,button);output.append(card);
+    }
+    if(!ranked.length) output.textContent='No matching favorites in this scan.';
+    status.textContent=(demoMarketEnabled?'DEMO DATA · ':'')+rows.length+' favorites analyzed · '+unavailable+' unavailable · '+new Date().toLocaleTimeString()+' · Observational screen, not a trade recommendation.';
+  } finally {
+    bunScannerBusy=false;
+    document.querySelectorAll('[data-scanner-mode]').forEach(b=>b.disabled=false);
+  }
+}
+document.querySelectorAll('[data-scanner-mode]').forEach(button=>button.addEventListener('click',()=>runBunScanner(button.dataset.scannerMode)));
 
 function startArena() {
   if (arenaRunning) { showPopup("Trading Arena", "The arena is already running."); return; }
@@ -723,7 +1378,50 @@ function getBunReply(message) {
   return "Bun says: think first, trade second. 🐰";
 }
 function escapeHTML(text) {
-  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  return String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+const DEFAULT_PFP_URL = "https://i.ibb.co/d4TvJ1hJ/bunmoney-bun-pfp.png";
+
+const BUN_ASSETS = {
+  pfp: { happy: "assets/pfs_happy.webp", serious: "assets/pfs_serious.webp", chill: "assets/pfs_chill.webp", focused: "assets/pfs_focused.webp", confident: "assets/pfs_confident.webp", rich: "assets/pfs_rich.webp" },
+  frame: { default: "assets/frame_default.webp", glow: "assets/frame_glow.webp", neon: "assets/frame_neon.webp", animated: "assets/frame_animated.webp", streak: "assets/frame_streak.webp", elite: "assets/frame_elite.webp", legendary: "assets/frame_legendary.webp" },
+  background: { charts: "assets/bg_charts.webp", city: "assets/bg_city.webp", money: "assets/bg_money.webp", neon: "assets/bg_neon.webp", abstract: "assets/bg_abstract.webp", graffiti: "assets/bg_graffiti.webp", nature: "assets/bg_nature.webp", black: "assets/bg_black.webp" }
+};
+function setPfpAsset(name) {
+  const src = BUN_ASSETS.pfp[name]; if (!src) return;
+  const img = document.getElementById("profileAvatarImage");
+  if (img) {
+    img.onerror = () => { img.onerror = null; img.src = DEFAULT_PFP_URL; };
+    img.src = src;
+  }
+  localStorage.setItem("bunmoney_pfp_asset", name);
+  showPopup("🐰 PFP Updated", `${name.replaceAll("_", " ")} Bun is now your profile vibe.`);
+}
+function setFrameAsset(name) {
+  const src = BUN_ASSETS.frame[name]; if (!src) return;
+  const frame = document.getElementById("profileFrameImage"); if (frame) frame.src = src;
+  localStorage.setItem("bunmoney_frame_asset", name);
+}
+function setPfpBackground(name) {
+  const src = BUN_ASSETS.background[name]; if (!src) return;
+  const avatar = document.getElementById("profileAvatar"); if (!avatar) return;
+  avatar.style.backgroundImage = `url("${src}")`; avatar.style.backgroundSize = "cover"; avatar.style.backgroundPosition = "center";
+  localStorage.setItem("bunmoney_bg_asset", name);
+}
+function restoreBunAssets() {
+  const pfp = localStorage.getItem("bunmoney_pfp_asset");
+  const profileImg = document.getElementById("profileAvatarImage");
+  if (profileImg) {
+    profileImg.onerror = () => { profileImg.onerror = null; profileImg.src = DEFAULT_PFP_URL; };
+    profileImg.src = (pfp && BUN_ASSETS.pfp[pfp]) ? BUN_ASSETS.pfp[pfp] : DEFAULT_PFP_URL;
+  }
+  const avatar = document.getElementById("profileAvatar");
+  const frame = localStorage.getItem("bunmoney_frame_asset");
+  const bg = localStorage.getItem("bunmoney_bg_asset");
+  const frameImg = document.getElementById("profileFrameImage");
+  if (frameImg && frame && BUN_ASSETS.frame[frame]) frameImg.src = BUN_ASSETS.frame[frame];
+  if (avatar && bg && BUN_ASSETS.background[bg]) { avatar.style.backgroundImage=`url("${BUN_ASSETS.background[bg]}")`; avatar.style.backgroundSize="cover"; avatar.style.backgroundPosition="center"; }
 }
 
 function setTheme(theme) {
@@ -743,16 +1441,36 @@ function setTheme(theme) {
 function setMascot(emoji) {
   document.querySelectorAll(".bun-character").forEach(element => {
     const image = element.querySelector("#bunCharacterImage");
+
     if (image) {
-      image.style.filter = "drop-shadow(0 0 8px rgba(163,230,53,.28))";
+      image.src = DEFAULT_PFP_URL;
+      image.alt = "";
+      image.setAttribute("aria-label", "BunMoney Bun");
+      image.onerror = () => {
+        image.onerror = null;
+        image.src = DEFAULT_PFP_URL;
+      };
+
       element.dataset.mascot = emoji;
-    } else {
-      element.textContent = emoji;
     }
   });
-  document.querySelectorAll(".profile-avatar").forEach(element => { element.textContent = emoji; });
+
+  document.querySelectorAll(".profile-avatar").forEach(element => {
+    const image = element.querySelector("#profileAvatarImage");
+
+    if (image) {
+      image.alt = "";
+      image.setAttribute("aria-label", "Bun profile avatar");
+      image.onerror = () => {
+        image.onerror = null;
+        image.src = DEFAULT_PFP_URL;
+      };
+    }
+  });
+
   localStorage.setItem("bunmoney_mascot", emoji);
 }
+
 function openFeature(feature) {
   const screens = { home: "home", trade: "trade", arcade: "arcade", world: "world", profile: "profile" };
   if (screens[feature]) { showScreen(screens[feature]); return; }
@@ -776,13 +1494,36 @@ function rotateQuote() {
 }
 function mascotReaction(message) {
   setText("mascotMessage", message);
+
   const mascot = document.querySelector(".bun-character");
+  const image = document.getElementById("bunCharacterImage");
+
+  // Keep the official hosted Bun PFP as the permanent image.
+  // Do not swap it for local reaction assets that CodePen may not have.
+  if (image) {
+    image.src = DEFAULT_PFP_URL;
+    image.alt = "";
+    image.setAttribute("aria-label", "BunMoney Bun");
+
+    // If anything ever breaks the image, immediately restore it.
+    image.onerror = () => {
+      image.onerror = null;
+      image.src = DEFAULT_PFP_URL;
+    };
+  }
+
+  // Wiggle the existing PFP instead of replacing the image.
   if (mascot) {
     mascot.classList.remove("react");
     void mascot.offsetWidth;
     mascot.classList.add("react");
+
+    setTimeout(() => {
+      mascot.classList.remove("react");
+    }, 900);
   }
 }
+
 function updateProfile() {
   setText("profileBalance", formatMoney(tradingBalance));
   setText("profileTrades", tradeHistory.length);
@@ -806,39 +1547,45 @@ function updateAchievements() {
   container.innerHTML = achievements.map(achievement => `<div>${achievement}</div>`).join("");
 }
 function saveGameState() {
+  if (stateBlocked) return;
   try {
-    localStorage.setItem("bunmoney_state", JSON.stringify({ tradingBalance, tradeHistory, rewardPoints, arcadeBank, activeBot }));
+    localStorage.setItem("bunmoney_state", JSON.stringify({ tradingBalance, tradeHistory, position, rewardPoints, arcadeBank, activeBot }));
   } catch (error) { console.log("Could not save BunMoney state."); }
 }
 function loadGameState() {
   try {
     const saved = localStorage.getItem("bunmoney_state");
     if (!saved) return;
-    const state = JSON.parse(saved);
-    if (Number.isFinite(Number(state.tradingBalance))) tradingBalance = Number(state.tradingBalance);
-    if (Array.isArray(state.tradeHistory)) tradeHistory = state.tradeHistory;
-    if (Number.isFinite(Number(state.rewardPoints))) rewardPoints = Number(state.rewardPoints);
-    if (Number.isFinite(Number(state.arcadeBank))) arcadeBank = Number(state.arcadeBank);
-    if (state.activeBot) activeBot = state.activeBot;
-  } catch (error) { console.log("Could not load saved state."); }
+    const state = Trading.state(JSON.parse(saved));
+    ({ tradingBalance, tradeHistory, position, rewardPoints, arcadeBank, activeBot } = state);
+    if (position) {
+      demoMarketEnabled = position.source === "demo";
+      const ticker = document.getElementById("ticker"); if (ticker) ticker.value = position.symbol;
+    }
+  } catch { stateBlocked = true; setText("reason","Saved state is invalid or from an older simulator. Export it before resetting; trading is locked."); }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   loadGameState();
-  startArcadeBank();
+
+  const paperTradeAmount = document.getElementById("paperTradeAmount");
+  if (paperTradeAmount) {
+    paperTradeAmount.addEventListener("input", updatePotentialRiskReward);
+  }
+
+  loadDemoSettings();
+  if (position) demoMarketEnabled = position.source === "demo";
+  document.getElementById("ticker")?.addEventListener("input",invalidateAnalysis);
   startLivePrice();
   startAlertMonitor();
-  rotateQuote();
-  setInterval(rotateQuote, 15000);
-  updateArcadeBank();
   updateConfidence();
-  updateLevel();
-  updateRank();
-  updateRewards();
-  updateProfile();
-  updateAchievements();
-  setText("tradingBalance", formatMoney(tradingBalance));
-  setText("position", "NONE");
+  syncPaperBalance();
+  setText(
+  "position",
+  position
+    ? `${position.side} @ ${formatMoney(position.entry)}`
+    : "NONE"
+);
   setText("arenaStatus", "READY");
   mascotReaction("Protect the bag. 🥕💰");
   const savedMascot = localStorage.getItem("bunmoney_mascot");
@@ -866,7 +1613,7 @@ function loadFavorites() {
     const saved = localStorage.getItem(BUN_FAVORITES_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length) bunFavorites = parsed;
+      if (Array.isArray(parsed)) bunFavorites = [...new Set(parsed.filter(Trading.validSymbol))].slice(0,50);
     }
   } catch (error) { console.log("Could not load favorites."); }
 }
@@ -874,6 +1621,20 @@ function saveFavorites() {
   try { localStorage.setItem(BUN_FAVORITES_KEY, JSON.stringify(bunFavorites)); }
   catch (error) { console.log("Could not save favorites."); }
 }
+function openChartFavorites() {
+  const overlay = document.getElementById("chartFavoritesOverlay");
+  if (!overlay) return;
+  renderFavorites();
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+function closeChartFavorites() {
+  const overlay = document.getElementById("chartFavoritesOverlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
 function createFavoritesScreen() {
   if (document.getElementById("favoritesScreen")) return;
   const screen = document.createElement("section");
@@ -885,10 +1646,11 @@ function createFavoritesScreen() {
     </div>
     <div id="favoritesList"></div>
     <div class="favorites-add">
-      <input id="favoriteInput" type="text" maxlength="10" placeholder="Add ticker...">
-      <button onclick="addFavorite()">+ Add</button>
+      <input id="favoriteInput" type="text" maxlength="30" placeholder="e.g. AAPL" aria-label="Add market ticker">
+      <button data-action="addFavorite">+ Add favorite</button>
+       <p id="favoriteFeedback" role="status" aria-live="polite"></p>
     </div>`;
-  const app = document.querySelector(".app");
+  const app = document.querySelector(".app") || document.body;
   if (app) app.appendChild(screen);
   renderFavorites();
 }
@@ -900,19 +1662,38 @@ function createFavoritesNav() {
   button.addEventListener("click", () => { showScreen("favoritesScreen"); updateFavorites(true); });
   nav.appendChild(button);
 }
-function addFavorite() {
+let favoritePending = false;
+function favoriteFeedback(text) { setText("favoriteFeedback", text); }
+async function addFavorite(fromChart = null) {
+  if (favoritePending) return;
   const input = document.getElementById("favoriteInput");
-  if (!input) return;
-  const symbol = input.value.toUpperCase().trim();
-  if (!symbol) return;
-  if (bunFavorites.includes(symbol)) {
-    showPopup("Favorites", `${symbol} is already in your favorites.`); return;
-  }
-  bunFavorites.push(symbol); saveFavorites(); input.value = ""; renderFavorites(); updateFavorites(true);
-  mascotReaction(`${symbol} joined the watchlist. ⭐🐰`);
+  const symbol = String(fromChart || input?.value || "").trim().toUpperCase();
+  if (!Trading.validSymbol(symbol)) return favoriteFeedback("Enter a valid symbol, like AAPL or BTC/USD.");
+  if (bunFavorites.includes(symbol)) return favoriteFeedback(symbol + " is already in Favorites.");
+  if (bunFavorites.length >= 50) return favoriteFeedback("Favorites is limited to 50 symbols.");
+  favoritePending = true;
+  favoriteFeedback("Checking " + symbol + "...");
+  try {
+    if (!demoMarketEnabled) {
+      const quote = await marketEngineRequest("/price", { symbol });
+      if (!Trading.positive(Number(quote.price)) ||
+          (quote.symbol && String(quote.symbol).toUpperCase() !== symbol))
+        throw new Error("Ticker not recognized by the provider.");
+    }
+    bunFavorites.push(symbol);
+    saveFavorites();
+    if (input) input.value = "";
+    renderFavorites();
+    favoriteFeedback(symbol + " saved." + (demoMarketEnabled ? " Demo quotes are simulated." : ""));
+    updateFavorites(true);
+  } catch(error) {
+    favoriteFeedback("Could not add " + symbol + ": " + (error.message || "Provider unavailable"));
+  } finally { favoritePending = false; }
 }
+function addCurrentFavorite() { addFavorite(selectedSymbol()); }
 function removeFavorite(symbol) {
   bunFavorites = bunFavorites.filter(item => item !== symbol);
+  favoriteDetailsCache.delete(symbol);
   saveFavorites(); renderFavorites(); mascotReaction(`${symbol} removed from favorites. 🐰`);
 }
 function focusAnalyzer() {
@@ -949,68 +1730,124 @@ function openFavorite(symbol) {
   mascotReaction(`Watching ${symbol}. Let's see what the market is doing. 🐰`);
   analyze(true);
 }
+const favoriteDetailsCache = new Map();
+const FAVORITE_DETAILS_TTL = 15 * 60 * 1000;
+let favoriteUpdatesRunning = false;
+
+function renderFavoriteDetails(symbol, snapshot) {
+  if (!bunFavorites.includes(symbol) || !snapshot) return;
+  const field = (part, value) => setText(`favorite-${part}-${symbol}`, value);
+  field("price", snapshot.price != null ? formatMoney(snapshot.price) : "—");
+  field("change", snapshot.change == null ? "—" : `${snapshot.change >= 0 ? "+" : ""}${snapshot.change.toFixed(2)}%`);
+  field("trend", snapshot.trend || "—");
+  field("volume", snapshot.volume || "—");
+  field("setup", snapshot.setup || "—");
+  field("support", snapshot.support != null ? formatMoney(snapshot.support) : "—");
+  field("resistance", snapshot.resistance != null ? formatMoney(snapshot.resistance) : "—");
+  field("status", snapshot.error ? "Data unavailable · " + snapshot.error : 
+    (snapshot.source === "demo" ? "Simulated data" : "Updated " + new Date(snapshot.fetchedAt).toLocaleTimeString()));
+  const move = document.getElementById(`favorite-change-${symbol}`);
+  if (move) move.style.color = snapshot.change == null ? "" : snapshot.change >= 0 ? "#a3e635" : "#fb7185";
+}
 function renderFavorites() {
-  const container = document.getElementById("favoritesList");
+  const container = document.getElementById("favoritesList") || document.getElementById("chartFavoritesList");
   if (!container) return;
   if (!bunFavorites.length) {
-    container.innerHTML = `<div class="alert empty">No favorite markets yet.</div>`; return;
+    container.innerHTML = '<div class="alert empty">No favorite markets yet. Add a ticker below.</div>';
+    return;
   }
-  container.innerHTML = bunFavorites.map(symbol => `
-    <div class="favorite-market" id="favorite-${symbol}">
+  container.innerHTML = bunFavorites.filter(Trading.validSymbol).map(symbol => `
+    <article class="favorite-market" id="favorite-${symbol}">
       <div class="favorite-top">
-        <div><strong>⭐ ${symbol}</strong><span class="favorite-price" id="favorite-price-${symbol}">—</span></div>
-        <button class="favorite-remove" onclick="removeFavorite('${symbol}')">×</button>
+        <div class="favorite-heading"><strong>⭐ ${symbol}</strong><span class="favorite-price" id="favorite-price-${symbol}">—</span></div>
+        <button type="button" class="favorite-remove" data-action="removeFavorite" data-symbol="${symbol}" aria-label="Remove ${symbol} from favorites">×</button>
       </div>
       <div class="favorite-stats">
-        <div><span>Move</span><strong id="favorite-change-${symbol}">—</strong></div>
+        <div><span>5m move</span><strong id="favorite-change-${symbol}">—</strong></div>
         <div><span>Trend</span><strong id="favorite-trend-${symbol}">—</strong></div>
-        <div><span>Volume</span><strong id="favorite-volume-${symbol}">—</strong></div>
+        <div><span>Volume ratio</span><strong id="favorite-volume-${symbol}">—</strong></div>
         <div><span>Setup</span><strong id="favorite-setup-${symbol}">—</strong></div>
       </div>
       <div class="favorite-levels">
-        <span>Support: <strong id="favorite-support-${symbol}">—</strong></span>
-        <span>Resistance: <strong id="favorite-resistance-${symbol}">—</strong></span>
+        <span>Support <strong id="favorite-support-${symbol}">—</strong></span>
+        <span>Resistance <strong id="favorite-resistance-${symbol}">—</strong></span>
       </div>
-      <button class="favorite-open" onclick="openFavorite('${symbol}')">View Chart →</button>
-    </div>`).join("");
+      <p class="favorite-status" id="favorite-status-${symbol}">Checking market data…</p>
+      <button type="button" class="favorite-open" data-action="openFavorite" data-symbol="${symbol}">View ${symbol} chart →</button>
+    </article>`).join("");
+  for (const symbol of bunFavorites) {
+    if (favoriteDetailsCache.has(symbol)) renderFavoriteDetails(symbol, favoriteDetailsCache.get(symbol));
+  }
+}
+async function fetchFavoriteDetails(symbol) {
+  const quote = await marketEngineRequest("/price", { symbol });
+  if (!Trading.positive(Number(quote.price)) ||
+      (quote.symbol && String(quote.symbol).toUpperCase() !== symbol))
+    throw new Error("Quote unavailable");
+  const series = await marketEngineRequest("/time_series", {symbol,interval:"5min",outputsize:30});
+  if (series.meta?.symbol && String(series.meta.symbol).toUpperCase() !== symbol)
+    throw new Error("Mismatched market data");
+  const candles = Trading.candles(series.values);
+  const closes = candles.map(c => c.close);
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const last = closes.at(-1), previous = closes.at(-2);
+  const price = Number(quote.price);
+  const sma10 = calculateSMA(closes,10).at(-1);
+  const sma20 = calculateSMA(closes,20).at(-1);
+  const trend = price > sma10 && sma10 > sma20 ? "BULLISH" :
+                price < sma10 && sma10 < sma20 ? "BEARISH" : "SIDEWAYS";
+  const recentVolumes = candles.slice(-21,-1).map(c => c.volume);
+  const avgVolume = average(recentVolumes);
+  const volumeRatio = avgVolume > 0 ? candles.at(-1).volume / avgVolume : null;
+  // Exclude the current candle when checking breakout/breakdown.
+  const upper = Math.max(...highs.slice(-21,-1));
+  const lower = Math.min(...lows.slice(-21,-1));
+  const setup = price > upper ? "POSSIBLE BREAKOUT" :
+                price < lower ? "POSSIBLE BREAKDOWN" : "WAIT";
+  return {price, change: previous > 0 ? (last-previous)/previous*100 : null,
+    trend, volume: volumeRatio == null ? "N/A" : volumeRatio.toFixed(2)+"x",
+    setup, support:Math.min(...lows.slice(-20)),
+    resistance:Math.max(...highs.slice(-20)),fetchedAt:Date.now(),
+    source:demoMarketEnabled ? "demo" : "live"};
 }
 async function updateFavorites(force = false) {
-  if (!bunFavorites.length) return;
-  for (const symbol of bunFavorites) {
-    try {
-      if (!MARKET_ENGINE_URL && (!API_KEY || API_KEY === "YOUR_TWELVE_DATA_API_KEY")) continue;
-      const data = await marketEngineRequest("/price", { symbol });
-      if (!data.price || !Number.isFinite(Number(data.price))) continue;
-      const price = Number(data.price);
-      updateHomeMarketCard(symbol, price, NaN);
-      const priceElement = document.getElementById(`favorite-price-${symbol}`);
-      if (priceElement) priceElement.textContent = formatMoney(price);
-      if (lastAnalysis && lastAnalysis.ticker === symbol) updateFavoriteFromAnalysis(symbol, lastAnalysis);
-      else {
-        const change = document.getElementById(`favorite-change-${symbol}`);
-        if (change) change.textContent = "Live";
+  if (favoriteUpdatesRunning || !bunFavorites.length) return;
+  favoriteUpdatesRunning = true;
+  const source = marketSource();
+  try {
+    // Read from per-symbol cache first to avoid exhausting provider credits.
+    for (const symbol of [...bunFavorites]) {
+      const cached = favoriteDetailsCache.get(symbol);
+      if (cached && cached.source === source && Date.now()-cached.fetchedAt < FAVORITE_DETAILS_TTL) {
+        renderFavoriteDetails(symbol,cached);
+        continue;
       }
-    } catch (error) { console.log("Favorite update failed:", symbol); }
-  }
+      try {
+        const snapshot = await fetchFavoriteDetails(symbol);
+        if (source !== marketSource() || !bunFavorites.includes(symbol)) continue;
+        favoriteDetailsCache.set(symbol,snapshot);
+        renderFavoriteDetails(symbol,snapshot);
+        updateHomeMarketCard(symbol,snapshot.price,snapshot.change);
+      } catch(error) {
+        if (source !== marketSource() || !bunFavorites.includes(symbol)) continue;
+        // Keep last good prices visibly marked as stale rather than erasing them.
+        const fallback = cached && cached.source === source ? {...cached,error:"Refresh failed",fetchedAt:cached.fetchedAt} :
+          {price:null,change:null,trend:"—",volume:"—",setup:"—",support:null,resistance:null,
+            error:"Check provider, market hours or API limits",fetchedAt:Date.now(),source};
+        renderFavoriteDetails(symbol,fallback);
+      }
+    }
+  } finally { favoriteUpdatesRunning = false; }
 }
 function updateFavoriteFromAnalysis(symbol, analysis) {
-  updateHomeMarketCard(symbol, analysis.currentPrice, analysis.changePercent);
-  setText(`favorite-price-${symbol}`, formatMoney(analysis.currentPrice));
-  const change = document.getElementById(`favorite-change-${symbol}`);
-  if (change) {
-    change.textContent = `${analysis.changePercent >= 0 ? "+" : ""}${analysis.changePercent.toFixed(2)}%`;
-    change.style.color = analysis.changePercent >= 0 ? "#22c55e" : "#ef4444";
-  }
-  setText(`favorite-trend-${symbol}`, analysis.trend);
-  setText(`favorite-volume-${symbol}`, analysis.volumeRatio ? analysis.volumeRatio.toFixed(1) + "x" : "—");
-  let setup = "WAIT";
-  if (analysis.retest === "RETEST AREA") setup = "RETEST";
-  else if (analysis.breakout === "POSSIBLE BREAKOUT") setup = "BREAKOUT";
-  else if (analysis.setupQuality === "HIGH") setup = "STRONG";
-  else if (analysis.setupQuality === "MODERATE") setup = "FORMING";
-  setText(`favorite-setup-${symbol}`, setup);
-  setText(`favorite-support-${symbol}`, formatMoney(analysis.support));
-  setText(`favorite-resistance-${symbol}`, formatMoney(analysis.resistance));
+  if (!bunFavorites.includes(symbol)) return;
+  const existing = favoriteDetailsCache.get(symbol);
+  if (!existing || existing.source !== analysis.source) return;
+  // Keep the latest independent snapshot intact. Analysis can refresh the quote
+  // but must not replace this symbol's 5-minute metrics with different intervals.
+  updateHomeMarketCard(symbol,analysis.currentPrice,existing.change);
+  renderFavoriteDetails(symbol,existing);
 }
 function createChartCopilot() {
   const canvas = document.getElementById("chart");
@@ -1123,64 +1960,57 @@ function updateTradeReadiness() {
 
 
 function updateTradePlan() {
-  const status = document.getElementById("tradePlanStatus");
   const direction = document.getElementById("tradePlanDirection");
+  const score = document.getElementById("tradePlanScore");
   const entry = document.getElementById("tradePlanEntry");
   const stop = document.getElementById("tradePlanStop");
   const target = document.getElementById("tradePlanTarget");
-  const confirmation = document.getElementById("planConfirmation");
-  const reward = document.getElementById("planReward");
   const note = document.getElementById("tradePlanNote");
-  if (![status,direction,entry,stop,target,confirmation,reward,note].every(Boolean)) return;
 
-  [status, direction, confirmation, reward].forEach(el => el.classList.remove("good","bad","warn","neutral"));
-  confirmation.classList.remove("ready","caution","blocked");
-  reward.classList.remove("ready","caution","blocked");
+  if (![direction, score, entry, stop, target, note].every(Boolean)) return;
 
   if (!lastAnalysis) {
-    status.textContent = "WAIT"; status.classList.add("neutral");
-    direction.textContent = "—"; entry.textContent = "—"; stop.textContent = "—"; target.textContent = "—";
-    confirmation.querySelector("span").textContent = "•";
-    confirmation.querySelector("small").textContent = "Waiting for analysis";
-    reward.querySelector("span").textContent = "•";
-    reward.querySelector("small").textContent = "Waiting for setup";
+    score.textContent = "—";
+    direction.textContent = "—";
+    entry.textContent = "—";
+    stop.textContent = "—";
+    target.textContent = "—";
     note.textContent = "Analyze a market to build a trade plan.";
     return;
   }
 
   const a = lastAnalysis;
+
+score.textContent = `${a.score > 0 ? "+" : ""}${a.score}`;
   const long = String(a.decision || "").includes("LONG");
   const short = String(a.decision || "").includes("SHORT");
-  const confirmed = (a.breakout === "POSSIBLE BREAKOUT" || a.retest === "RETEST AREA") && Number(a.volumeRatio) >= 1.05;
-  const rrGood = Number.isFinite(Number(a.rr)) && Number(a.rr) >= 2;
 
-  direction.textContent = long ? "LONG WATCH" : short ? "SHORT WATCH" : "NO DIRECTION";
-  direction.classList.add(long ? "good" : short ? "bad" : "warn");
+  const confirmed =
+    (a.breakout === "POSSIBLE BREAKOUT" || a.breakout === "POSSIBLE BREAKDOWN" ||
+      a.retest === "RETEST AREA") &&
+    Number(a.volumeRatio) >= 1.05;
+
+  const rrGood =
+    Number.isFinite(Number(a.rr)) &&
+    Number(a.rr) >= 2;
+
+  direction.textContent = long
+    ? "LONG WATCH"
+    : short
+      ? "SHORT WATCH"
+      : "NO DIRECTION";
+
   entry.textContent = formatMoney(a.entry);
   stop.textContent = formatMoney(a.stop);
   target.textContent = formatMoney(a.target);
 
   const ready = (long || short) && confirmed && rrGood;
   const watch = (long || short) || confirmed;
-  status.textContent = ready ? "READY TO WATCH" : watch ? "WATCH" : "WAIT";
-  status.classList.add(ready ? "good" : watch ? "warn" : "neutral");
-
-  confirmation.classList.add(confirmed ? "ready" : "caution");
-  confirmation.querySelector("span").textContent = confirmed ? "✓" : "!";
-  confirmation.querySelector("small").textContent = confirmed
-    ? "Price action and volume are giving confirmation."
-    : "Wait for price action and volume to confirm.";
-
-  reward.classList.add(rrGood ? "ready" : "caution");
-  reward.querySelector("span").textContent = rrGood ? "✓" : "!";
-  reward.querySelector("small").textContent = rrGood
-    ? `${Number(a.rr).toFixed(2)}:1 reward-to-risk.`
-    : "Reward-to-risk is below the preferred 2:1 threshold.";
 
   note.textContent = ready
-    ? "Setup has multiple confirmations. Still wait for your own entry trigger before acting."
+    ? `Setup has confirmation and ${Number(a.rr).toFixed(2)}:1 reward-to-risk. Still wait for your own entry trigger before acting.`
     : watch
-      ? "A setup may be forming. Do not chase; wait for confirmation."
+      ? "A setup may be forming. Wait for confirmation and do not chase."
       : "No clean setup yet. Patience is part of the strategy.";
 }
 
@@ -1204,7 +2034,7 @@ function createQuickTradeButtons() {
   if (!chartCard || document.getElementById("chartQuickTrade")) return;
   const controls = document.createElement("div");
   controls.id = "chartQuickTrade"; controls.className = "chart-quick-trade";
-  controls.innerHTML = `<button class="quick-buy" onclick="paperBuy(); quickCharacterReaction('BUY')">🐰 ↑ BUY</button><button class="quick-sell" onclick="paperSell(); quickCharacterReaction('SELL')">↓ SELL 🐰</button>`;
+  controls.innerHTML = `<button class="quick-buy" data-action="paperBuy">🐰 ↑ BUY</button><button class="quick-sell" data-action="paperSell">↓ SELL 🐰</button>`;
   chartCard.appendChild(controls);
 }
 function quickCharacterReaction(action) {
@@ -1216,9 +2046,75 @@ function quickCharacterReaction(action) {
   const message = document.getElementById("chartCopilotMessage");
   if (!message) return;
   message.textContent = action === "BUY"
-    ? "Paper buy opened. Keep an eye on the stop and reaction."
-    : "Paper position closed. Review what price did next.";
+    ? "BUY requests a LONG or closes an existing SHORT. Check the position status."
+    : "SELL requests a SHORT or closes an existing LONG. Check the position status.";
 }
+let miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
+function openMiniGames() {
+  const overlay = document.getElementById("miniGamesOverlay");
+  if (!overlay) return;
+  clearMiniGameTimer();
+  miniGameState = { mode: null, game: null, score: 0, timer: null, target: null };
+  const mode = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
+  if (mode) mode.hidden = false;
+  if (content) content.innerHTML = "<p class='mini-games-hint'>Pick a mode. Your chart stays open behind this mini-screen.</p>";
+  overlay.classList.remove("hidden"); overlay.setAttribute("aria-hidden", "false");
+}
+function closeMiniGames() {
+  clearMiniGameTimer();
+  const overlay = document.getElementById("miniGamesOverlay");
+  if (overlay) { overlay.classList.add("hidden"); overlay.setAttribute("aria-hidden", "true"); }
+}
+function clearMiniGameTimer() { if (miniGameState.timer) clearInterval(miniGameState.timer); miniGameState.timer = null; }
+function chooseMiniGameMode(mode) {
+  miniGameState.mode = mode;
+  const modeEl = document.getElementById("miniGamesMode"), content = document.getElementById("miniGamesContent");
+  if (!modeEl || !content) return;
+  modeEl.hidden = true;
+  if (mode === "single") {
+    content.innerHTML = `<div class="mini-game-selection"><h4>Single-player</h4><button data-action="startMiniGame" data-mode="reaction">⚡ Reaction Rush<small>Tap the target as fast as you can.</small></button><button data-action="startMiniGame" data-mode="price">🎯 Price Guess<small>Guess whether the next simulated tick goes up or down.</small></button></div>`;
+  } else {
+    content.innerHTML = `<div class="mini-game-selection"><h4>Online</h4><p class="mini-games-hint">Online matchmaking is a prototype lobby for now. Real multiplayer needs the future backend.</p><button data-action="startMiniGame" data-mode="duel">⚔️ 1v1 Reaction Duel<small>Play against a simulated opponent.</small></button><button data-action="startMiniGame" data-mode="co-op">🤝 Co-op Challenge<small>Team with a simulated player to reach a target.</small></button></div>`;
+  }
+}
+function startMiniGame(game) {
+  clearMiniGameTimer();
+  miniGameState.game = game; miniGameState.score = 0;
+  const content = document.getElementById("miniGamesContent");
+  if (!content) return;
+  if (game === "reaction" || game === "duel") {
+    miniGameState.target = Math.floor(Math.random()*1000)+600;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Score <strong id="miniScore">0</strong></div><button id="reactionTarget" class="reaction-target" data-action="hitReactionTarget">TAP!</button><p id="miniGameStatus">Hit the button 10 times.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="${miniGameState.mode}">← Back</button></div>`;
+  } else if (game === "price") {
+    miniGameState.target = Math.random() > .5 ? 1 : -1;
+    content.innerHTML = `<div class="mini-game-play"><h4>Next tick?</h4><p class="mini-price-symbol">${document.getElementById("symbol")?.textContent || "MARKET"}</p><div class="mini-choice-row"><button data-action="makePriceGuess" data-guess="1">📈 UP</button><button data-action="makePriceGuess" data-guess="-1">📉 DOWN</button></div><p id="miniGameStatus">Make your call.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="single">← Back</button></div>`;
+  } else {
+    miniGameState.target = 10;
+    content.innerHTML = `<div class="mini-game-play"><div class="mini-score">Team progress <strong id="miniScore">0</strong>/10</div><button class="reaction-target coop-target" data-action="coOpTap">HELP TEAM</button><p id="miniGameStatus">Tap to help your teammate reach 10.</p><button class="mini-back" data-action="chooseMiniGameMode" data-mode="online">← Back</button></div>`;
+  }
+}
+function hitReactionTarget() {
+  miniGameState.score++;
+  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus"), target = document.getElementById("reactionTarget");
+  if (score) score.textContent = miniGameState.score;
+  if (target) { target.style.transform = `translate(${Math.floor(Math.random()*70)-35}px,${Math.floor(Math.random()*40)-20}px)`; setTimeout(()=>{if(target) target.style.transform=""},120); }
+  if (miniGameState.score >= 10) { if(status) status.textContent = miniGameState.game === "duel" ? `You won the prototype duel! 🐰 Score ${miniGameState.score}.` : "Clean run! 🐰⚡"; return; }
+  if (status) status.textContent = miniGameState.game === "duel" ? `Your turn — keep going. Opponent score: ${Math.min(9, Math.floor(miniGameState.score*.8)+Math.floor(Math.random()*2))}.` : `${10-miniGameState.score} more hits.`;
+}
+function makePriceGuess(guess) {
+  const actual = Math.random() > .5 ? 1 : -1, status = document.getElementById("miniGameStatus");
+  if (!status) return;
+  if (guess === actual) { miniGameState.score++; status.textContent = `Correct! +1 point. Total: ${miniGameState.score}. Play again?`; }
+  else status.textContent = `Not this time — it moved ${actual > 0 ? "UP 📈" : "DOWN 📉"}. Total: ${miniGameState.score}.`;
+}
+function coOpTap() {
+  miniGameState.score++;
+  const score = document.getElementById("miniScore"), status = document.getElementById("miniGameStatus");
+  if (score) score.textContent = miniGameState.score;
+  if (miniGameState.score >= 10) { if(status) status.textContent = "Team challenge complete! 🤝🐰"; return; }
+  if (status) status.textContent = `Keep helping — ${10-miniGameState.score} left. Your teammate is covering the rest.`;
+}
+
 function startFavoritesMonitor() {
   if (favoritesTimer) clearInterval(favoritesTimer);
   favoritesTimer = setInterval(() => { updateFavorites(false); }, 900000);
@@ -1229,7 +2125,7 @@ function connectFavoritesToAnalysis() {
   const originalAnalyze = analyze;
   window.analyze = async function(force = false) {
     await originalAnalyze(force);
-    if (lastAnalysis) {
+    if (lastAnalysis && lastAnalysis.ticker === selectedSymbol()) {
       updateFavoriteFromAnalysis(lastAnalysis.ticker, lastAnalysis);
       updateChartCopilot();
       updateBunAIHome();
@@ -1279,7 +2175,7 @@ function showMarketError(message) {
 }
 
 function exportPaperTrades() {
-  const payload = { exportedAt: new Date().toISOString(), balance: tradingBalance, position, tradeHistory };
+  const payload = { recoveryState: stateBlocked ? localStorage.getItem("bunmoney_state") : null, exportedAt: new Date().toISOString(), balance: tradingBalance, position, tradeHistory };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a"); link.href = url; link.download = "bunmoney-paper-trades.json"; link.click();
@@ -1291,7 +2187,7 @@ function handleKeyboardShortcuts(event) {
   if (event.key === "/") { event.preventDefault(); focusAnalyzer(); }
   if (event.key.toLowerCase() === "a") analyze(true);
   if (event.key.toLowerCase() === "h") showScreen("home");
-  if (event.key.toLowerCase() === "t") showScreen("trade");
+  if (event.key.toLowerCase() === "t") document.querySelector(".paper-trading-card")?.scrollIntoView({behavior:"smooth"});
 }
 
 function markInitialAppReady() {
@@ -1332,7 +2228,8 @@ function toggleChatSetting(id) {
 }
 function clearLocalProgress() {
   if (!confirm("Reset BunMoney's saved prototype progress on this device?")) return;
-  ["bunmoney_state","bunmoney_favorites","bunmoney_mascot","bunmoney_last_analysis"].forEach(k => localStorage.removeItem(k));
+  ["bunmoney_state","bunmoney_favorites","bunmoney_mascot","bunmoney_last_analysis","bunmoney_profile","bunmoney_demo_market","bunmoney_pfp_asset","bunmoney_frame_asset","bunmoney_bg_asset"].forEach(k => localStorage.removeItem(k));
+  stateBlocked = true; // Prevent unload from saving the state just removed.
   location.reload();
 }
 const originalSendChat = window.sendChat;
@@ -1347,7 +2244,7 @@ window.sendChat = function() {
    FREE PROTOTYPE COMPLETION LAYER
    Local demo systems only — no paid services required.
 ========================================================= */
-let demoMarketEnabled = true;
+let demoMarketEnabled = false;
 let demoProfile = { username: "Guest", createdAt: Date.now() };
 
 const DEMO_MARKET_BASE = {
@@ -1369,7 +2266,7 @@ function demoCandles(symbol, interval = "5min", count = 80) {
   let seed = demoSeed(symbol + interval);
   let price = base;
   const candles = [];
-  const stepMinutes = interval === "1day" ? 1440 : interval === "1week" ? 10080 : interval === "1month" ? 43200 : interval === "1h" ? 60 : interval === "4h" ? 240 : interval === "15min" ? 15 : 5;
+  const stepMinutes = interval === "1day" ? 1440 : interval === "1week" ? 10080 : interval === "1month" ? 43200 : interval === "1h" ? 60 : interval === "4h" ? 240 : interval === "15min" ? 15 : interval === "1min" ? 1 : 5;
   const now = Date.now();
   for (let i = count - 1; i >= 0; i--) {
     seed = (seed * 9301 + 49297) % 233280;
@@ -1383,28 +2280,18 @@ function demoCandles(symbol, interval = "5min", count = 80) {
     candles.push({ datetime: new Date(now - i * stepMinutes * 60000).toISOString(), open: open.toFixed(4), high: high.toFixed(4), low: low.toFixed(4), close: close.toFixed(4), volume: String(volume) });
     price = close;
   }
-  return { status: "ok", meta: { symbol, interval }, values: candles };
+  return { status: "ok", meta: { symbol, interval }, values: candles.reverse() };
 }
 
-const originalMarketEngineRequest = window.marketEngineRequest || marketEngineRequest;
-window.marketEngineRequest = async function(endpoint, params = {}) {
-  try {
-    return await originalMarketEngineRequest(endpoint, params);
-  } catch (error) {
-    if (!demoMarketEnabled) throw error;
-    const symbol = String(params.symbol || "SOUN").toUpperCase();
-    if (endpoint === "/time_series") return demoCandles(symbol, params.interval || "5min", Math.min(Number(params.outputsize || 80), 100));
-    if (endpoint === "/price") {
-      const candles = demoCandles(symbol, "5min", 3).values;
-      const latest = candles[candles.length - 1];
-      return { status: "ok", symbol, price: latest.close, demo: true };
-    }
-    throw error;
-  }
-};
-
-/* Replace the analysis request reference so analyze/other callers use the demo fallback. */
-marketEngineRequest = window.marketEngineRequest;
+function demoLivePrice(symbol) {
+  const base = DEMO_MARKET_BASE[symbol] || 25;
+  const now = Date.now() / 1000;
+  const seed = demoSeed(symbol);
+  const waveA = Math.sin(now / 19 + seed) * 0.006;
+  const waveB = Math.sin(now / 47 + seed * 0.7) * 0.0035;
+  const drift = Math.sin(now / 180 + seed * 0.13) * 0.004;
+  return base * (1 + waveA + waveB + drift);
+}
 
 function saveDemoProfile() {
   const input = document.getElementById("demoUsername");
@@ -1425,14 +2312,17 @@ function updateDemoProfileUI() {
   if (input && !input.value) input.value = demoProfile.username === "Guest" ? "" : demoProfile.username;
 }
 function toggleDemoMarket() {
+  if (position) return showPopup("Open position","Close the position before changing data sources.");
   demoMarketEnabled = !demoMarketEnabled;
+  quoteCache.clear(); invalidateAnalysis();
+  setText("feedStatus",demoMarketEnabled ? "SIMULATED data" : "REST polling");
   localStorage.setItem("bunmoney_demo_market", String(demoMarketEnabled));
   setText("demoMarketButton", `Demo Market: ${demoMarketEnabled ? "ON" : "OFF"}`);
-  showPopup("📡 Demo Market", demoMarketEnabled ? "Demo market data will keep the prototype usable when live data is unavailable." : "Demo fallback is off. Live market data must be configured.");
+  showPopup("📡 Demo Market", demoMarketEnabled ? "Synthetic data is explicitly selected. These are not live market prices." : "Live Twelve Data and Coinbase data selected.");
 }
 function loadDemoSettings() {
   const saved = localStorage.getItem("bunmoney_demo_market");
-  if (saved !== null) demoMarketEnabled = saved !== "false";
+  if (saved !== null && !position) demoMarketEnabled = saved === "true";
   setText("demoMarketButton", `Demo Market: ${demoMarketEnabled ? "ON" : "OFF"}`);
 }
 
@@ -1450,18 +2340,9 @@ function renderTradeHistory() {
   }).join("");
 }
 
-const originalPaperSell = window.paperSell || paperSell;
-window.paperSell = function() {
-  const symbol = document.getElementById("symbol")?.textContent || "";
-  originalPaperSell();
-  if (tradeHistory.length) tradeHistory[tradeHistory.length - 1].symbol = symbol;
-  saveGameState();
-  renderTradeHistory();
-};
-paperSell = window.paperSell;
-
 function exportBunMoneyData() {
   const data = {
+    recoveryState: stateBlocked ? localStorage.getItem("bunmoney_state") : null,
     app: "BunMoney",
     version: "prototype",
     exportedAt: new Date().toISOString(),
@@ -1480,13 +2361,20 @@ function importBunMoneyData() {
   input.type = "file"; input.accept = "application/json,.json";
   input.onchange = () => {
     const file = input.files?.[0]; if (!file) return;
+    if (file.size > 2000000) return showPopup("Import Failed","Backup exceeds 2 MB.");
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
+        if (position) throw new Error("Close your position before importing.");
+        const importedState = Trading.state(data.state);
+        if (!Array.isArray(data.favorites) || data.favorites.length > 50 || !data.favorites.every(Trading.validSymbol)) throw new Error("Invalid favorites.");
+        data.state = importedState;
+        data.profile = { username: String(data.profile?.username || "Guest").slice(0,40), createdAt: Number(data.profile?.createdAt) || Date.now() };
         if (data.profile) { demoProfile = { ...demoProfile, ...data.profile }; localStorage.setItem("bunmoney_profile", JSON.stringify(demoProfile)); }
         if (data.state) localStorage.setItem("bunmoney_state", JSON.stringify(data.state));
         if (Array.isArray(data.favorites)) localStorage.setItem("bunmoney_favorites", JSON.stringify(data.favorites));
+        stateBlocked = true;
         showPopup("📥 Import Complete", "Your local prototype backup was imported. Reloading now.");
         setTimeout(() => location.reload(), 700);
       } catch (_) { showPopup("Import Failed", "That file is not a valid BunMoney prototype backup."); }
@@ -1543,13 +2431,7 @@ window.sendChat = function() {
 /* Keep the UI in sync after the existing initialization routines run. */
 document.addEventListener("DOMContentLoaded", () => {
   loadDemoProfile();
-  loadDemoSettings();
   renderTradeHistory();
-  updateProfile();
-  updateAchievements();
-  updateRewards();
-  updateLevel();
-  rotateQuote();
   setTimeout(() => { if (!lastAnalysis) analyze(false).catch(() => {}); }, 250);
 });
 
@@ -1570,3 +2452,343 @@ window.clearLocalProgress = function() {
   originalClearLocalProgress();
 };
 clearLocalProgress = window.clearLocalProgress;
+
+
+/* =========================================================
+   MARKET NEWS REPORT — EDUCATIONAL TICKER-AWARE DEMO
+   ========================================================= */
+(function setupMarketNewsReport() {
+  const reports = {
+    xauusd: {
+      event: "US inflation, jobs, or Fed-rate updates",
+      time: "Check the connected economic calendar",
+      impact: "USD/rates can move gold sharply",
+      explanation: "XAUUSD often reacts to the US dollar, Treasury yields, inflation data, employment releases, and Federal Reserve decisions. Stronger-than-expected US data can support the dollar and pressure gold, while weaker data or falling yields can support gold. Confirm the actual release time before trading."
+    },
+    gold: {
+      event: "US dollar and interest-rate headlines",
+      time: "Check the connected economic calendar",
+      impact: "Can increase volatility in gold",
+      explanation: "Gold commonly responds to the dollar, real yields, inflation expectations, central-bank decisions, and risk sentiment. Watch the scheduled release and compare the result with expectations rather than assuming the first candle is the final direction."
+    },
+  };
+  reports["soun"] = {
+    event: "Company earnings, guidance, and AI-sector headlines",
+    time: "Check the company calendar and live news feed",
+    impact: "Company-specific news can create gaps",
+    explanation: "SOUN is a single-company equity, so earnings, guidance, contracts, analyst changes, AI-sector sentiment, and broader technology-market moves may affect its chart. A live news/calendar connection is required to show a verified future headline and exact release time."
+  };
+
+  function getReport(ticker) {
+    const key = String(ticker || "").trim().toLowerCase().replace(/\s+/g, "");
+    if (reports[key]) return reports[key];
+    return {
+      event: "Ticker-specific headlines and scheduled releases",
+      time: "Check a live news/economic calendar",
+      impact: "Depends on the asset and event",
+      explanation: `${key.toUpperCase() || "This ticker"} needs a connected live news feed to identify the next verified event, its exact time, and the likely chart sensitivity. Review earnings, economic releases, sector news, and market-wide risk before acting.`
+    };
+  }
+
+  function updateMarketNewsReport() {
+    const input = document.getElementById("ticker");
+    const ticker = String(input?.value || document.getElementById("symbol")?.textContent || "").trim();
+    const report = getReport(ticker);
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    set("newsTicker", ticker.toUpperCase() || "—");
+    set("newsEvent", report.event);
+    set("newsTime", report.time);
+    set("newsImpact", report.impact);
+    set("newsExplanation", report.explanation);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", updateMarketNewsReport);
+  } else {
+    updateMarketNewsReport();
+  }
+
+  const input = document.getElementById("ticker");
+  if (input) input.addEventListener("input", updateMarketNewsReport);
+  const symbol = document.getElementById("symbol");
+  if (symbol) new MutationObserver(updateMarketNewsReport).observe(symbol, { childList: true, characterData: true, subtree: true });
+})();
+
+
+// A CSP-compatible, explicit action table; no eval or inline script handlers.
+document.addEventListener("click", event => {
+  const control = event.target.closest("[data-action]");
+  if (!control) return;
+  const actions = { analyze:() => analyze(true), paperBuy, paperSell, exportPaperTrades,
+    addFavorite:() => addFavorite(), addCurrentFavorite, removeFavorite:() => removeFavorite(control.dataset.symbol),
+    openFavorite:() => openFavorite(control.dataset.symbol),
+    setTimeframe:() => setTimeframe(control.dataset.timeframe),
+    startMiniGame:() => startMiniGame(control.dataset.mode), chooseMiniGameMode:() => chooseMiniGameMode(control.dataset.mode),
+    hitReactionTarget, coOpTap, makePriceGuess:() => makePriceGuess(Number(control.dataset.guess)),
+    showScreen:() => showScreen(control.dataset.screen), emperorPrompt:() => emperorAsk(control.dataset.prompt), refreshMarketNews:() => loadMarketNews(false), newsFromChart:() => loadMarketNews(false), newsAllFavorites:() => loadMarketNews(true), refreshMarketEvents, eventsFromChart, clearEventTicker, scanMarket, scanSpikes, viewSpikeMarket:() => viewSpikeMarket(control.dataset.symbol), unlockMarketEngine,
+    toggleDemoMarket, exportBunMoneyData, importBunMoneyData, clearLocalProgress };
+  actions[control.dataset.action]?.();
+});
+document.addEventListener("input", event => {
+  if (event.target.id === "zoomSlider") changeChartZoom(event.target.value);
+});
+window.addEventListener("beforeunload", () => { saveGameState(); coinbaseFeed?.stop(); });
+
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target?.id === "favoriteInput") { e.preventDefault(); addFavorite(); } });
+
+
+/* Emperor Bunny educational assistant — selected chart context only. */
+let emperorBusy = false;
+function emperorContext() {
+  const a = lastAnalysis;
+  if (!a || a.ticker !== selectedSymbol()) return null;
+  return {
+    symbol:a.ticker, trend:a.trend, setup:a.breakout || a.retest || "NO CONFIRMATION",
+    price:a.currentPrice, support:a.support, resistance:a.resistance,
+    rsi:a.rsi, volumeRatio:a.volumeRatio, rr:a.rr, stop:a.stop,
+    target:a.target, source:a.source, ageMs:Date.now()-a.timestamp
+  };
+}
+const emperorConversation = [];
+function addNewsSources(container, sources) {
+  if (!container || !Array.isArray(sources)) return;
+  const list = document.createElement("div");
+  list.className = "news-reference-list";
+  for (const source of sources.slice(0,8)) {
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== "https:") continue;
+      const link = document.createElement("a");
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source.title || url.hostname;
+      list.append(link);
+    } catch {}
+  }
+  if (list.childElementCount) {
+    const label = document.createElement("strong");
+    label.textContent = "Sources";
+    container.append(label,list);
+  }
+}
+function emperorPost(speaker, message, sources = []) {
+  const panel = document.getElementById("emperorMessages");
+  if (!panel) return;
+  const item = document.createElement("div");
+  item.className = speaker === "You" ? "emperor-user" : "emperor-response";
+  const heading = document.createElement("strong");
+  heading.textContent = speaker + ": ";
+  const text = document.createElement("span");
+  text.textContent = String(message);
+  item.append(heading,text);
+  addNewsSources(item,sources);
+  panel.appendChild(item);
+  panel.scrollTop = panel.scrollHeight;
+}
+async function emperorAsk(question) {
+  const message = String(question || "").trim();
+  if (!message || emperorBusy || message.length > 500) return;
+  const button = document.getElementById("emperorAskButton");
+  const field = document.getElementById("emperorQuestion");
+  emperorBusy = true;
+  if (button) button.disabled = true;
+  if (field) field.value = "";
+  emperorPost("You", message);
+  try {
+    const response = await fetch("/api/ai/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message,context:emperorContext(),history:emperorConversation.slice(-8)})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Assistant unavailable");
+    emperorPost("Emperor Bunny",data.text || "No explanation available.",data.sources);
+    emperorConversation.push({role:"user",content:message},{role:"assistant",content:data.text || ""});
+    while(emperorConversation.length>8)emperorConversation.shift();
+  } catch (error) {
+    emperorPost("Emperor Bunny",error.message || "Unable to contact the AI service.");
+  } finally {
+    emperorBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+let marketNewsBusy=false,newsStories=[],newsPage=0;
+const NEWS_PER_PAGE=8;
+function marketNewsPriority(impact) {
+  return impact==="potentially bullish"||impact==="potentially bearish"?0:
+    impact==="mixed / uncertain"?1:2;
+}
+function newsSessionLabel(){
+  const pieces=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+  const part=name=>pieces.find(p=>p.type===name)?.value;
+  const minutes=Number(part("hour"))*60+Number(part("minute"));
+  const regular=!["Sat","Sun"].includes(part("weekday")) && minutes>=570 && minutes<960;
+  return "US stocks: regular trading hours 9:30 AM–4:00 PM Eastern (excluding market holidays). "+
+    (regular?"Currently within normal weekday session hours.":"Currently outside normal weekday session hours.")+
+    " Articles list publication times; no exact time of a future market move is knowable.";
+}
+function renderMarketNews(){
+  const container=document.getElementById("liveNewsBrief"),nav=document.getElementById("newsPages");
+  if(!container||!nav)return;
+  container.replaceChildren();nav.replaceChildren();
+  const pages=Math.max(1,Math.ceil(newsStories.length/NEWS_PER_PAGE));
+  newsPage=Math.max(0,Math.min(newsPage,pages-1));
+  for(const article of newsStories.slice(newsPage*NEWS_PER_PAGE,(newsPage+1)*NEWS_PER_PAGE)){
+    let url;
+    try{url=new URL(article.url);if(url.protocol!=="https:")continue;}catch{continue;}
+    const card=document.createElement("article");card.className="market-news-story";
+    const top=document.createElement("div");top.className="market-news-top";
+    const ticker=document.createElement("strong");ticker.textContent=article.ticker;
+    const badge=document.createElement("span");badge.className="market-news-direction";
+    badge.dataset.impact=article.impact||"uncertain";
+    badge.textContent=article.impact==="potentially bullish"?"↑ Potentially bullish":
+      article.impact==="potentially bearish"?"↓ Potentially bearish":"? "+(article.impact||"uncertain");
+    top.append(ticker,badge);
+    const link=document.createElement("a");link.href=url.href;link.rel="noopener noreferrer";link.target="_blank";link.textContent=article.title;
+    const meta=document.createElement("p");meta.className="market-news-meta";
+    meta.textContent=(article.source||"Publisher")+" · Published "+new Date(article.publishedAt).toLocaleString();
+    const why=document.createElement("p");why.className="market-news-reason";
+    why.textContent=article.why||"The headline alone cannot establish market impact.";
+    const chart=document.createElement("button");chart.type="button";chart.className="market-news-chart";
+    chart.textContent="View "+article.ticker+" chart →";
+    chart.addEventListener("click",()=>analyzeTicker(article.ticker));
+    card.append(top,link,meta,why,chart);container.append(card);
+  }
+  if(!newsStories.length)container.textContent="No recent headlines found for the chosen markets.";
+  const prev=document.createElement("button");prev.type="button";prev.textContent="← Previous";prev.disabled=newsPage===0;
+  prev.addEventListener("click",()=>{newsPage--;renderMarketNews();});
+  const page=document.createElement("span");page.textContent="Page "+(newsPage+1)+" of "+pages+" · "+newsStories.length+" headlines";
+  const next=document.createElement("button");next.type="button";next.textContent="Next →";next.disabled=newsPage>=pages-1;
+  next.addEventListener("click",()=>{newsPage++;renderMarketNews();});
+  nav.append(prev,page,next);
+}
+async function loadMarketNews(allMarkets=false){
+  if(marketNewsBusy)return;
+  const input=document.getElementById("newsSymbol");
+  if(!input)return;
+  // Explicit search never replaces the input with the chart's selected ticker.
+  const symbol=input.value.trim().toUpperCase();
+  const markets=allMarkets?[...new Set(bunFavorites.filter(Trading.validSymbol))].slice(0,10):[symbol];
+  const status=document.getElementById("liveNewsStatus"),btn=document.getElementById("newsRefreshButton");
+  const timing=document.getElementById("newsTiming");
+  if(timing)timing.textContent=newsSessionLabel();
+  if(!markets.length||markets.some(s=>!Trading.validSymbol(s))){
+    if(status)status.textContent="Enter a valid ticker or add markets to Favorites.";return;
+  }
+  marketNewsBusy=true;if(btn)btn.disabled=true;
+  if(status)status.textContent="Checking headlines for "+markets.join(", ")+"…";
+  const results=[];let failed=0;
+  try{
+    for(const ticker of markets){
+      try{
+        const res=await fetch("/api/news?symbol="+encodeURIComponent(ticker));
+        const data=await res.json();
+        if(!res.ok)throw Error(data.error||"Feed unavailable");
+        for(const article of data.articles||[])results.push({...article,ticker});
+      }catch{failed++;}
+    }
+    const seen=new Set();
+    newsStories=results.filter(a=>{
+      const id=a.ticker+"|"+a.title.toLowerCase();
+      if(seen.has(id))return false;seen.add(id);return true;
+    }).sort((a,b)=>marketNewsPriority(a.impact)-marketNewsPriority(b.impact)||
+      (Date.parse(b.publishedAt)||0)-(Date.parse(a.publishedAt)||0));
+    newsPage=0;renderMarketNews();
+    if(status)status.textContent=(allMarkets?"Favorite markets":"Market "+symbol)+" · "+
+      newsStories.length+" headlines · "+failed+" unavailable feeds. "+
+      "Sorted by headline impact category, then recency—not predicted price-move size.";
+  }finally{marketNewsBusy=false;if(btn)btn.disabled=false;}
+}
+document.addEventListener("submit", event => {
+  if (event.target?.id !== "emperorAskForm") return;
+  event.preventDefault();
+  emperorAsk(document.getElementById("emperorQuestion")?.value);
+});
+
+
+/* Independent market events calendar: never manufacture earnings release times. */
+let bunEvents=[],bunEventsPage=0,bunEventsBusy=false;
+const BUN_EVENTS_PER_PAGE=8;
+function renderMarketEvents(){
+ const list=document.getElementById("eventsList"),pages=document.getElementById("eventsPages");
+ if(!list||!pages)return;
+ list.replaceChildren();pages.replaceChildren();
+ const type=document.getElementById("eventTypeFilter")?.value||"all";
+ const ticker=(document.getElementById("eventTickerFilter")?.value||"").trim().toUpperCase();
+ const sort=document.getElementById("eventSortFilter")?.value||"soonest";
+ const favoriteSet=new Set(bunFavorites.map(s=>String(s).toUpperCase()));
+ const rows=bunEvents.filter(e=>(type==="all"||e.kind===type) &&
+   (!ticker || e.symbol===ticker) &&
+   (sort!=="favorites" || (e.kind==="earnings" && favoriteSet.has(e.symbol))))
+   .sort((a,b)=>{
+     if(sort==="az")return a.title.localeCompare(b.title) || a.date.localeCompare(b.date);
+     if(sort==="impact"){
+       const rank={high:0,medium:1,low:2,unknown:3};
+       return (rank[a.impact]??3)-(rank[b.impact]??3) || a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+     }
+     return a.date.localeCompare(b.date) || (a.at||"").localeCompare(b.at||"") || a.title.localeCompare(b.title);
+   });
+ const count=Math.max(1,Math.ceil(rows.length/BUN_EVENTS_PER_PAGE));
+ bunEventsPage=Math.min(bunEventsPage,count-1);
+ const fmt=new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Chicago"});
+ for(const item of rows.slice(bunEventsPage*BUN_EVENTS_PER_PAGE,(bunEventsPage+1)*BUN_EVENTS_PER_PAGE)){
+   const card=document.createElement("article");card.className="events-item";
+   const heading=document.createElement("div");heading.className="event-title";
+   const name=document.createElement("strong");name.textContent=(item.kind==="earnings"?item.symbol+" · ":"")+item.title;
+   const badge=document.createElement("span");badge.textContent=item.kind==="earnings"?"Earnings":(item.impact||"Economic")+" economic";
+   heading.append(name,badge);
+   const when=document.createElement("p");when.className="event-when";
+   when.textContent=item.at ? "Scheduled: "+fmt.format(new Date(item.at))+" Central Time" :
+     "Date: "+item.date+" · "+(item.session||"Exact release time not published");
+   const reason=document.createElement("p");reason.className="event-note";reason.textContent=item.note||"Release times can change.";
+   const link=document.createElement("a");
+   try{const u=new URL(item.url);if(u.protocol!=="https:")continue;link.href=u.href;}
+   catch{continue;}
+   link.target="_blank";link.rel="noopener noreferrer";link.textContent="Verify schedule →";
+   const details=document.createElement("p");details.className="event-meta";
+   details.textContent="Status: "+(item.status||"scheduled")+" · Source: "+(item.source||"Calendar");
+   card.append(heading,when,details,reason,link);list.append(card);
+ }
+ if(!rows.length)list.textContent="No matching events found in the upcoming calendar window. This does not confirm there are no events.";
+ const prev=document.createElement("button");prev.type="button";prev.textContent="← Previous";prev.disabled=bunEventsPage===0;
+ prev.addEventListener("click",()=>{bunEventsPage--;renderMarketEvents();});
+ const indicator=document.createElement("span");indicator.textContent="Page "+(bunEventsPage+1)+" of "+count;
+ const next=document.createElement("button");next.type="button";next.textContent="Next →";next.disabled=bunEventsPage>=count-1;
+ next.addEventListener("click",()=>{bunEventsPage++;renderMarketEvents();});
+ pages.append(prev,indicator,next);
+}
+async function refreshMarketEvents(){
+ if(bunEventsBusy)return;
+ bunEventsBusy=true;
+ const button=document.getElementById("eventsRefreshButton");
+ const status=document.getElementById("eventsStatus");
+ if(button)button.disabled=true;
+ if(status)status.textContent="Checking published event schedules…";
+ try {
+   const res=await fetch("/api/events");const data=await res.json();
+   if(!res.ok)throw new Error(data.error||"Calendar unavailable");
+   bunEvents=Array.isArray(data.events)?data.events:[];
+   bunEventsPage=0;renderMarketEvents();
+   if(status)status.textContent=bunEvents.length+" scheduled events · Updated "+new Date(data.updatedAt).toLocaleString()+
+      (data.unavailable?.length?" · Unavailable feeds: "+data.unavailable.join(", "):"")+
+      (data.cached?" · Cached":"");
+ }catch(err){if(status)status.textContent=err.message||"Calendar unavailable";}
+ finally{bunEventsBusy=false;if(button)button.disabled=false;}
+}
+function eventsFromChart(){
+ const input=document.getElementById("eventTickerFilter");
+ // Apply the ticker the user entered. Do not replace it with the chart symbol.
+ if(input)input.value=input.value.trim().toUpperCase();
+ bunEventsPage=0;renderMarketEvents();
+}
+function clearEventTicker(){
+ const input=document.getElementById("eventTickerFilter");
+ if(input)input.value="";
+ bunEventsPage=0;renderMarketEvents();
+}
+document.addEventListener("change",e=>{
+ if(["eventTypeFilter","eventSortFilter"].includes(e.target?.id)){bunEventsPage=0;renderMarketEvents();}
+});
+document.addEventListener("input",e=>{
+ if(e.target?.id==="eventTickerFilter"){bunEventsPage=0;renderMarketEvents();}
+});

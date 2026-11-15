@@ -768,207 +768,859 @@ button:active { transform: scale(.97); }
 .future-events-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.future-events-pill{font-size:11px;font-weight:800;letter-spacing:.08em;padding:6px 9px;border-radius:999px;background:rgba(128,255,0,.12);border:1px solid rgba(128,255,0,.28);white-space:nowrap}.future-events-list{display:grid;gap:10px;margin-top:12px}.future-event{display:flex;gap:12px;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.025)}.future-event-date{min-width:118px;font-size:11px;font-weight:800;color:#b8ff62;line-height:1.35}.future-event-main{min-width:0}.future-event-codes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}.future-event-codes span{font-size:10px;font-weight:900;letter-spacing:.04em;padding:3px 6px;border-radius:6px;background:rgba(128,255,0,.08);border:1px solid rgba(128,255,0,.2);color:#d7ff9d}.future-event-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.future-event-head strong{font-size:13px}.future-event-head span{font-size:10px;opacity:.7;border:1px solid rgba(255,255,255,.12);padding:3px 6px;border-radius:999px}.future-event p{margin:5px 0 0;font-size:12px;line-height:1.45;opacity:.78}@media(max-width:600px){.future-event{display:block}.future-event-date{margin-bottom:7px}.future-event-head{align-items:flex-start}}
 
 /* =========================================================
-   BUNMONEY DESKTOP COMMAND CENTER — 2026
-   Keeps the existing mobile layout and turns desktop into
-   a wide trading dashboard.
-========================================================= */
+   CLEAN BUNMONEY HOME LAYOUT — LAST RULES WIN
+   Uses the actual direct-child order in #home.
+   ========================================================= */
+
 @media (min-width: 768px) {
-  body { overflow-x: hidden; }
-
-  .app {
-    width: min(100%, 1440px);
-    max-width: 1440px !important;
-    margin: 0 auto;
-    padding: 24px 32px 48px;
-  }
-
-  .topbar.bun-header {
-    min-height: 74px;
-    margin-bottom: 12px;
-  }
-
-  .main-nav {
-    margin-bottom: 18px;
-    padding: 2px 0 4px;
-  }
-
-  .nav-button {
-    min-width: 104px;
-    padding: 10px 16px;
-    font-size: 12px;
-  }
-
-  /* Give the home screen an actual desktop dashboard structure. */
   #home {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
+    gap: 16px !important;
+    align-items: start !important;
   }
 
-  #home > .hero-card,
-  #home > .search,
-  #home > .decision,
-  #home > .future-events-card {
-    grid-column: 1 / -1;
+  #home > * {
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
   }
 
+  /* Existing home order: 1 hero, 2 quick, 3 snapshot, 4 command,
+     5 search, 6 quote, 7 metric grid, 8 chart, 9 analysis,
+     10 setup, 11 plan, 12 decision, 13 alerts, 14 risk,
+     15 BunAI, 16 readiness, 17 confidence, 18 paper,
+     19 level, 20 history, 21 quote. */
+  #home > :nth-child(1) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(2) { grid-column: 1 / 5 !important; }
+  #home > :nth-child(3) { grid-column: 5 / 9 !important; }
+  #home > :nth-child(4) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(5) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(6) { grid-column: 1 / 5 !important; }
+  #home > :nth-child(7) { grid-column: 5 / 13 !important; }
+  #home > :nth-child(8) { grid-column: 1 / 9 !important; }
+  #home > :nth-child(9) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(10) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(11) { grid-column: 9 / 13 !important; }
+  #home > :nth-child(12) { grid-column: 1 / 9 !important; }
+  #home > :nth-child(13) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(14) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(15) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(16) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(17) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(18) { grid-column: 1 / 7 !important; }
+  #home > :nth-child(19) { grid-column: 7 / 13 !important; }
+  #home > :nth-child(20) { grid-column: 1 / -1 !important; }
+  #home > :nth-child(21) { grid-column: 1 / -1 !important; }
+
+  #home > .chart-card { overflow: hidden !important; }
+  #home > .chart-card #chart { width: 100% !important; height: 470px !important; }
+  #home > .grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  #home .trade-plan-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #home .news-report-grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 10px !important; }
+  #home .news-report-item { min-width: 0 !important; }
+  #home .news-report-item strong { overflow-wrap: anywhere !important; }
+}
+
+@media (max-width: 767px) {
+  #home { display: block !important; }
+  #home > * { width: 100% !important; margin-bottom: 14px !important; }
+  #home > .chart-card #chart { height: 340px !important; }
+  .news-report-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+}
+
+.market-news-card { border-color: rgba(56,189,248,.25) !important; }
+.news-badge { border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; font-size: 9px; color: var(--blue); white-space: nowrap; }
+.news-report-item { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.news-report-item small { display: block; color: var(--muted); font-size: 10px; margin-bottom: 7px; }
+.news-report-item strong { display: block; font-size: 12px; line-height: 1.35; }
+.news-report-explanation { margin: 14px 0 0; color: var(--text); line-height: 1.55; }
+.news-report-disclaimer { margin: 10px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+
+
+/* =========================================================
+   BUNMONEY — CLEAN FINAL DESKTOP HOME LAYOUT
+   ========================================================= */
+
+#home {
+  width: 100%;
+  min-width: 0;
+}
+
+#home > * {
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+
+  /* Main dashboard grid */
+  #home {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 14px !important;
+    align-items: start !important;
+    grid-auto-flow: row !important;
+  }
+
+  #home > * {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide the old dashboard filler cards */
   #home > .hero-card,
   #home > .quick-actions-home,
   #home > .market-snapshot-card,
   #home > .master-command-card,
-  #home > .price-card,
-  #home > .grid,
-  #home > .chart-card,
-  #home > .setup,
-  #home > .trade-plan-card,
-  #home > .decision,
-  #home > .future-events-card,
+  #home > .bunai-home-card,
+  #home > section:has(#riskBar),
+  #home > section:has(#confidenceBar) {
+    display: none !important;
+  }
+
+  /* =========================================
+     TOP
+     ========================================= */
+
+  #homeSearch {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+  }
+
+  #homePriceCard {
+    grid-column: 1 / 5 !important;
+    grid-row: 2 !important;
+  }
+
+  #homeMetrics {
+    grid-column: 5 / -1 !important;
+    grid-row: 2 !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* =========================================
+     MAIN TRADING AREA
+     ========================================= */
+
+  /* Chart */
+  #mainChartCard {
+    grid-column: 1 / 9 !important;
+    grid-row: 3 / 6 !important;
+    width: 100% !important;
+  }
+
+  #mainChartCard #chart {
+    width: 100% !important;
+    height: 470px !important;
+  }
+
+  /* Technical Analysis */
+  #technicalAnalysisCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 3 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+  }
+
+  /* Trade Setup */
+  #tradeSetupCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 4 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+  }
+
+  /* Trade Plan */
+  #tradePlanCard {
+    grid-column: 9 / -1 !important;
+    grid-row: 5 !important;
+
+    width: 100% !important;
+    padding: 14px !important;
+
+    /* IMPORTANT: don't let it stretch */
+    align-self: start !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Trade Plan contents */
+  #tradePlanCard .trade-plan-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+  }
+
+  #tradePlanCard .trade-plan-checks {
+    display: none !important;
+  }
+
+  #tradePlanCard .trade-plan-note {
+    display: none !important;
+  }
+
+  /* =========================================
+     WAIT
+     ========================================= */
+
+  #decision {
+    grid-column: 1 / 9 !important;
+    grid-row: 6 !important;
+
+    width: 100% !important;
+    min-height: 64px !important;
+    height: auto !important;
+    margin: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* =========================================
+     MARKET NEWS
+     ========================================= */
+
+  #marketNewsCard {
+    grid-column: 1 / -1 !important;
+    grid-row: 7 !important;
+  }
+
+  #marketNewsCard .news-report-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* =========================================
+     MARKET ALERTS
+     ========================================= */
+
+  #home > section:has(#alerts) {
+    grid-column: 1 / -1 !important;
+    grid-row: 8 !important;
+  }
+
+  /* =========================================
+     LOWER CARDS
+     ========================================= */
+
+  #home > .home-readiness {
+    grid-column: 1 / 7 !important;
+    grid-row: 9 !important;
+  }
+
+  #home > section:has(#tradingBalance) {
+    grid-column: 7 / 13 !important;
+    grid-row: 9 !important;
+  }
+
+  #home > section:has(#level) {
+    grid-column: 1 / 7 !important;
+    grid-row: 10 !important;
+  }
+
   #home > .trade-history-card {
-    margin-bottom: 0;
-    min-width: 0;
+    grid-column: 1 / -1 !important;
+    grid-row: 11 !important;
   }
 
-  /* Top dashboard row */
-  #home > .hero-card { grid-column: 1 / -1; }
-  #home > .quick-actions-home { grid-column: 1 / 5; }
-  #home > .market-snapshot-card { grid-column: 5 / 9; }
-  #home > .master-command-card { grid-column: 9 / 13; }
-
-  /* Search + live quote row */
-  #home > .search { grid-column: 1 / -1; }
-  #home > .price-card { grid-column: 1 / 5; }
-  #home > .grid {
-    grid-column: 5 / 13;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    height: 100%;
+  #home > .reason-card:not(.bunai-home-card) {
+    grid-column: 1 / -1 !important;
+    grid-row: 12 !important;
   }
 
-  /* Chart is the visual centerpiece; analysis sits beside it. */
-  #home > .chart-card { grid-column: 1 / 9; }
-  #home > .chart-card #chart { height: 430px; }
+  /* =========================================
+     COMPACT CARD CONTENT
+     ========================================= */
 
-  /* Analysis stack: section order in the current HTML is stable here:
-     9 = Technical Analysis, 10 = Trade Setup, 11 = Trade Plan. */
-  #home > .setup:nth-of-type(9),
-  #home > .setup:nth-of-type(10),
-  #home > .trade-plan-card {
-    grid-column: 9 / 13;
-  }
-  #home > .decision { grid-column: 9 / 13; }
-  #home > .future-events-card { grid-column: 1 / -1; }
-
-  /* Bottom dashboard row: 14 = Paper Trading, 15 = Trader Level. */
-  #home > .setup:nth-of-type(14) { grid-column: 1 / 7; }
-  #home > .setup:nth-of-type(15) { grid-column: 7 / 13; }
-  #home > .trade-history-card { grid-column: 1 / -1; }
-
-  .quick-actions-grid,
-  .master-grid,
-  .snapshot-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  #home .row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 12px !important;
+    min-width: 0 !important;
   }
 
-  .master-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-  .search input { font-size: 15px; }
-
-  /* Other screens use the same wide canvas instead of a 520px-looking column. */
-  #trade,
-  #arcade,
-  #world,
-  #profile {
-    width: 100%;
-    max-width: none;
+  #home .row span,
+  #home .row strong {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
   }
 
-  #trade > .setup,
-  #trade > .section-title,
-  #arcade > .setup,
-  #arcade > .money,
-  #world > .setup,
-  #world > .section-title,
-  #profile > .setup,
-  #profile > .section-title,
-  #profile > .profile-card {
-    min-width: 0;
+  #technicalAnalysisCard .row,
+  #tradeSetupCard .row {
+    padding: 7px 0 !important;
   }
 
-  #trade {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
+  #technicalAnalysisCard h3,
+  #tradeSetupCard h3,
+  #tradePlanCard h3 {
+    margin-top: 0 !important;
   }
-  #trade > .section-title { grid-column: 1 / -1; }
-  #trade > .setup:nth-of-type(1) { grid-column: 1 / 7; }
-  #trade > .setup:nth-of-type(2) { grid-column: 7 / 13; }
-  #trade > .market-board-card { grid-column: 1 / -1; }
-  #trade > .setup:nth-of-type(4) { grid-column: 1 / 5; }
-  #trade > .setup:nth-of-type(5) { grid-column: 5 / 9; }
-  #trade > .setup:nth-of-type(6) { grid-column: 9 / 13; }
-  #trade > .setup:nth-of-type(7) { grid-column: 1 / -1; }
-
-  #arcade,
-  #world,
-  #profile {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
-  }
-  #arcade > .section-title,
-  #world > .section-title,
-  #profile > .section-title { grid-column: 1 / -1; }
-  #arcade > *:not(.section-title) { grid-column: span 6; }
-  #world > *:not(.section-title) { grid-column: span 6; }
-  #profile > .profile-card { grid-column: 1 / 5; }
-  #profile > .setup { grid-column: span 4; }
-  #profile > .asset-customizer { grid-column: 1 / -1; }
-
-  .bot-grid,
-  .game-grid,
-  .world-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .asset-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .background-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-
-  .bottom-nav { display: none !important; }
-}
-
-/* Large desktop: give the dashboard more breathing room. */
-@media (min-width: 1200px) {
-  .app { padding-left: 36px; padding-right: 36px; }
-  #home { gap: 16px; }
-  #home > .chart-card #chart { height: 470px; }
-}
-
-/* Tablet / narrow desktop: collapse the 12-column dashboard cleanly. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  #home { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  #home > .quick-actions-home { grid-column: 1 / 3; }
-  #home > .market-snapshot-card { grid-column: 3 / 5; }
-  #home > .master-command-card { grid-column: 5 / 7; }
-  #home > .price-card { grid-column: 1 / 3; }
-  #home > .grid { grid-column: 3 / 7; }
-  #home > .chart-card { grid-column: 1 / -1; }
-  #home > .setup:nth-of-type(9),
-  #home > .setup:nth-of-type(10),
-  #home > .trade-plan-card,
-  #home > .decision { grid-column: 1 / -1; }
 }
 
 
-/* Dedicated navigation screens */
-.dedicated-screen { width:100%; }
-.dedicated-screen > .setup, .dedicated-screen > .money, .dedicated-screen > .profile-card { min-width:0; }
-@media (min-width:768px) {
-  .dedicated-screen { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; align-items:start; }
-  .dedicated-screen > .section-title { grid-column:1 / -1; }
-  .dedicated-screen > section, .dedicated-screen > .setup, .dedicated-screen > .money, .dedicated-screen > .profile-card { grid-column:span 6; margin-bottom:0; }
-  #paper > .trade-history-card, #rank > .asset-customizer { grid-column:1 / -1; }
-  #brokerage > section, #arena > section { grid-column:span 6; }
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 767px) {
+
+  #home {
+    display: block !important;
+  }
+
+  #home > * {
+    width: 100% !important;
+    margin-bottom: 14px !important;
+  }
+
+  #mainChartCard #chart {
+    height: 340px !important;
+  }
+
+  #homeMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #marketNewsCard .news-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #home > section:has(#riskBar),
+  #home > section:has(#confidenceBar),
+  #home > .bunai-home-card {
+    display: none !important;
+  }
 }
+/* Private core controls */
+.connection-settings input, #paperTradeAmount, #favoriteInput {
+  max-width: 100%; min-width: 0; padding: 9px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+}
+.simulator-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.chart-quick-trade { display: flex; gap: 8px; padding-top: 10px; }
+.chart-quick-trade button { flex: 1; padding: 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+
+/* BunMoney dashboard repair: override legacy grid rules referencing removed elements */
+#home.screen:not(.active) { display:none !important; }
+#favoritesScreen.screen.active { display:block !important; width:100%; }
+.favorite-current {background:#1b202b !important;color:#a3e635 !important;border:1px solid #38402c;border-radius:10px;padding:12px 15px !important;white-space:nowrap}
+.chart-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.chart-heading h3{font-size:19px;margin:0}.chart-heading span{font-size:12px;color:#aab6c6}
+#favoritesScreen .favorites-add{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0 24px}
+#favoritesScreen .favorites-add input{flex:1 1 200px;min-height:44px;font-size:16px}
+#favoritesScreen .favorites-add button{min-height:44px;border-radius:9px;padding:10px 16px;background:#a3e635;color:#10150c}
+#favoriteFeedback{flex-basis:100%;min-height:18px;color:#b9c8d6;font-size:13px;margin:0}
+#favoritesList{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
+#favoritesList .favorite-market{min-width:0}
+#favoritesList .favorite-remove{min-width:36px;min-height:36px}
+@media(min-width:900px){
+.app{max-width:1600px !important;padding:28px clamp(20px,3vw,52px) 60px !important}
+#home.screen.active{display:grid !important;grid-template-columns:minmax(0,1.65fr) minmax(340px,1fr) !important;grid-template-areas:"header header" "search search" "connect connect" "metrics metrics" "price price" "chart technical" "chart levels" "plan paper" "history history" !important;gap:18px !important;align-items:start !important;grid-auto-rows:auto !important}
+#home.screen.active>*{grid-row:auto !important;grid-column:auto !important;width:100% !important;max-width:none !important;min-width:0 !important;margin:0 !important}
+#home.screen.active>.app-header{grid-area:header !important}
+#home.screen.active>.home-search{grid-area:search !important}
+#home.screen.active>.connection-settings{grid-area:connect !important}
+#home.screen.active>.home-metrics{grid-area:metrics !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+#home.screen.active>.home-price-card{grid-area:price !important}
+#home.screen.active>.home-chart{grid-area:chart !important}
+#home.screen.active>.technical-analysis-card{grid-area:technical !important}
+#home.screen.active>.trade-setup-card{grid-area:levels !important}
+#home.screen.active>.trade-plan-card{grid-area:plan !important}
+#home.screen.active>.paper-trading-card{grid-area:paper !important}
+#home.screen.active>.trade-history-card{grid-area:history !important}
+#mainChartCard #chart{height:560px !important}
+#home .setup,#home .card,#home .chart-card,#home .price-card{padding:22px !important}
+#home .row{min-height:46px}#home .row span,#home .row strong{font-size:14px !important}
+#home .card strong{font-size:18px}
+}
+@media(max-width:899px){
+#home.screen.active{display:flex !important;flex-direction:column;gap:14px}
+#home.screen.active>*{width:100% !important;margin:0 !important}
+#home .home-metrics{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+#mainChartCard #chart{height:clamp(320px,60vw,460px) !important}
+#home .home-search{flex-wrap:wrap}#home .home-search input{flex:1 1 200px}#home .home-search button{min-height:44px}
+}
+
+/* Market spike detector */
+.spike-board{margin:20px 0 !important;padding:24px !important;border-color:rgba(163,230,53,.27);background:linear-gradient(145deg,#151d21,#10151e)}
+.spike-board-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.spike-board-header h3{font-size:21px;margin:0 0 6px}
+.spike-board-header p,.spike-disclaimer{color:var(--muted);font-size:13px;line-height:1.6;margin:0}
+.spike-board-header button{background:var(--lime);color:#0b130b;padding:12px 18px;border:0;border-radius:10px;font-weight:800}
+.spike-board-header button:disabled{opacity:.55;cursor:wait}
+.spike-board-status{font-size:13px;color:#c5d0e0;margin:16px 0}
+.spike-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:14px}
+.spike-card{background:#111923;border:1px solid #344052;border-radius:14px;padding:17px;min-width:0}
+.spike-card.spike-up{border-top:3px solid #a3e635}
+.spike-card.spike-down{border-top:3px solid #f87171}
+.spike-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.spike-top strong:first-child{font-size:18px;color:white}
+.spike-move{font-size:15px;color:#a3e635}
+.spike-down .spike-move{color:#f87171}
+.spike-card p{font-size:13px;line-height:1.5;margin:12px 0;color:#d4deeb}
+.spike-card .spike-time{color:#96a6bc;font-size:12px;overflow-wrap:anywhere}
+.spike-card button{width:100%;min-height:44px;margin-top:8px;background:#a3e635;color:#111710;border-radius:10px;font-weight:800}
+.spike-empty{padding:20px;border-radius:12px;border:1px dashed #415064;color:var(--muted)}
+.spike-disclaimer{margin-top:16px}
+@media(max-width:600px){.spike-board{padding:16px !important}.spike-board-header button{width:100%}}
+
+/* Favorites market detail cards — one clear dashboard card per saved symbol. */
+#favoritesList{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:18px 0}
+#favoritesList .favorite-market{display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid #303c4c;border-radius:16px;background:#141b26;min-width:0}
+#favoritesList .favorite-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+#favoritesList .favorite-heading{display:flex;flex-direction:column;gap:8px;min-width:0}
+#favoritesList .favorite-heading strong{font-size:18px;color:#fff}
+#favoritesList .favorite-price{display:block;font-size:25px;font-weight:800;color:#b9fb55}
+#favoritesList .favorite-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#favoritesList .favorite-stats>div{background:#0e141d;padding:12px;border:1px solid #273242;border-radius:10px;min-width:0}
+#favoritesList .favorite-stats span{display:block;color:#9caec4;font-size:12px;margin-bottom:7px}
+#favoritesList .favorite-stats strong{display:block;font-size:15px;color:#f3f6fa;overflow-wrap:anywhere}
+#favoritesList .favorite-levels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#favoritesList .favorite-levels span{font-size:12px;color:#9caec4;display:flex;flex-direction:column;gap:6px}
+#favoritesList .favorite-levels strong{font-size:16px;color:#fff}
+#favoritesList .favorite-status{margin:0;color:#94a8be;font-size:11px;line-height:1.45}
+#favoritesList .favorite-remove{border-radius:10px;background:#44202a;color:#ffd8df;padding:7px 12px;font-size:20px}
+#favoritesList .favorite-open{width:100%;min-height:44px;border-radius:10px;background:#a3e635;color:#10180a;font-size:14px;margin-top:auto}
+
+/* Emperor Bunny v1 */
+.emperor-bunny-card{margin:20px 0 !important;padding:24px !important;border-color:rgba(163,230,53,.3);background:linear-gradient(140deg,#1d251b,#101620)}
+.emperor-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.emperor-icon{height:58px;width:58px;display:grid;place-items:center;border-radius:17px;background:#28361b;font-size:34px}
+.emperor-head h3{font-size:24px;margin:0 0 4px}.emperor-head p,.emperor-intro,.emperor-disclaimer{font-size:13px;line-height:1.55;color:#adb9c8}
+.emperor-head p{margin:0}.emperor-mode{margin-left:auto;background:rgba(163,230,53,.13);border:1px solid rgba(163,230,53,.35);color:#d4ff89;border-radius:99px;font-size:12px;padding:7px 12px}
+.emperor-intro{margin:16px 0}.emperor-quick{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
+.emperor-quick button{background:#263026;color:white;border:1px solid #445837;border-radius:10px;padding:10px 14px}
+.emperor-messages{background:#0d131b;border:1px solid #35404c;border-radius:15px;min-height:145px;max-height:360px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.emperor-messages p{margin:0;line-height:1.5;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.emperor-welcome{color:#b2c1d2}.emperor-user{align-self:flex-end;background:#2b3c1f;border-radius:12px;padding:12px;max-width:90%}
+.emperor-response{align-self:flex-start;background:#1e2937;border-radius:12px;padding:12px;max-width:95%}
+.emperor-form{display:flex;gap:10px;margin-top:12px}
+.emperor-form input{flex:1;min-width:0;min-height:46px;border:1px solid #3b4656;border-radius:10px;background:#0d131b;color:white;padding:11px;font:inherit}
+.emperor-form button{background:#a3e635;color:#10180c;border-radius:10px;padding:12px 18px;white-space:nowrap}
+.emperor-form button:disabled{opacity:.5}.emperor-disclaimer{margin:14px 0 0}
+@media(max-width:600px){.emperor-bunny-card{padding:16px !important}.emperor-form{flex-wrap:wrap}.emperor-form button{width:100%}}
+
+/* Emperor Bunny conversational AI and cited market news */
+.emperor-response .news-reference-list, .market-live-news .news-reference-list {display:flex;flex-wrap:wrap;gap:9px;margin-top:9px}
+.news-reference-list a{color:#baff65;text-decoration:underline;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.emperor-response>strong:not(:first-child){display:block;margin-top:12px}
+.market-live-news{margin:20px 0 !important;padding:24px !important;background:linear-gradient(140deg,#121e25,#10151d);border-color:#344a52}
+.live-news-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.live-news-head h3{margin:0 0 6px;font-size:22px}
+.live-news-head p,.news-footnote{font-size:13px;color:#acbace;line-height:1.5;margin:0}
+.live-news-head button,.news-symbol-row button{background:#a3e635;color:#10160d;padding:12px 15px;border-radius:10px}
+.live-news-head button:disabled{opacity:.6}
+.news-symbol-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:18px 0}
+.news-symbol-row label{font-size:13px;color:#b5c1ce}
+.news-symbol-row input{flex:1;min-width:180px;background:#0c141d;color:#fff;border:1px solid #425062;padding:12px;border-radius:10px;text-transform:uppercase}
+.live-news-status{font-size:13px;color:#adcbdd;margin-bottom:12px}
+.news-brief{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;color:#edf3f7;font-size:14px}
+.news-sources{margin:14px 0}.news-sources>strong{display:block;margin-bottom:8px}
+.news-footnote{margin-top:14px}
+@media(max-width:600px){.market-live-news{padding:16px !important}.live-news-head button{width:100%}}
+
+/* Independent Market News feed cards */
+#liveNewsBrief{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.market-news-story{padding:17px;background:#111a23;border:1px solid #344452;border-radius:12px}
+.market-news-story a{color:#e8f4f4;font-weight:750;font-size:15px;line-height:1.5;text-decoration:none;overflow-wrap:anywhere}
+.market-news-story a:hover{text-decoration:underline;color:#b8f66c}
+.market-news-meta{font-size:12px;color:#9caec4;margin:12px 0 0}
+
+.news-impact{margin-top:12px;border-top:1px solid #2c3a49;padding-top:11px;font-size:13px;line-height:1.5;color:#b5c6d3}
+.news-impact-label{display:block;color:#ccd9e6;text-transform:capitalize;font-size:12px;margin-bottom:4px}
+.news-impact[data-impact="potentially bullish"] .news-impact-label{color:#b9f768}
+.news-impact[data-impact="potentially bearish"] .news-impact-label{color:#ff8b98}
+.news-impact p{margin:0}
+
+/* Multi-market news list, direction labels, and pagination */
+.news-pages{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:16px}
+.news-pages button{background:#263927;color:#c9ff9b;padding:10px 16px;border-radius:10px;border:1px solid #53694b}
+.news-pages button:disabled{opacity:.4}
+.news-pages span,.news-timing{font-size:12px;line-height:1.6;color:#adc1d2}
+.news-timing{margin:10px 0}
+.market-news-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.market-news-top strong{color:#baff75;font-size:17px}
+.market-news-direction{font-size:12px;font-weight:bold;color:#b8c8d7}
+.market-news-direction[data-impact="potentially bullish"]{color:#a3e635}
+.market-news-direction[data-impact="potentially bearish"]{color:#ff8b98}
+.market-news-reason{font-size:13px;line-height:1.55;color:#afc1d1}
+.market-news-chart{border-radius:9px;background:#a3e635;color:#10170b;padding:9px 12px;margin-top:12px;font-weight:750}
+
+/* Market events, responsive and separate from AI */
+.bun-events{margin:20px 0 !important;padding:23px !important;background:#121c22}
+.events-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+.events-header h3{font-size:22px;margin:0 0 6px}.events-header p{color:#afc0ce;font-size:13px;margin:0}
+.events-header button,.event-controls button{border-radius:10px;background:#a3e635;color:#10180b;padding:11px 15px}
+.event-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0}
+.event-controls label{font-size:13px;color:#a5bed0}
+.event-controls input,.event-controls select{background:#0e1720;color:white;border:1px solid #465362;border-radius:10px;padding:10px;min-height:43px}
+.event-controls input{flex:1;min-width:190px}
+.events-status,.events-source{color:#aebfd1;font-size:12px;line-height:1.6}
+.events-source{margin:15px 0 0}.events-source a,.events-item a{color:#b7fc62}
+.events-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:13px}
+.events-item{background:#0f1721;border:1px solid #344454;border-radius:14px;padding:17px}
+.event-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.event-title strong{color:white;font-size:16px}.event-title span{font-size:11px;color:#bbf77c;text-transform:capitalize}
+.event-when{font-weight:bold;color:#e3f6d6;font-size:13px}
+.event-note,.event-meta{color:#afc1cf;font-size:12px;line-height:1.5}
+.events-pages{display:flex;justify-content:center;align-items:center;gap:13px;margin-top:16px}
+.events-pages button{padding:10px 14px;color:#d2ffb1;background:#243727;border-radius:10px}
+.events-pages button:disabled{opacity:.35}
+@media(max-width:600px){.bun-events{padding:15px !important}.events-header button{width:100%}}
+
+#eventSortFilter{min-width:150px}
+.event-controls button[data-action="clearEventTicker"]{background:#263342;color:#d3e4f5;border:1px solid #455264}
+
+.bot-dashboard {margin:24px auto; padding:20px; max-width:1100px; background:#14231f; color:#e5f4ec; border:1px solid #477360; border-radius:16px; overflow:auto}
+.bot-dashboard summary {cursor:pointer; font-size:1.2rem; font-weight:700}
+.bot-controls {display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.bot-dashboard button,.bot-dashboard select {padding:10px; border-radius:8px; border:1px solid #659b7c; background:#234b37; color:white}
+.bot-dashboard .bot-emergency {background:#8b1d2b; border-color:#ff7b8a}
+.bot-dashboard button:disabled {opacity:.5}
+.bot-dashboard table {border-collapse:collapse; font-size:.85rem; width:100%}
+.bot-dashboard td,.bot-dashboard th {padding:8px; text-align:left; border-bottom:1px solid #477360}
+.bot-dashboard pre {white-space:pre-wrap; overflow-wrap:anywhere}
+
+/* BunMoney brand refresh — additive, existing trading controls unchanged */
+.brand-mark{display:inline-block;filter:drop-shadow(0 0 12px rgba(163,230,53,.32))}
+.brand-beta{font-size:10px;letter-spacing:.16em;color:#101b0b;background:#a3e635;padding:4px 7px;border-radius:6px;vertical-align:middle}
+.app-header h1{letter-spacing:-.04em}
+.bun-welcome{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:18px;align-items:center;overflow:hidden;margin:0 0 18px;padding:25px 27px;border-radius:22px;border:1px solid rgba(163,230,53,.28);background:radial-gradient(circle at 82% 30%,rgba(163,230,53,.17),transparent 40%),linear-gradient(125deg,#14251e,#10131d 70%);box-shadow:0 18px 55px rgba(0,0,0,.22)}
+.bun-welcome:before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(163,230,53,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(163,230,53,.035) 1px,transparent 1px);background-size:32px 32px}
+.bun-welcome-copy{position:relative;z-index:1}
+.bun-eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:#bef264}
+.bun-welcome h2{font-size:clamp(27px,4vw,48px);line-height:1.08;letter-spacing:-.055em;margin:12px 0}
+.bun-welcome h2 em{font-style:normal;color:#a3e635}
+.bun-welcome p{max-width:490px;color:#b7c3ba;font-size:14px;line-height:1.65}
+.bun-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:17px}
+.bun-chips span{padding:8px 10px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:999px;color:#dce6df;font-size:11px}
+.bun-art{position:relative;display:grid;place-items:center;min-height:190px;isolation:isolate}
+.bun-orbit{position:absolute;border-radius:50%;border:1px solid rgba(163,230,53,.22);width:175px;height:175px;transform:rotate(-25deg) scaleY(.68)}
+.bun-orbit-two{width:145px;height:145px;transform:rotate(35deg) scaleY(.75);border-color:rgba(56,189,248,.3)}
+.bun-mascot{font-size:100px;line-height:1;filter:drop-shadow(0 16px 20px rgba(0,0,0,.38));animation:bunFloat 4s ease-in-out infinite}
+.bun-art-label{position:absolute;bottom:0;right:0;color:#9acb8d;letter-spacing:.18em;font-size:10px;font-weight:800}
+@keyframes bunFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@media(max-width:620px){.bun-welcome{grid-template-columns:minmax(0,1fr) 92px;padding:19px 15px;gap:6px}.bun-art{min-height:120px}.bun-mascot{font-size:66px}.bun-orbit{width:98px;height:98px}.bun-orbit-two{width:78px;height:78px}.bun-welcome p{font-size:12px}.bun-chips span{font-size:10px;padding:6px 8px}.bun-art-label{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.bun-mascot{animation:none}}
+
+/* BunMoney cartoon trading-terminal theme */
+.bun-welcome{grid-template-columns:minmax(160px,34%) minmax(0,1fr);min-height:245px;background:radial-gradient(ellipse at 28% 70%,rgba(73,255,26,.24),transparent 48%),linear-gradient(115deg,#080e0b,#09170c 65%,#07110a);border-color:#61d92a;box-shadow:0 0 0 1px rgba(123,255,43,.15),0 18px 50px rgba(0,0,0,.32)}
+.bun-welcome-copy{z-index:2}.bun-welcome h2{font-size:clamp(42px,7vw,94px);font-style:italic;font-weight:1000;letter-spacing:-.08em;white-space:nowrap;text-shadow:3px 5px 0 #07140b,0 0 24px rgba(99,255,0,.23)}
+.bun-title-light{color:#e7f0e9}.bun-crown{font-size:.38em;color:#a3e635;vertical-align:top;letter-spacing:0}.bun-welcome p{color:#d5ebd3}
+.bun-mascot-frame{align-self:end;display:flex;justify-content:center;align-items:end;position:relative;z-index:1}
+.bun-mascot-frame img{display:block;width:min(100%,360px);height:auto;max-height:265px;object-fit:contain;filter:drop-shadow(0 0 22px rgba(97,255,20,.27))}
+.bun-shortcuts{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;margin:-3px 0 18px;padding:5px 0 10px}
+.bun-shortcuts a{color:#e6f9df;background:#101914;border:1px solid #2b6330;padding:12px 15px;text-decoration:none;border-radius:12px;white-space:nowrap;font-size:12px;font-weight:800}
+.bun-shortcuts a:hover,.bun-shortcuts a:focus-visible{background:#20492a;border-color:#a3e635;outline:2px solid #a3e635}
+.bun-market-hub{padding:18px;margin-bottom:18px;border:1px solid #4ba837;border-radius:18px;background:linear-gradient(155deg,#101c15,#0a1010);box-shadow:0 10px 26px rgba(0,0,0,.25)}
+.bun-market-hub-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+.bun-market-hub h3{font-size:23px;margin:6px 0}.bun-scan-status{color:#b3f98b;font-size:11px;border:1px solid #376f38;padding:7px 9px;border-radius:999px}
+.bun-scan-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.bun-scan-grid a{display:flex;flex-direction:column;gap:9px;text-decoration:none;background:#0b1310;border:1px solid #2d5130;border-radius:13px;padding:15px 12px;min-height:100px;color:#e7f6e5;transition:border-color .15s,background .15s}
+.bun-scan-grid a:hover,.bun-scan-grid a:focus-visible{border-color:#a3e635;background:#17301c;outline:none}
+.bun-scan-grid strong{font-size:14px}.bun-scan-grid small{font-size:11px;line-height:1.5;color:#a9b9ab}
+.bun-scan-disclaimer{font-size:11px;color:#91a998;line-height:1.5;margin:13px 0 0}
+@media(max-width:850px){.bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.bun-welcome{grid-template-columns:100px minmax(0,1fr);min-height:175px;padding:12px}.bun-welcome h2{font-size:clamp(29px,8vw,43px)}.bun-welcome p{font-size:11px}.bun-mascot-frame img{max-height:170px}.bun-welcome .bun-chips{gap:4px}.bun-welcome .bun-chips span{font-size:9px}.bun-market-hub-heading{align-items:start;flex-direction:column}.bun-scan-grid{gap:7px}.bun-scan-grid a{padding:12px 10px;min-height:94px}.bun-scan-grid strong{font-size:12px}}
+
+/* Command dashboard v2 — scoped desktop grid; no trading behavior changes */
+#home{min-width:0}
+.bun-command-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 12px;color:#eaffdc}
+.bun-command-heading strong{font-size:19px}.bun-command-heading span{font-size:11px;color:#98b99b}
+.bun-command-grid{display:grid;grid-template-columns:minmax(215px, .9fr) minmax(0,2fr) minmax(260px,1.08fr);align-items:start;gap:14px;margin-bottom:20px}
+.bun-command-grid>div{min-width:0}
+.bun-command-scanner .bun-market-hub{margin:0;height:100%;padding:15px}
+.bun-command-scanner .bun-market-hub-heading{align-items:flex-start;flex-direction:column;gap:6px}
+.bun-command-scanner .bun-market-hub h3{font-size:21px}
+.bun-command-scanner .bun-scan-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.bun-command-scanner .bun-scan-grid a{min-height:0;padding:12px 13px;gap:5px}
+.bun-command-chart{border:1px solid #356f2d;border-radius:17px;padding:13px;background:linear-gradient(145deg,#0d1611,#0b1018)}
+.bun-command-chart #homeSearch{display:flex;flex-wrap:wrap;gap:7px}
+.bun-command-chart #homeSearch input{flex:1 1 140px;min-width:0}
+.bun-command-chart #homePriceCard{margin-bottom:12px}
+.bun-command-chart #homeMetrics{margin-bottom:12px}
+.bun-command-chart #mainChartCard{margin:0;min-width:0}
+.bun-command-chart .chart-timeframes{flex-wrap:wrap}
+.bun-command-chart .chart-wrap{min-width:0}
+.bun-command-bot .bot-dashboard{display:block;width:100%;max-width:none;margin:0;min-width:0;overflow-wrap:anywhere;border-color:#397d35}
+.bun-command-bot .bot-dashboard>summary{font-size:15px;line-height:1.4}
+.bun-command-bot .bot-tabs{display:flex;flex-wrap:wrap}
+.bun-command-bot .bot-dashboard table{display:block;overflow-x:auto;max-width:100%}
+.bun-command-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.bun-command-stats>div{min-width:0;min-height:92px;border:1px solid #4baf37;border-radius:15px;padding:15px;background:linear-gradient(140deg,#102314,#0a130d);color:#d7f5d0;box-shadow:0 6px 22px rgba(0,0,0,.2)}
+.bun-command-stats>div:nth-child(3){border-color:#d5aa2d;background:linear-gradient(140deg,#2c2510,#14120b)}
+.bun-command-stats>div:nth-child(4){border-color:#d86a5e;background:linear-gradient(140deg,#301813,#150e0e)}
+.bun-command-stats strong{display:block;margin-top:8px;font-size:clamp(16px,1.8vw,25px);overflow-wrap:anywhere}
+.bun-connection-panel{margin-bottom:18px}
+@media(max-width:1100px){.bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}.bun-command-bot{grid-column:1/-1}.bun-command-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:690px){.bun-command-grid{display:flex;flex-direction:column}.bun-command-grid>div{width:100%}.bun-command-chart{order:0}.bun-command-scanner{order:1}.bun-command-bot{order:2}.bun-command-scanner .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bun-command-heading{align-items:flex-start;flex-direction:column}.bun-command-stats{gap:8px}.bun-command-stats>div{padding:11px;min-height:78px}.bun-command-stats strong{font-size:17px}}
+
+/* FIX: Legacy #home named grid areas were visually moving the original
+   chart/history ahead of the BunMoney hero and command dashboard. Keep the
+   document order and let the nested command grid own its columns. */
+#home.screen.active{
+  display:block !important;
+  grid-template-areas:none !important;
+  grid-template-columns:none !important;
+}
+#home.screen.active > *{
+  grid-area:auto !important;
+  grid-column:auto !important;
+  grid-row:auto !important;
+  width:100% !important;
+  margin-bottom:14px !important;
+}
+#home.screen.active > .bun-command-grid{
+  display:grid !important;
+  grid-template-columns:minmax(200px,.85fr) minmax(0,1.9fr) minmax(260px,1fr) !important;
+  align-items:start;
+  gap:14px;
+}
+#home.screen.active > .bun-command-grid > *{min-width:0}
+#home.screen.active > .bun-command-stats{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+}
+#home.screen.active > .bun-welcome{
+  display:grid !important;
+  grid-template-columns:minmax(160px,34%) minmax(0,1fr) !important;
+}
+#home.screen.active > .bun-shortcuts{display:flex !important}
+#home.screen.active .bun-command-chart .home-metrics{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+}
+@media(max-width:1120px){
+  #home.screen.active > .bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) !important}
+  #home.screen.active > .bun-command-grid > .bun-command-bot{grid-column:1/-1 !important}
+  #home.screen.active > .bun-command-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+}
+@media(max-width:690px){
+  #home.screen.active > .bun-command-grid{display:flex !important;flex-direction:column}
+  #home.screen.active > .bun-command-grid > *{width:100%}
+  #home.screen.active > .bun-welcome{grid-template-columns:100px minmax(0,1fr) !important}
+}
+
+/* Structural command-center layout: override the legacy named-area home grid. */
+#home.screen.active{display:block !important;grid-template:none !important;grid-template-areas:none !important}
+#home.screen.active > *{grid-area:auto !important;grid-column:auto !important;grid-row:auto !important;width:100% !important;min-width:0 !important;margin:0 0 16px !important}
+#home.screen.active > .bun-welcome{display:grid !important;grid-template-columns:minmax(210px,31%) minmax(0,1fr) !important;min-height:290px;align-items:center;padding:24px 32px !important}
+#home.screen.active > .bun-welcome .bun-mascot-frame img{max-height:285px;width:100%}
+#home.screen.active > .bun-welcome h2{font-size:clamp(44px,6vw,84px)}
+#home.screen.active > .bun-shortcuts{display:flex !important;flex-wrap:wrap;overflow:visible;gap:10px}
+#home.screen.active > .bun-shortcuts a{flex:1 1 130px;text-align:center}
+#home.screen.active > .bun-command-heading{display:flex !important}
+#home.screen.active > .bun-command-stats{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+#home.screen.active > .bun-command-grid{display:grid !important;grid-template-columns:minmax(200px,.8fr) minmax(0,1.7fr) minmax(270px,1fr) !important;gap:14px;align-items:start}
+#home.screen.active > .bun-command-grid > div{min-width:0}
+#home.screen.active .bun-command-scanner .bun-scan-grid{grid-template-columns:1fr !important}
+#home.screen.active .bun-command-chart .home-metrics{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+#home.screen.active .bun-command-chart .home-search{display:flex !important;flex-wrap:wrap}
+#home.screen.active .bun-command-chart .home-price-card{margin-bottom:12px !important}
+#home.screen.active .bun-command-chart .home-chart{margin-bottom:0 !important}
+#home.screen.active .bun-command-bot .bot-dashboard{width:100% !important;max-width:none !important;margin:0 !important;display:block}
+#home.screen.active .bun-command-bot .bot-stats{display:none}
+#home.screen.active .bun-command-bot .bot-tabs{flex-wrap:wrap}
+#home.screen.active .bun-command-bot .bot-dashboard table{display:block;overflow-x:auto}
+@media(max-width:1150px){
+#home.screen.active > .bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr) !important}
+#home.screen.active > .bun-command-grid > .bun-command-bot{grid-column:1/-1 !important}
+#home.screen.active > .bun-command-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+}
+@media(max-width:700px){
+#home.screen.active > .bun-welcome{grid-template-columns:110px minmax(0,1fr) !important;min-height:180px;padding:12px !important}
+#home.screen.active > .bun-welcome h2{font-size:clamp(28px,7vw,46px)}
+#home.screen.active > .bun-welcome .bun-mascot-frame img{max-height:180px}
+#home.screen.active > .bun-command-grid{display:flex !important;flex-direction:column}
+#home.screen.active > .bun-command-grid > div{width:100%}
+#home.screen.active > .bun-command-grid .bun-command-chart{order:0}
+#home.screen.active > .bun-command-grid .bun-command-scanner{order:1}
+#home.screen.active > .bun-command-grid .bun-command-bot{order:2}
+}
+
+/* V3 structural dashboard: overrides legacy positional home-grid styles */
+.app>.bun-welcome{display:grid !important;grid-template-columns:minmax(180px,32%) minmax(0,1fr) !important;width:100%;margin:0 0 14px !important;min-height:290px}
+.app>.bun-welcome .bun-mascot-frame img{max-height:290px;width:min(100%,390px)}
+.app>.bun-shortcuts{display:flex !important;justify-content:flex-start;flex-wrap:wrap;overflow:visible;margin-bottom:16px}
+.app>.bun-shortcuts a{flex:0 0 auto}
+#home.screen.active{display:block !important;grid-template:none !important;grid-template-areas:none !important}
+#home.screen.active>*{grid-area:auto !important;grid-column:auto !important;grid-row:auto !important;width:100% !important;margin-bottom:15px !important}
+#home.screen.active>.bun-command-grid{display:grid !important;grid-template-columns:minmax(205px,.9fr) minmax(0,1.85fr) minmax(255px,1.1fr) !important;gap:13px;align-items:start}
+#home.screen.active>.bun-command-grid>*{min-width:0}
+#home.screen.active>.bun-command-grid .bun-market-hub{margin:0 !important}
+#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:1fr !important}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-search{display:flex;flex-wrap:wrap}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-metrics{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+#home.screen.active>.bun-command-grid .bun-command-chart .home-chart{width:100% !important;max-width:100%;margin:0 !important}
+#home.screen.active>.bun-command-grid .bun-command-chart #chart{width:100% !important;height:350px !important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{width:100%;max-width:none;margin:0;padding:12px}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard>summary{font-size:15px}
+#home.screen.active>.bun-account-overview .bot-stats{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:10px}
+#home.screen.active>.bun-account-overview .bot-stats>div{min-width:0}
+@media(max-width:1180px){#home.screen.active>.bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) !important}#home.screen.active>.bun-command-grid>.bun-command-bot{grid-column:1/-1 !important}}
+@media(max-width:700px){.app>.bun-welcome{grid-template-columns:105px minmax(0,1fr) !important;min-height:190px;padding:12px !important}.app>.bun-welcome h2{font-size:clamp(30px,8vw,48px)}.app>.bun-shortcuts{flex-wrap:nowrap;overflow-x:auto}#home.screen.active>.bun-command-grid{display:flex !important;flex-direction:column}#home.screen.active>.bun-command-grid>*{width:100%}#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}#home.screen.active>.bun-account-overview .bot-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important}}
+
+/* BunMoney V4 visual identity: original mascot, restrained neon terminal */
+:root{--bun-lime:#a3f72d;--bun-border:rgba(140,235,66,.38);--bun-panel:#0c1510;--bun-ink:#eaf6e6}
+body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.16),transparent 78%),#080d0b}
+.app>.bun-welcome{
+  min-height:305px!important;
+  background:
+    radial-gradient(ellipse at 16% 85%,rgba(110,255,33,.24),transparent 39%),
+    linear-gradient(90deg,rgba(7,18,9,.35),rgba(4,11,7,.4)),
+    repeating-linear-gradient(0deg,transparent 0 31px,rgba(112,231,50,.045) 32px),
+    repeating-linear-gradient(90deg,transparent 0 31px,rgba(112,231,50,.045) 32px),
+    #08130a!important;
+  border:1px solid #4eaa22!important;
+  box-shadow:inset 0 0 55px rgba(91,222,23,.07),0 14px 42px rgba(0,0,0,.28)!important;
+  border-radius:20px!important;
+}
+.app>.bun-welcome:after{content:"";position:absolute;right:-6%;bottom:-65%;width:60%;height:120%;border:1px solid rgba(139,255,39,.1);border-radius:50%;pointer-events:none}
+.app>.bun-welcome .bun-mascot-frame img{max-height:305px!important;filter:drop-shadow(0 0 30px rgba(126,255,34,.24)) drop-shadow(0 12px 9px rgba(0,0,0,.5))}
+.app>.bun-welcome .bun-eyebrow{color:#c5ff69;font-size:12px;letter-spacing:.2em}
+.app>.bun-welcome h2{font-weight:1000;line-height:1.03;letter-spacing:-.075em;text-shadow:0 3px 0 #020903,0 0 25px rgba(105,245,36,.19)}
+.app>.bun-welcome h2 em{color:#a4ff31}
+.app>.bun-welcome .bun-chips span{border-color:rgba(147,255,54,.18);background:rgba(8,20,11,.75);color:#e1f5da}
+.app>.bun-shortcuts{gap:9px!important;margin:0 0 17px!important}
+.app>.bun-shortcuts a{border:1px solid #365b32!important;background:linear-gradient(#132217,#0b160e)!important;border-radius:12px!important;padding:12px 16px!important;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+.app>.bun-shortcuts a:hover,.app>.bun-shortcuts a:focus-visible{background:#264e20!important;border-color:#a3f72d!important}
+#home .bun-market-hub,#home .bun-command-chart,#home .bot-dashboard{background:linear-gradient(150deg,#101d15,#0a120e)!important;border:1px solid var(--bun-border)!important;border-radius:18px!important;box-shadow:0 8px 30px rgba(0,0,0,.16)}
+#home .bun-market-hub h3,#home .bun-command-heading strong{color:#f1faec;letter-spacing:-.02em}
+#home .bun-scan-grid a{background:linear-gradient(130deg,#13241a,#0a140e)!important;border:1px solid #3e6840!important;border-radius:12px!important;min-height:74px;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+#home .bun-scan-grid a:hover,#home .bun-scan-grid a:focus-visible{transform:translateY(-2px);border-color:#a3f72d!important;box-shadow:0 0 0 1px rgba(163,247,45,.25),0 8px 22px rgba(0,0,0,.2)}
+#home .bun-account-overview .bot-stats>div{border:1px solid #3e7740!important;background:linear-gradient(145deg,#142b1b,#0c1711)!important;border-radius:14px!important;box-shadow:inset 0 1px rgba(255,255,255,.05)}
+#home .bun-account-overview .bot-stats>div:nth-child(3){border-color:#88762f!important;background:linear-gradient(145deg,#28240f,#13140c)!important}
+#home .bun-account-overview .bot-stats>div:nth-child(4){border-color:#874e3f!important;background:linear-gradient(145deg,#291b16,#14110f)!important}
+#home .bot-dashboard summary{color:#c7ff87!important}
+#home .bot-tabs button.active{background:#86d729!important;color:#071108!important;border-color:#a3f72d!important;font-weight:800}
+#home .bot-dashboard [data-section]{background:#0e1a12!important;border-color:#315936!important}
+@media(max-width:700px){.app>.bun-welcome{min-height:190px!important}.app>.bun-welcome .bun-mascot-frame img{max-height:190px!important}.app>.bun-shortcuts a{padding:10px 12px!important}}
+@media(prefers-reduced-motion:reduce){#home .bun-scan-grid a{transition:none}#home .bun-scan-grid a:hover{transform:none}}
+
+/* V5: structural three-column command center, not visual DOM reordering. */
+#home.screen.active>.bun-command-grid{
+ display:grid!important;
+ grid-template-columns:minmax(195px,.85fr) minmax(0,2fr) minmax(250px,1.05fr)!important;
+ gap:14px!important;align-items:start!important;
+ width:100%!important;min-width:0;
+}
+#home.screen.active>.bun-command-grid>.bun-command-scanner,
+#home.screen.active>.bun-command-grid>.bun-command-chart,
+#home.screen.active>.bun-command-grid>.bun-command-bot{
+ grid-area:auto!important;grid-row:auto!important;grid-column:auto!important;
+ width:auto!important;min-width:0!important;max-width:100%;
+}
+#home.screen.active>.bun-command-grid .bun-market-hub{margin:0!important;padding:15px!important}
+#home.screen.active>.bun-command-grid .bun-market-hub-heading{display:flex;flex-direction:column;align-items:start;gap:7px}
+#home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:1fr!important}
+#home.screen.active>.bun-command-grid .bun-scan-grid a{min-height:68px!important}
+#home.screen.active>.bun-command-grid .bun-command-chart{padding:12px!important}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-search{display:flex!important;flex-wrap:wrap;gap:7px}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-search input{flex:1 1 140px;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-metrics{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-metrics>.card{min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart>.home-chart{max-width:100%;width:100%!important;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart .chart-wrap{width:100%;min-width:0}
+#home.screen.active>.bun-command-grid .bun-command-chart #chart{max-width:100%;width:100%!important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{display:block!important;margin:0!important;max-width:100%;width:100%;min-width:0;overflow-wrap:anywhere}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard>summary{font-size:16px}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-stats{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+#home.screen.active>.bun-command-grid .bun-command-bot .bot-tabs{flex-wrap:wrap}
+@media(max-width:1130px){
+ #home.screen.active>.bun-command-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr)!important}
+ #home.screen.active>.bun-command-grid>.bun-command-bot{grid-column:1/-1!important}
+}
+@media(max-width:700px){
+ #home.screen.active>.bun-command-grid{display:flex!important;flex-direction:column!important}
+ #home.screen.active>.bun-command-grid>.bun-command-chart{order:0;width:100%!important}
+ #home.screen.active>.bun-command-grid>.bun-command-scanner{order:1;width:100%!important}
+ #home.screen.active>.bun-command-grid>.bun-command-bot{order:2;width:100%!important}
+ #home.screen.active>.bun-command-grid .bun-scan-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* V6: keep the scanner, usable chart and Python bot in one desktop row.
+   Override V5's 1130px two-column breakpoint that pushed the bot below. */
+@media (min-width: 960px){
+  #home.screen.active>.bun-command-grid{
+    display:grid!important;
+    grid-template-columns:minmax(170px, 0.78fr) minmax(0, 2.45fr) minmax(220px, 1fr)!important;
+    gap:12px!important;
+    align-items:start!important;
+  }
+  #home.screen.active>.bun-command-grid>.bun-command-scanner,
+  #home.screen.active>.bun-command-grid>.bun-command-chart,
+  #home.screen.active>.bun-command-grid>.bun-command-bot{
+    grid-column:auto!important;
+    grid-row:auto!important;
+    min-width:0!important;
+  }
+  #home.screen.active>.bun-command-grid .bun-command-bot .bot-dashboard{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+  }
+  #home.screen.active>.bun-command-grid .bun-command-chart .chart-timeframes{
+    display:flex;
+    flex-wrap:wrap;
+  }
+}
+@media (min-width: 701px) and (max-width: 959px){
+  #home.screen.active>.bun-command-grid{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.65fr)!important;
+    gap:12px!important;
+  }
+  #home.screen.active>.bun-command-grid>.bun-command-bot{
+    grid-column:1/-1!important;
+  }
+}
+
+/* Interactive, paper-only watchlist scanner cards. */
+#home .bun-scan-grid button[data-scanner-mode]{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;width:100%;min-height:68px;padding:12px 13px;background:linear-gradient(130deg,#13241a,#0a140e);border:1px solid #3e6840;border-radius:12px;color:#e7f6e5;cursor:pointer;font:inherit}
+#home .bun-scan-grid button[data-scanner-mode]:hover,#home .bun-scan-grid button[data-scanner-mode]:focus-visible{border-color:#a3f72d;outline:2px solid #5a9c41;outline-offset:1px}
+#home .bun-scan-grid button[data-scanner-mode]:disabled{opacity:.55;cursor:wait}
+#bun-scanner-status{font-size:12px;margin:12px 0;color:#b3f98b}
+#bun-scanner-results{display:grid;gap:8px;max-height:440px;overflow:auto}
+#bun-scanner-results .feature-card{padding:10px;overflow-wrap:anywhere}
+#bun-scanner-results .feature-card p{font-size:12px;line-height:1.5}
+
+/* Forex and metals presets are watchlist-only; paper bot markets are separate. */
+.bun-market-presets{margin-top:14px;padding:12px;border:1px solid #36593a;border-radius:12px}
+.bun-market-presets>strong{font-size:13px;color:#e4f8d9}
+.bun-market-presets p{font-size:11px;line-height:1.5;color:#b3c4b3}
+.bun-preset-grid{display:flex;flex-wrap:wrap;gap:6px}
+.bun-preset-grid button{font:inherit;font-size:11px;padding:7px 9px;border-radius:8px;border:1px solid #3e6840;background:#12261a;color:#e5f8e3;cursor:pointer}
+.bun-preset-grid button:hover,.bun-preset-grid button:focus-visible{border-color:#a3f72d;outline-offset:2px}
+.bun-preset-grid button:disabled{opacity:.55;cursor:wait}
+
+/* Opt-in historical God Mode overlay, never an execution control. */
+.bun-godmode-controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:9px 12px;background:#101d15;border:1px solid #36593a;border-radius:10px;margin:8px 0}
+.bun-godmode-controls label{font-size:13px;font-weight:700;color:#c8f7a1;cursor:pointer}
+.bun-godmode-controls input{accent-color:#a3e635}
+#bunGodModeStatus{font-size:11px;color:#b5cbb8}
+
+/* Historical God Mode performance panel (simulation, not trade advice). */
+.bun-god-performance{margin:10px 0;padding:12px;border:1px solid #45653b;border-radius:12px;background:#101c15}
+.bun-god-performance[hidden]{display:none}
+.bun-god-performance h4{margin:0 0 8px;color:#c9f9a4}
+.bun-god-performance p,.bun-god-performance small{font-size:11px;line-height:1.5;color:#b5cbb8}
+#bunGodPerformanceMetrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}
+.bun-god-metric{display:flex;flex-direction:column;gap:5px;padding:9px;border:1px solid #34583c;border-radius:8px}
+.bun-god-metric span{font-size:11px;color:#b5cbb8}
+.bun-god-metric strong{font-size:14px;color:#e8f8e4}
