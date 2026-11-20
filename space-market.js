@@ -17,6 +17,8 @@
   const latestOut = document.getElementById("spaceMarketLatest");
   const trailOut = document.getElementById("spaceMarketTrail");
   const chartPanel = document.getElementById("spaceMarketChartPanel");
+  const separateCanvas = document.getElementById("spaceSeparateChart");
+  const separateCtx = separateCanvas ? separateCanvas.getContext("2d") : null;
   const stage = document.getElementById("spaceMarketStage");
   const toggleButtons = [...document.querySelectorAll("[data-space-layout]")];
   const points = [];
@@ -24,7 +26,7 @@
     x:((i*73.17)%997)/997,y:((i*137.31)%991)/991,
     r:.35+((i*19)%13)/10,a:.2+((i*7)%7)/10
   }));
-  let lastValue = null, currentSymbol = "—", currentChange = "", width = 0, height = 0, frame = 0, raf = 0;
+  let lastValue = null, currentSymbol = "—", currentChange = "", width = 0, height = 0, frame = 0, raf = 0, layoutMode = "overlay";
   const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function parsePrice(text) {
@@ -83,7 +85,7 @@
     for(let x=0;x<w;x+=Math.max(42,w/9)){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
     for(let y=0;y<h;y+=42){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
     // Draw price path only from observed Trading Core price updates.
-    if(points.length>1){
+    if(points.length>1 && layoutMode==="overlay"){
       const vals=points.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),range=max-min||Math.max(Math.abs(max)*.001,.000001);
       const pad=30,plotW=w-pad*2,plotH=h-pad*2;
       const coords=points.map((p,i)=>({x:pad+(i/(points.length-1))*plotW,y:pad+(1-(p.value-min)/range)*plotH}));
@@ -102,10 +104,10 @@
       ctx.save();ctx.translate(w/2,h/2);ctx.shadowColor="#818cf8";ctx.shadowBlur=20;ctx.fillStyle="#dbeafe";
       ctx.beginPath();ctx.moveTo(0,-22);ctx.quadraticCurveTo(14,-8,10,14);ctx.lineTo(0,9);ctx.lineTo(-10,14);ctx.quadraticCurveTo(-14,-8,0,-22);ctx.fill();
       ctx.shadowBlur=0;ctx.fillStyle="#818cf8";ctx.beginPath();ctx.moveTo(-5,12);ctx.lineTo(0,26);ctx.lineTo(5,12);ctx.fill();ctx.restore();
-      ctx.fillStyle="#a5b4fc";ctx.font="12px Arial";ctx.textAlign="center";ctx.fillText("ANALYZE A MARKET TO BEGIN FLIGHT TRACKING",w/2,h/2+58);ctx.textAlign="start";
+      if(points.length===0){ctx.fillStyle="#a5b4fc";ctx.font="12px Arial";ctx.textAlign="center";ctx.fillText("ANALYZE A MARKET TO BEGIN FLIGHT TRACKING",w/2,h/2+58);ctx.textAlign="start";}
     }
   }
-  function animate(){frame++;if(!reducedMotion)draw();raf=requestAnimationFrame(animate);}
+  function animate(){frame++;if(!reducedMotion){draw();drawSeparate();}raf=requestAnimationFrame(animate);}
   function setLayout(layout){
     const overlay=layout==="overlay";
     if(chartPanel) chartPanel.hidden=overlay;
