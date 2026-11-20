@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BunMoney — Market Command Center</title>
-  <link rel="stylesheet" href="style.css?v=layout-v6">
+  <link rel="stylesheet" href="style.css?v=layout-v6">\n  <link rel="stylesheet" href="space-market.css?v=phase-1">
 </head>
 
 <body>
@@ -21,7 +21,7 @@
     <nav class="bun-shortcuts" aria-label="BunMoney tools">
       <a href="#homeSearch">⌕ Markets</a><a href="#mainChartCard">▥ Chart</a><a href="#bun-scanner-guide">◉ Scanner</a><a href="#spikeBoard">⚡ Movers</a><a href="#bun-scanner-guide">★ Watchlist</a>
     </nav>
-<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button></nav>
+<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button><button class="nav-button" data-action="showScreen" data-screen="spaceMarketScreen">🚀 Space Market</button></nav>
 <main id="home" class="screen active">
 
     <header class="app-header">
@@ -343,6 +343,40 @@
 
   </main>
 
+  <section id="spaceMarketScreen" class="screen space-market-screen" aria-label="BunMoney Space Market">
+    <div class="space-market-shell">
+      <header class="space-market-topbar">
+        <div><div class="space-market-kicker">BUNMONEY / GALAXY EXPLORER</div><h2 class="space-market-title">🚀 Space Market</h2></div>
+        <span class="space-market-mode">PAPER-FIRST EXPERIENCE</span>
+      </header>
+      <div class="space-market-toolbar">
+        <div class="space-market-symbol"><strong id="spaceMarketSymbol">—</strong><span id="spaceMarketPrice" class="space-market-price">—</span><span id="spaceMarketChange" class="space-market-change">Awaiting market data</span></div>
+        <div class="space-market-toggle" role="group" aria-label="Chart layout">
+          <button type="button" data-space-layout="overlay" aria-pressed="true">Hologram</button>
+          <button type="button" data-space-layout="separate" aria-pressed="false">Separate chart</button>
+        </div>
+      </div>
+      <div id="spaceMarketStage" class="space-market-stage">
+        <div class="space-market-hud"><small>Flight telemetry</small><strong>TOP-DOWN VIEW</strong></div>
+        <div class="space-market-hud space-market-hud-right"><small>Observed updates</small><strong id="spaceMarketTrail">0 captured updates</strong></div>
+        <canvas id="spaceFlightCanvas" role="img" aria-label="Top-down rocket visualization with a trail based on observed market price updates"></canvas>
+      </div>
+      <div class="space-market-caption"><span>GALAXY EXPLORER · TOP-DOWN CAMERA</span><span id="spaceMarketStatus" role="status" aria-live="polite">Awaiting market data</span></div>
+      <div id="spaceMarketChartPanel" class="space-market-chart-panel" hidden>
+        <h4>SEPARATE PRICE CHART · OBSERVED MARKET HISTORY</h4>
+        <canvas id="spaceSeparateChart" aria-label="Separate chart of observed market price updates"></canvas>
+        <p style="margin-top:7px">Latest observed price: <strong id="spaceMarketLatest">—</strong></p>
+      </div>
+      <div class="space-market-metrics">
+        <div class="space-market-metric"><span>Camera</span><strong>Top-down</strong></div>
+        <div class="space-market-metric"><span>Chart mode</span><strong>Hologram / Separate</strong></div>
+        <div class="space-market-metric"><span>Price source</span><strong>Trading Core</strong></div>
+      </div>
+      <p class="space-market-note">Phase 1 visual preview. This screen mirrors the selected symbol and price from Trading Core when its data updates. It does not create simulated price movement, open trades, or change your existing trading controls.</p>
+      <div class="space-market-actions"><button type="button" data-action="showScreen" data-screen="home">← Back to Trading Core</button></div>
+    </div>
+  </section>
+
   <section class="setup emperor-bunny-card" id="emperorBunny" aria-label="Emperor Bunny assistant">
     <div class="emperor-head">
       <div class="emperor-icon" aria-hidden="true">🐰</div>
@@ -437,6 +471,6 @@
   <script src="script.js"></script>
 
 <script src="bot-dashboard.js?v=upgrade-v2-20261111" defer></script>
-<script src="dashboard-layout.js?v=layout-v5" defer></script>
+<script src="dashboard-layout.js?v=layout-v5" defer></script>\n<script src="space-market.js?v=phase-1" defer></script>
 </body>
 </html>

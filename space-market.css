@@ -1,0 +1,42 @@
+/* BunMoney Space Market — Phase 1 visual shell */
+.space-market-screen { color:#eef4ff; }
+.space-market-shell { overflow:hidden; border:1px solid rgba(125,151,255,.24); border-radius:22px; background:linear-gradient(155deg,#080d22 0%,#10102d 52%,#080b19 100%); box-shadow:0 18px 55px rgba(0,0,0,.34),inset 0 0 45px rgba(92,83,255,.08); }
+.space-market-topbar { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:17px 18px;border-bottom:1px solid rgba(145,163,255,.15); }
+.space-market-kicker { color:#9aaeff;font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase; }
+.space-market-title { margin:4px 0 0;font-size:clamp(20px,4vw,29px);letter-spacing:-.6px; }
+.space-market-mode { display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(74,222,128,.28);border-radius:999px;padding:7px 10px;color:#86efac;background:rgba(34,197,94,.09);font-size:10px;font-weight:800;letter-spacing:.8px; }
+.space-market-mode:before { content:"";width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80; }
+.space-market-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 16px; }
+.space-market-symbol { display:flex;align-items:baseline;gap:10px;flex-wrap:wrap; }
+.space-market-symbol strong { font-size:18px;letter-spacing:.5px; }
+.space-market-price { color:#fff;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums; }
+.space-market-change { color:#9ca9c7;font-size:12px; }
+.space-market-change.up { color:#6ee7b7; }.space-market-change.down { color:#fda4af; }
+.space-market-toggle { display:flex;gap:6px;padding:4px;border:1px solid rgba(153,169,255,.2);border-radius:12px;background:rgba(5,10,29,.68); }
+.space-market-toggle button { margin:0!important;padding:8px 11px;border:1px solid transparent;border-radius:8px;background:transparent;color:#aeb9d8;font-size:11px; }
+.space-market-toggle button[aria-pressed="true"] { color:#fff;background:rgba(99,102,241,.25);border-color:rgba(129,140,248,.45); }
+.space-market-stage { position:relative;min-height:320px;margin:0 12px 12px;overflow:hidden;border:1px solid rgba(120,145,255,.17);border-radius:17px;background:radial-gradient(ellipse at 50% 44%,rgba(57,48,139,.32),transparent 47%),radial-gradient(ellipse at 15% 85%,rgba(15,93,145,.16),transparent 38%),#070b1d; }
+.space-market-stage:before,.space-market-stage:after { content:"";position:absolute;pointer-events:none;border:1px solid rgba(130,151,255,.09);border-radius:50%;width:70%;height:120%;left:15%;top:-10%;transform:rotate(-22deg); }
+.space-market-stage:after { width:45%;left:28%;transform:rotate(25deg);border-color:rgba(130,151,255,.06); }
+#spaceFlightCanvas { position:relative;z-index:1;display:block;width:100%;height:320px; }
+.space-market-hud { position:absolute;z-index:2;left:13px;top:12px;display:flex;flex-direction:column;gap:4px;pointer-events:none; }
+.space-market-hud small { color:#8e9dc5;font-size:9px;letter-spacing:1.2px;text-transform:uppercase; }
+.space-market-hud strong { color:#dbeafe;font-size:13px;font-variant-numeric:tabular-nums; }
+.space-market-hud-right { left:auto;right:13px;text-align:right; }
+.space-market-caption { display:flex;justify-content:space-between;gap:10px;padding:0 17px 14px;color:#8290b4;font-size:10px; }
+.space-market-chart-panel { margin:0 12px 12px;padding:14px;border:1px solid rgba(120,145,255,.17);border-radius:15px;background:rgba(5,10,28,.78); }
+.space-market-chart-panel[hidden] { display:none!important; }
+.space-market-chart-panel h4 { margin:0 0 8px;font-size:12px;color:#c7d2fe;letter-spacing:.7px; }
+.space-market-chart-panel p { margin:0;color:#93a1c4;font-size:12px;line-height:1.5; }
+.space-market-metrics { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 12px 12px; }
+.space-market-metric { min-width:0;padding:11px;border:1px solid rgba(120,145,255,.14);border-radius:12px;background:rgba(8,14,37,.72); }
+.space-market-metric span { display:block;color:#8796ba;font-size:10px; }
+.space-market-metric strong { display:block;margin-top:5px;color:#e0e7ff;font-size:13px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums; }
+.space-market-note { margin:0 12px 14px;padding:10px 12px;border-radius:10px;background:rgba(99,102,241,.08);color:#a5b4d8;font-size:11px;line-height:1.5; }
+.space-market-actions { display:flex;gap:8px;flex-wrap:wrap;padding:0 12px 15px; }
+.space-market-actions a,.space-market-actions button { margin:0!important;padding:10px 12px;border:1px solid rgba(129,140,248,.28);border-radius:10px;background:rgba(67,56,202,.15);color:#dbeafe;font-size:11px;text-decoration:none; }
+.space-market-actions a:hover,.space-market-actions button:hover { border-color:#818cf8;background:rgba(67,56,202,.28); }
+@media(max-width:520px){.space-market-stage{min-height:280px;margin-left:8px;margin-right:8px}#spaceFlightCanvas{height:280px}.space-market-metrics{grid-template-columns:repeat(2,minmax(0,1fr));padding-left:8px;padding-right:8px}.space-market-toolbar{padding:10px 12px}.space-market-caption{padding-left:12px;padding-right:12px}}
+@media(prefers-reduced-motion:reduce){.space-market-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+#spaceSeparateChart { display:block;width:100%;height:190px;border-radius:10px;background:#080d20; }
