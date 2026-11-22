@@ -54,7 +54,7 @@ async function refresh(forceHistory=false){
  const symbol=state.symbol,now=Date.now();
  const cached=state.historyCache.get(symbol);
  const needsHistory=forceHistory||!cached||now-cached.loadedAt>=HISTORY_TTL;
- status("Refreshing "+symbol+" quote"+(needsHistory+" historical candles…": "…"));
+ status("Refreshing "+symbol+" quote"+(needsHistory?" and historical candles…":"…"));
  try{
   const quotePromise=api("/price",{symbol});
   const historyPromise=needsHistory?Promise.all([
