@@ -1806,6 +1806,7 @@ async function fetchFavoriteDetails(symbol) {
   const setup = price > upper ? "POSSIBLE BREAKOUT" :
                 price < lower ? "POSSIBLE BREAKDOWN" : "WAIT";
   return {price, change: previous > 0 ? (last-previous)/previous*100 : null,
+    changeAmount: Number.isFinite(last) && Number.isFinite(previous) ? last-previous : null,
     trend, volume: volumeRatio == null ? "N/A" : volumeRatio.toFixed(2)+"x",
     setup, support:Math.min(...lows.slice(-20)),
     resistance:Math.max(...highs.slice(-20)),fetchedAt:Date.now(),
