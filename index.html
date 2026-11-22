@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BunMoney — Market Command Center</title>
   <link rel="stylesheet" href="style.css?v=layout-v6">
+  <link rel="stylesheet" href="market-intelligence.css?v=1">
 </head>
 
 <body>
@@ -21,7 +22,7 @@
     <nav class="bun-shortcuts" aria-label="BunMoney tools">
       <a href="#homeSearch">⌕ Markets</a><a href="#mainChartCard">▥ Chart</a><a href="#bun-scanner-guide">◉ Scanner</a><a href="#spikeBoard">⚡ Movers</a><a href="#bun-scanner-guide">★ Watchlist</a>
     </nav>
-<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button></nav>
+<nav class="main-nav" aria-label="Main navigation"><button class="nav-button active" data-action="showScreen" data-screen="home">📊 Trading core</button><button class="nav-button" data-action="showScreen" data-screen="intelligenceScreen">🧠 Market Intelligence</button></nav>
 <main id="home" class="screen active">
 
     <header class="app-header">
@@ -343,6 +344,22 @@
 
   </main>
 
+
+  <section id="intelligenceScreen" class="screen mi-screen" aria-label="Market intelligence">
+    <div class="mi-header"><div><span class="bun-eyebrow">BUNMONEY / MARKET INTELLIGENCE</span><h2>🧠 Market Intelligence</h2><p>BTC and ETH target analysis · 30-day historical context · paper research only</p></div><div class="mi-assets"><button type="button" class="active" data-mi-asset="BTC/USD">BTC / USD</button><button type="button" data-mi-asset="ETH/USD">ETH / USD</button></div></div>
+    <div class="mi-controls"><label for="miWindow">Window</label><select id="miWindow"><option value="1">1 minute</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="60">60 minutes</option></select><label for="miTarget">Your target ($)</label><input id="miTarget" type="number" min="0" step="any" placeholder="Enter target price"><button type="button" id="miRefresh">Refresh analysis</button><button type="button" id="miRecord" class="mi-action">Record forecast</button></div>
+    <p id="miStatus" class="mi-status" role="status" aria-live="polite">Loading market intelligence…</p>
+    <div class="mi-live-strip"><div class="mi-card"><small>LIVE PRICE</small><strong id="miPrice">—</strong><p id="miChange">—</p></div><div class="mi-card"><small>WINDOW OPEN</small><strong id="miWindowOpen">—</strong><p id="miWindowDistance">—</p></div><div class="mi-card"><small>TIME REMAINING</small><strong id="miCountdown">—</strong><p>15-minute UTC window</p></div><div class="mi-card"><small>MOVE NEEDED</small><strong id="miMoveAmount">Set a target</strong><p id="miMovePercent">—</p></div></div>
+    <div class="mi-grid">
+      <section class="mi-panel"><h3>⚖️ Hold or Flip</h3><p class="mi-sub">Historical frequency of similar 15-minute windows reaching your target distance. Not a live contract probability.</p><div class="mi-kpis"><div class="mi-kpi"><span>Historical target-hit rate</span><strong id="miTargetHit">Set target</strong></div><div class="mi-kpi"><span>Historical sample size</span><strong id="miTargetSamples">—</strong></div></div><div class="mi-bar"><span id="miTargetBar"></span></div><p class="mi-foot">Calculated from observed high/low excursions in available historical candles. Past frequency does not predict the next outcome.</p></section>
+      <section class="mi-panel"><h3>⏱ Settlement Tracker</h3><p class="mi-sub">Tracks the current UTC 15-minute window and a rolling average of BunMoney's recent quote samples.</p><div class="mi-kpis"><div class="mi-kpi"><span>Sampled 60-second average</span><strong id="miSettlementAvg">—</strong></div><div class="mi-kpi"><span>Recent quote samples</span><strong id="miSettlementCount">—</strong></div></div><p id="miSettlementMethod" class="mi-foot">Waiting for quote samples.</p><p class="mi-foot">This is not an exchange's official settlement calculation. Check the specific market's settlement rules.</p></section>
+      <section class="mi-panel"><h3>⚡ Volatility Stats</h3><p class="mi-sub">Average absolute percentage change across sampled intervals, plus a 30-day 15-minute baseline.</p><div class="mi-kpis"><div class="mi-kpi"><span>1-minute move</span><strong id="miVol1">—</strong></div><div class="mi-kpi"><span>5-minute move</span><strong id="miVol5">—</strong></div><div class="mi-kpi"><span>15-minute move</span><strong id="miVol15">—</strong></div><div class="mi-kpi"><span>30-day avg. absolute 15m move</span><strong id="miVol30">—</strong></div></div></section>
+      <section class="mi-panel"><h3>📍 Where BTC / ETH Stands</h3><p class="mi-sub">Distance from the current window open, recent momentum and historical market context.</p><div class="mi-kpis"><div class="mi-kpi"><span>1-minute momentum</span><strong id="miMom1">—</strong></div><div class="mi-kpi"><span>5-minute momentum</span><strong id="miMom5">—</strong></div><div class="mi-kpi"><span>15-minute momentum</span><strong id="miMom15">—</strong></div><div class="mi-kpi"><span>30-minute momentum</span><strong id="miMom30">—</strong></div><div class="mi-kpi"><span>RSI (14)</span><strong id="miRsi">—</strong></div><div class="mi-kpi"><span>Positive 15m historical windows</span><strong id="miHistUp">—</strong></div></div><p class="mi-foot">Historical 15m return range: <strong id="miHistRange">—</strong></p></section>
+      <section class="mi-panel mi-wide"><h3>🧾 Historical Accuracy</h3><p class="mi-sub">Record a target forecast during a window. BunMoney checks it after the window closes using the first available refreshed quote. This is an approximate paper-tracking record.</p><div class="mi-kpis"><div class="mi-kpi"><span>Settled forecast accuracy</span><strong id="miAccuracy">No settled forecasts yet.</strong></div><div class="mi-kpi"><span>Available history</span><strong id="miBars">—</strong></div></div><div id="miForecasts" class="mi-history-list" style="margin-top:12px"><div class="mi-empty">No recorded forecasts yet.</div></div><p class="mi-foot">History is stored in this browser's local storage and can be cleared by clearing site data. It is not a verified trading ledger.</p></section>
+    </div>
+    <p class="mi-foot">Market data comes from BunMoney's configured provider. 30-day history depends on Twelve Data plan limits and data availability. Demo mode uses synthetic data and is clearly labeled. This module does not place orders or connect to Kalshi.</p>
+  </section>
+
   <section class="setup emperor-bunny-card" id="emperorBunny" aria-label="Emperor Bunny assistant">
     <div class="emperor-head">
       <div class="emperor-icon" aria-hidden="true">🐰</div>
@@ -435,6 +452,8 @@
   <script src="bot-insights.js"></script>
   <script src="godmode-performance.js"></script>
   <script src="script.js"></script>
+  <script src="market-intelligence-core.js"></script>
+  <script src="market-intelligence.js"></script>
 
 <script src="bot-dashboard.js?v=upgrade-v2-20261111" defer></script>
 <script src="dashboard-layout.js?v=layout-v5" defer></script>
