@@ -106,10 +106,10 @@
   function openFavorites() {
     openModal("Favorites");
     const list=document.createElement("div");list.className="bm-favorite-grid";modalBody.append(list);
-    const symbols=Array.isArray(window.bunFavorites)?window.bunFavorites:[];
+    const symbols=typeof bunFavorites!=="undefined"?bunFavorites:[];
     if (!symbols.length) {const empty=document.createElement("p");empty.className="bm-empty";empty.textContent="No favorites yet. Add markets from the Markets search.";list.append(empty);return;}
     for(const symbol of symbols){
-      const cached=window.favoriteDetailsCache instanceof Map?window.favoriteDetailsCache.get(symbol):null;
+      const cached=typeof favoriteDetailsCache!=="undefined"?favoriteDetailsCache.get(symbol):null;
       const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";
       const name=document.createElement("strong");name.textContent=symbol;
       const price=document.createElement("span");price.className="bm-fav-price";price.textContent=fmtMoney(cached?.price);
@@ -157,7 +157,7 @@
         const symbol=(preset.textContent||"").replace(/^\+\s*/,"").trim().toUpperCase();
         if(symbol&&typeof addFavorite==="function"){
           preset.disabled=true;
-          addFavorite(symbol).then(()=>{if(typeof openFavorite==="function"&&Array.isArray(window.bunFavorites)&&window.bunFavorites.includes(symbol)){closeModal();openFavorite(symbol);}}).catch(()=>{}).finally(()=>{preset.disabled=false;});
+          addFavorite(symbol).then(()=>{if(typeof openFavorite==="function"&&typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){closeModal();openFavorite(symbol);}}).catch(()=>{}).finally(()=>{preset.disabled=false;});
         }
       }
     },true);
