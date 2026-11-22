@@ -55,9 +55,8 @@
     const bucketMs = 15 * 60 * 1000;
     const windowStart = Math.floor(now / bucketMs) * bucketMs;
     const windowEnd = windowStart + bucketMs;
-    const openCandle = [...one].reverse().find(c => c.time <= windowStart && c.time + 60000 > windowStart)
-      || [...fifteen].reverse().find(c => c.time <= windowStart && c.time + bucketMs > windowStart);
-    const windowOpen = openCandle ? openCandle.open : null;
+    const openCandle = [...one].reverse().find(c => c.time <= windowStart);
+    const windowOpen = openCandle ? (openCandle.time + 60000 <= windowStart ? openCandle.close : openCandle.open) : null;
     const remainingMs = Math.max(0, windowEnd - now);
     const last1 = one.slice(-1)[0];
     const closes = one.map(c => c.close);
