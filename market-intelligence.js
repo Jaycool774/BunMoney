@@ -61,7 +61,7 @@ async function refresh(){
  finally{state.refreshing=false;}
 }
 function recordForecast(){
- const r=state.result;if(!r||!r.moveNeeded){status("Enter a target and refresh before recording a forecast.");return;}
+ const r=state.result;if(!r||!r.moveNeeded){status("Enter a target and refresh before recording a forecast.");return;}if(r.window.remainingMs<=0){status("This 15-minute window has closed. Wait for the next window before recording.");return;}
  if(state.history.some(x=>x.windowStart===r.window.start&&x.symbol===state.symbol)){status("A forecast is already recorded for this market window.");return;}
  const f={id:state.symbol+":"+r.window.start,symbol:state.symbol,target:r.target,direction:r.moveNeeded.direction,probability:r.historical.targetHitRate,windowStart:r.window.start,windowEnd:r.window.end,createdAt:Date.now(),outcome:null,correct:null};
  state.history.push(f);state.history=state.history.slice(-100);saveHistory();render(r);status("Forecast recorded. It will be checked after the 15-minute window closes.");
@@ -75,5 +75,5 @@ function bind(){
  document.querySelector('[data-screen="intelligenceScreen"]')?.addEventListener("click",()=>{if(!state.timer)state.timer=setInterval(()=>{if($("intelligenceScreen")?.classList.contains("active"))refresh();},15000);refresh();});
 }
 bind();
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",refresh,{once:true});else refresh();
+status("Open Market Intelligence to load BTC or ETH analysis.");
 })();
