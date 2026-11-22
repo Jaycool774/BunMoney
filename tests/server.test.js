@@ -21,6 +21,9 @@ test("Only public assets are served, with CSP", async (t) => {
     "/script.js",
     "/trading-core.js",
     "/coinbase-feed.js",
+    "/market-intelligence-core.js",
+    "/market-intelligence.js",
+    "/market-intelligence.css",
     "/assets/bg_city.webp",
   ]) {
     const r = await fetch(base + path);
