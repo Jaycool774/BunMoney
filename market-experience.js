@@ -112,14 +112,14 @@
       const cached=typeof favoriteDetailsCache!=="undefined"?favoriteDetailsCache.get(symbol):null;
       const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";
       const name=document.createElement("strong");name.textContent=symbol;
-      const price=document.createElement("span");price.className="bm-fav-price";price.textContent=fmtMoney(cached?.price);
-      const move=document.createElement("span");move.className="bm-fav-move";
+      const price=document.createElement("span");price.className="bm-fav-price";price.dataset.favPrice=symbol;price.textContent=fmtMoney(cached?.price);
+      const move=document.createElement("span");move.className="bm-fav-move";move.dataset.favMove=symbol;
       const amount=Number(cached?.changeAmount),pct=Number(cached?.change);
       if(Number.isFinite(amount)&&Number.isFinite(pct)){
         const up=amount>=0;move.classList.add(up?"is-up":"is-down");
         move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(pct);
       }else{move.textContent="Waiting for quote";}
-      const trend=document.createElement("small");trend.textContent=(cached?.trend||"Waiting for trend")+" · "+(cached?.setup||"No setup yet");
+      const trend=document.createElement("small");trend.dataset.favTrend=symbol;trend.textContent=(cached?.trend||"Waiting for trend")+" · "+(cached?.setup||"No setup yet");
       card.append(name,price,move,trend);
       card.addEventListener("click",()=>{closeModal();if(typeof openFavorite==="function")openFavorite(symbol);});
       list.append(card);
@@ -136,7 +136,7 @@
     }
     modalBody.append(actions);
     const note=document.createElement("p");note.className="bm-empty";note.textContent="Choose a scan to rank your saved favorites, then filter the results by ticker or details.";modalBody.append(note);
-    search.addEventListener("keydown",e=>{if(e.key==="Enter"){const q=search.value.trim().toUpperCase();if(q&&typeof analyzeTicker==="function"){closeModal();analyzeTicker(q);}}});
+    search.addEventListener("input",()=>{const q=search.value.trim().toLowerCase();for(const button of actions.children)button.hidden=!button.textContent.toLowerCase().includes(q);note.textContent=q?"Showing scan types matching “"+search.value+"”.":"Choose a scan to rank your saved favorites, then filter the results by ticker or details.";});
     search.focus();
   }
   function installNavigation() {
@@ -260,17 +260,27 @@
     }));
     const wrap=card.querySelector(".chart-wrap");
     const extras=document.createElement("section");extras.id="bmChartExtrasInfo";extras.className="bm-chart-intelligence";
-    extras.innerHTML='<div class="bm-chart-why"><small>WHY IT IS MOVING</small><p id="bmWhyMoving">Analyze a market to see the factors behind its latest move.</p></div><div class="bm-chart-mi"><div class="bm-chart-mi-head"><strong>Market Intelligence</strong><button type="button" id="bmOpenIntelligence">Full view →</button></div><div class="bm-chart-mi-grid"><div><small>BTC / USD</small><strong id="bmMiBtc">—</strong><span id="bmMiBtcChange">—</span></div><div><small>ETH / USD</small><strong id="bmMiEth">—</strong><span id="bmMiEthChange">—</span></div><div><small>15m momentum</small><strong id="bmMiMomentum">—</strong></div><div><small>RSI (14)</small><strong id="bmMiRsi">—</strong></div></div><p class="bm-mi-foot">Provider quotes may be delayed or rate-limited. Indicators are descriptive, not predictions.</p></div>';
+    extras.innerHTML='<div class="bm-chart-why"><small>WHY IT IS MOVING</small><p id="bmWhyMoving">Analyze a market to see the factors behind its latest move.</p></div><div class="bm-chart-mi"><div class="bm-chart-mi-head"><strong>Market Intelligence</strong><button type="button" id="bmOpenIntelligence">Full view →</button></div><div class="bm-chart-mi-grid"><div><small>Active asset</small><strong id="bmMiBtc">BTC / USD</strong><span id="bmMiBtcChange">—</span></div><div><small>Live price</small><strong id="bmMiEth">—</strong><span id="bmMiEthChange">—</span></div><div><small>15m momentum</small><strong id="bmMiMomentum">—</strong></div><div><small>RSI (14)</small><strong id="bmMiRsi">—</strong></div></div><p class="bm-mi-foot">Provider quotes may be delayed or rate-limited. Indicators are descriptive, not predictions.</p></div>';
     if(wrap)wrap.insertAdjacentElement("afterend",extras);else card.append(extras);
     $("bmOpenIntelligence")?.addEventListener("click",()=>{if(typeof showScreen==="function")showScreen("intelligenceScreen");});
   }
-  function syncMiniIntelligence() {
-    const map=[["bmMiBtc","miPrice"],["bmMiBtcChange","miChange"],["bmMiMomentum","miMom15"],["bmMiRsi","miRsi"]];
-    for(const [dest,source] of map)safeText($(dest),$(source)?.textContent||"—");
-    const originalSymbol=document.querySelector('[data-mi-asset].active')?.dataset.miAsset||"BTC/USD";
-    if(originalSymbol==="ETH/USD"){
-      safeText($("bmMiEth"),$("miPrice")?.textContent||"—");safeText($("bmMiEthChange"),$("miChange")?.textContent||"—");
+  function syncFavoriteMiniCards(){
+    if(!modal || !modal.classList.contains("open") || modalTitle?.textContent!=="Favorites" || typeof favoriteDetailsCache==="undefined")return;
+    for(const symbol of (typeof bunFavorites!=="undefined"?bunFavorites:[])){
+      const data=favoriteDetailsCache.get(symbol);if(!data)continue;
+      const find=(attr)=>Array.from(modalBody.querySelectorAll("["+attr+"]")).find(node=>node.getAttribute(attr)===symbol);
+      const price=find("data-fav-price"),move=find("data-fav-move"),trend=find("data-fav-trend");
+      if(price)price.textContent=fmtMoney(data.price);
+      if(move){const amount=Number(data.changeAmount),change=Number(data.change);move.classList.remove("is-up","is-down");if(Number.isFinite(amount)&&Number.isFinite(change)){const up=amount>=0;move.classList.add(up?"is-up":"is-down");move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(change);}}
+      if(trend)trend.textContent=(data.trend||"Waiting for trend")+" · "+(data.setup||"No setup yet");
     }
+  }
+  function syncMiniIntelligence() {
+    syncFavoriteMiniCards();
+    const originalSymbol=document.querySelector('[data-mi-asset].active')?.dataset.miAsset||"BTC/USD";
+    safeText($("bmMiBtc"),originalSymbol);safeText($("bmMiEth"),$("miPrice")?.textContent||"—");safeText($("bmMiBtcChange"),$("miChange")?.textContent||"—");
+    const map=[["bmMiMomentum","miMom15"],["bmMiRsi","miRsi"]];
+    for(const [dest,source] of map)safeText($(dest),$(source)?.textContent||"—");
     const miniChange=$("bmMiBtcChange");if(miniChange)updateTone(miniChange,(miniChange.textContent||"").startsWith("+")?1:(miniChange.textContent||"").startsWith("-")?-1:0);
     const mom=$("bmMiMomentum");if(mom)updateTone(mom,(mom.textContent||"").startsWith("+")?1:(mom.textContent||"").startsWith("-")?-1:0);
     safeText($("bmWhyMoving"),explainMovement());
