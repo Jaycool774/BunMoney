@@ -137,25 +137,44 @@
     openModal("Favorites");
     const form=document.createElement("div");form.className="bm-favorite-add";
     const input=document.createElement("input");input.id="bmFavoriteInput";input.type="search";
-    input.placeholder="Add a verified ticker or market name…";input.setAttribute("aria-label","Add a favorite market");
-    const add=document.createElement("button");add.type="button";add.id="bmFavoriteAdd";add.textContent="Add favorite";
+    input.placeholder="Search a ticker or market name…";input.setAttribute("aria-label","Search for a favorite market");
+    const add=document.createElement("button");add.type="button";add.id="bmFavoriteAdd";add.textContent="Find markets";
     const feedback=document.createElement("p");feedback.id="bmFavoriteFeedback";feedback.className="bm-modal-note";feedback.setAttribute("role","status");
-    form.append(input,add,feedback);modalBody.append(form);
+    const results=document.createElement("div");results.id="bmFavoriteSearchResults";results.className="bm-favorite-search-results";
+    form.append(input,add,feedback,results);modalBody.append(form);
     add.addEventListener("click",async()=>{
-      const symbol=input.value.trim().toUpperCase();
-      if(!symbol){feedback.textContent="Enter a market ticker or name.";return;}
-      const legacyInput=$("favoriteInput");if(legacyInput)legacyInput.value=symbol;
-      add.disabled=true;feedback.textContent="Verifying "+symbol+" with the provider…";
+      const query=input.value.trim();
+      if(!query){feedback.textContent="Enter a ticker or market name to search.";return;}
+      add.disabled=true;feedback.textContent="Searching the connected provider…";results.replaceChildren();
       try{
-        if(typeof addFavorite!=="function")throw new Error("Favorites are unavailable in this build.");
-        await addFavorite();
-        const legacyFeedback=$("favoriteFeedback");
-        feedback.textContent=legacyFeedback?.textContent||"Favorite check complete.";
-        if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){
-          openFavorites();
-          const refreshed=$("bmFavoriteFeedback");if(refreshed)refreshed.textContent=symbol+" saved to Favorites.";
+        if(typeof marketEngineRequest!=="function")throw new Error("Market search is unavailable in this build.");
+        const response=await marketEngineRequest("/search",{symbol:query});
+        const matches=Array.isArray(response.data)?response.data:[];
+        if(!matches.length){feedback.textContent="No verified market matches. Try another ticker or name.";return;}
+        feedback.textContent=matches.length+" provider matches. Select one to verify and save it.";
+        for(const match of matches){
+          const symbol=String(match.symbol||"").toUpperCase();if(!symbol)continue;
+          const option=document.createElement("button");option.type="button";option.dataset.symbol=symbol;
+          option.className="bm-favorite-add-option";
+          option.textContent=symbol+" · "+String(match.name||symbol)+(match.exchange?" · "+match.exchange:"");
+          option.addEventListener("click",async()=>{
+            const legacyInput=$("favoriteInput");if(legacyInput)legacyInput.value=symbol;
+            option.disabled=true;feedback.textContent="Verifying "+symbol+" quote…";
+            try{
+              if(typeof addFavorite!=="function")throw new Error("Favorites are unavailable in this build.");
+              await addFavorite();
+              const legacyFeedback=$("favoriteFeedback");
+              feedback.textContent=legacyFeedback?.textContent||"Favorite check complete.";
+              if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){
+                openFavorites();
+                const refreshed=$("bmFavoriteFeedback");if(refreshed)refreshed.textContent=symbol+" saved to Favorites.";
+              }
+            }catch(error){feedback.textContent=error.message||"Could not save this favorite.";}
+            finally{option.disabled=false;}
+          });
+          results.append(option);
         }
-      }catch(error){feedback.textContent=error.message||"Could not save this favorite.";}
+      }catch(error){feedback.textContent=error.message||"Market search is temporarily unavailable.";}
       finally{add.disabled=false;}
     });
     const list=document.createElement("div");list.className="bm-favorite-grid";modalBody.append(list);
