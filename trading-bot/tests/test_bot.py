@@ -368,7 +368,7 @@ class BotTests(unittest.TestCase):
         self.assertTrue(self.state()['position'])
         sales=[p for p in self.state()['proposals'].values() if p.get('side')=='sell']
         self.assertEqual(sales[-1]['status'],'manual')
-        self.e.controls('mode','approval');self.clock[0]+=300;self.e.cycle()
+        self.e.controls('mode','approval');self.clock[0]+=900;self.e.cycle()
         sale=self.pending();self.assertEqual(sale['side'],'sell')
         self.assertTrue(self.state()['position']);self.e.controls('approve',sale['id'])
         self.assertFalse(self.state()['position'])
