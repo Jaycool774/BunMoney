@@ -63,7 +63,16 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(() => document.getElementById("miPrice")?.textContent !== "—", {}, { timeout: 8000 });
     await page.locator("#miTarget").fill("101");
     await page.locator("#miTarget").dispatchEvent("change");
-    await page.waitForFunction(() => document.getElementById("miMoveAmount")?.textContent.includes("$1.00"), {}, { timeout: 8000 });
+    await page.waitForFunction(() => document.getElementById("miMoveAmount")?.textContent.includes("$1.00"), {}, { timeout: 8000 }).catch(async (error) => {
+      console.error("Target diagnostics:", {
+        target: await page.locator("#miTarget").inputValue(),
+        price: await page.locator("#miPrice").textContent(),
+        move: await page.locator("#miMoveAmount").textContent(),
+        status: await page.locator("#miStatus").textContent(),
+        bars: await page.locator("#miBars").textContent(),
+      });
+      throw error;
+    });
     assert.match(await page.locator("#miTargetHit").textContent(), /%/);
     await page.locator('.nav-button[data-screen="home"]').click();
     await page.locator(".buy-button").click();
