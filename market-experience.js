@@ -102,7 +102,7 @@
       status.textContent="Preparing watchlist scan…";
       const filter=document.createElement("input");filter.type="search";filter.className="bm-result-filter";filter.placeholder="Filter scan results…";filter.setAttribute("aria-label","Filter scan results");
       modalTools.append(filter);
-      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\s+([+-]?\d+(?:\.\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>=0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
+      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\s+([+-]?\d+(?:\.\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
       if (typeof runBunScanner==="function") Promise.resolve(runBunScanner(mode)).then(()=>filter.dispatchEvent(new Event("input")));
       else status.textContent="Scanner module is unavailable. Refresh BunMoney and try again.";
     } else {
