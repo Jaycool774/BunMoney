@@ -114,7 +114,8 @@ const assert = require("node:assert/strict");
     await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
     await page.locator("#bmFavoriteInput").fill("ETH/USD");
     await page.locator("#bmFavoriteAdd").click();
-    // Favorites validates against the provider before saving; wait for the async response.
+    await page.locator('#bmFavoriteSearchResults button[data-symbol="ETH/USD"]').click();
+    // Favorites validates the returned symbol with a live quote before saving.
     await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').waitFor();
     assert.equal(await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').count(),1);
     await page
