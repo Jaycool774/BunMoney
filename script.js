@@ -62,6 +62,7 @@ function invalidateAnalysis() {
   window.lastEntry = window.lastStop = window.lastTarget = undefined;
   coinbaseFeed?.stop();
   setText("price", "$—"); setText("reason", "Analyze this market before opening a position.");
+  renderTradeSignal("HOLD","Analyze a supported market to refresh the signal.");
   ["entry","stop","target","rr","potentialLoss","potentialProfit","tradePlanEntry","tradePlanStop","tradePlanTarget","tradePlanScore","tradePlanDirection","trend","support","resistance","sma10","sma20","rsi","volumeRatio","breakout","retest","setupQuality","marketOutlook"].forEach(id => setText(id,"—"));
   updateTradePlan();
 }
@@ -1677,6 +1678,16 @@ function saveFavorites() {
   try { localStorage.setItem(BUN_FAVORITES_KEY, JSON.stringify(bunFavorites)); }
   catch (error) { console.log("Could not save favorites."); }
 }
+window.addEventListener("storage", event => {
+  if (event.key !== BUN_FAVORITES_KEY) return;
+  try {
+    const parsed = JSON.parse(event.newValue || "[]");
+    if (!Array.isArray(parsed)) return;
+    bunFavorites = [...new Set(parsed.filter(Trading.validSymbol))].slice(0,50);
+    renderFavorites();
+    updateFavorites(true);
+  } catch { /* Ignore malformed cross-tab storage updates. */ }
+});
 function openChartFavorites() {
   const overlay = document.getElementById("chartFavoritesOverlay");
   if (!overlay) return;
