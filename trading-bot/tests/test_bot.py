@@ -93,6 +93,11 @@ class BotTests(unittest.TestCase):
         bars=self.market.candles('BTC/USD','15min')
         self.e.validate_candles(bars,900)
         self.assertLessEqual(bars[-1].timestamp+900,self.clock[0])
+        self.clock[0]+=840
+        self.e.validate_candles(bars,900)  # A completed 15m candle remains current until the next bar closes.
+        self.clock[0]+=421
+        with self.assertRaises(Blocked):self.e.validate_candles(bars,900)
+        self.clock[0]-=1261
         incomplete=list(bars)
         incomplete[-1]=replace(incomplete[-1],timestamp=self.clock[0])
         with self.assertRaises(Blocked):self.e.validate_candles(incomplete,900)
