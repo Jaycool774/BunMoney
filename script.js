@@ -1815,6 +1815,22 @@ function renderFavoriteDetails(symbol, snapshot) {
     (snapshot.source === "demo" ? "Simulated data" : "Updated " + new Date(snapshot.fetchedAt).toLocaleTimeString()));
   const move = document.getElementById(`favorite-change-${symbol}`);
   if (move) move.style.color = snapshot.change == null ? "" : snapshot.change >= 0 ? "#a3e635" : "#fb7185";
+  for (const node of document.querySelectorAll("[data-fav-price]")) {
+    if (node.dataset.favPrice === symbol) node.textContent = snapshot.price != null ? formatMoney(snapshot.price) : "—";
+  }
+  for (const node of document.querySelectorAll("[data-fav-move]")) {
+    if (node.dataset.favMove !== symbol) continue;
+    node.classList.remove("is-up","is-down");
+    if (snapshot.changeAmount != null && Number.isFinite(Number(snapshot.changeAmount))) {
+      const up = Number(snapshot.changeAmount) >= 0;
+      node.classList.add(up ? "is-up" : "is-down");
+      node.textContent = (up ? "+" : "-") + formatMoney(Math.abs(Number(snapshot.changeAmount))) +
+        "  " + (snapshot.change == null ? "—" : (snapshot.change >= 0 ? "+" : "") + snapshot.change.toFixed(2) + "%");
+    } else node.textContent = "—";
+  }
+  for (const node of document.querySelectorAll("[data-fav-trend]")) {
+    if (node.dataset.favTrend === symbol) node.textContent = (snapshot.trend || "—") + " · " + (snapshot.setup || "—");
+  }
 }
 function renderFavorites() {
   const container = document.getElementById("favoritesList") || document.getElementById("chartFavoritesList");
