@@ -38,7 +38,7 @@ class Quote:
 
 @dataclass(frozen=True)
 class Candle:
-    timestamp: float  # UTC opening time, five-minute candles
+    timestamp: float  # UTC opening time; interval is selected per market
     open: float
     high: float
     low: float
@@ -47,7 +47,7 @@ class Candle:
 
 class MarketData(Protocol):
     def quote(self, symbol: str) -> Quote: ...
-    def candles(self, symbol: str) -> list[Candle]: ...
+    def candles(self, symbol: str, interval: str = '5min') -> list[Candle]: ...
 
 
 class FutureBroker(Protocol):
@@ -451,12 +451,15 @@ class Engine:
                     s['last_cycle'] = self.now()
                     s['last_error'] = None
                     return
-                histories = {symbol: self.market.candles(symbol) for symbol in active}
-                for candles in histories.values():
-                    self.validate_candles(candles)
+                # BTC uses a slower 15-minute signal candle; the other supported
+                # crypto markets retain their existing completed 5-minute strategy.
+                intervals = {symbol: ('15min' if symbol == 'BTC/USD' else '5min') for symbol in active}
+                histories = {symbol: self.market.candles(symbol, interval=intervals[symbol]) for symbol in active}
+                for symbol, candles in histories.items():
+                    self.validate_candles(candles, 900 if intervals[symbol] == '15min' else 300)
                 for symbol in active:
                     candles = histories[symbol]
-                    decision = evaluate(candles)
+                    decision = evaluate(candles, interval=intervals[symbol])
                     if not decision:
                         self.activity(symbol, 'quick / patient', 'wait', 'No qualifying completed-candle crossover', candles[-1].timestamp)
                         continue
@@ -506,18 +509,20 @@ class Engine:
                 self.cancel(s, 'service error')
                 self.event('error', {'message': s['last_error']})
 
-    def validate_candles(self, candles):
+    def validate_candles(self, candles, interval_seconds=300):
+        if interval_seconds not in (300, 900):
+            raise Blocked('Unsupported candle interval')
         if len(candles) < 21:
             raise Blocked('At least 21 completed candles required')
         for i,c in enumerate(candles):
             for n in (c.open,c.high,c.low,c.close): positive(n)
             if not c.low <= min(c.open,c.close) <= max(c.open,c.close) <= c.high:
                 raise Blocked('Invalid OHLC candle')
-            if not math.isfinite(c.timestamp) or c.timestamp+300 > self.now():
+            if not math.isfinite(c.timestamp) or c.timestamp+interval_seconds > self.now():
                 raise Blocked('Incomplete or future candle')
-            if i and c.timestamp-candles[i-1].timestamp != 300:
+            if i and c.timestamp-candles[i-1].timestamp != interval_seconds:
                 raise Blocked('Unordered, duplicate or missing candles')
-        if self.now()-(candles[-1].timestamp+300) > 360:
+        if self.now()-(candles[-1].timestamp+interval_seconds) > 360:
             raise Blocked('Stale market candles')
 
     def snapshot(self):
