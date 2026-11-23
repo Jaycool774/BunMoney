@@ -35,6 +35,8 @@ const assert = require("node:assert/strict");
       viewport: { width: 390, height: 844 },
     });
     const page = await context.newPage();
+    // Keep the browser smoke test deterministic: use its mocked REST feed, not a public live WebSocket.
+    await page.addInitScript(() => { window.WebSocket = undefined; });
     const errors = [];
 
     page.on("pageerror", (error) => errors.push(error.message));
