@@ -74,7 +74,8 @@ async function refresh(forceHistory=false){
  const needsHistory=forceHistory||!cached||now-cached.loadedAt>=HISTORY_TTL;
  status("Refreshing "+symbol+" quote"+(needsHistory?" and historical candles…":"…"));
  try{
-  const streamFresh=!demoMarketEnabled&&state.streamPrice>0&&now-state.streamTime<20000;\n  const quotePromise=streamFresh?Promise.resolve({price:state.streamPrice}):api("/price",{symbol});
+  const streamFresh=!demoMarketEnabled&&state.streamPrice>0&&now-state.streamTime<20000;
+  const quotePromise=streamFresh?Promise.resolve({price:state.streamPrice}):api("/price",{symbol});
   const historyPromise=needsHistory?Promise.all([
    api("/time_series",{symbol,interval:"1min",outputsize:300}),
    api("/time_series",{symbol,interval:"15min",outputsize:2880})
@@ -85,9 +86,8 @@ async function refresh(forceHistory=false){
   if(needsHistory)state.historyCache.set(symbol,hist);
   const price=Number(quote.price);
   if(!Number.isFinite(price)||price<=0)throw new Error("Provider returned an invalid quote.");
-  const stamp=Date.now();state.samples=state.samples.filter(s=>stamp-s.time<=60000);state.samples.push({time:stamp,price});
+  const stamp=streamFresh?state.streamTime:Date.now();state.samples=state.samples.filter(s=>stamp-s.time<=60000);state.samples.push({time:stamp,price});
   settleForecasts(price,stamp);
-  const target=Number(state.target);
   const r=engine.calculate({symbol,currentPrice:price,candles1m:hist.one.values,candles15m:hist.quarter.values,target:state.target,windowMinutes:state.windowMinutes,now:stamp,samples:state.samples});
   render(r);
   status((streamFresh?"Coinbase live quote":"Quote updated "+new Date(stamp).toLocaleTimeString()+" · "+(demoMarketEnabled?"DEMO DATA":"Provider data"))+" · Historical candles refreshed "+(needsHistory?"now":"from 5-minute cache")+".");
@@ -120,9 +120,11 @@ function bind(){
  $("miRecord").addEventListener("click",recordForecast);
  document.querySelector('[data-screen="intelligenceScreen"]')?.addEventListener("click",()=>{startAutoRefresh();refresh(false);});
  document.querySelector('[data-screen="home"]')?.addEventListener("click",startAutoRefresh);
+ connectStream(state.symbol);
  startAutoRefresh();
  if($("home")?.classList.contains("active"))refresh(false);
 }
 bind();
+window.addEventListener("beforeunload",()=>state.feed?.stop());
 status("Loading BTC and ETH market intelligence…");
 })();
