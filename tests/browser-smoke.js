@@ -169,6 +169,25 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(()=>document.getElementById('bot-message').textContent.includes('Emergency ON'));
     assert.deepEqual(botControls.map(c=>c.action),['reject','mode','emergency']);
     assert.deepEqual(errors,[]);
+    // New market experience: fast chart controls, market search, scanner popup and compact favorites.
+    await page.locator('[data-chart-mode="zigzag"]').click();
+    await page.locator('[data-chart-mode="candles"]').click();
+    assert.equal(await page.locator("#bmCandleCountdown").isVisible(), true);
+    assert.equal(await page.locator("#bmWhyMoving").isVisible(), true);
+    await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
+    await page.locator("#bmMarketSearch").fill("AAPL");
+    await page.locator(".bm-market-option").first().click();
+    await page.waitForFunction(() => lastAnalysis?.ticker === "AAPL");
+    await page.locator('.bun-shortcuts a[href="#spikeBoard"]').click();
+    await page.locator(".bm-mover-filters button").filter({hasText:"All movers"}).click();
+    await page.waitForFunction(() => document.querySelectorAll("#bun-scanner-results .feature-card").length > 0, {}, {timeout:8000});
+    await page.locator(".bm-modal-close").click();
+    await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".bm-favorite-mini").length >= 3);
+    await page.locator(".bm-modal-close").click();
+    await page.locator("#bun-market-presets button").filter({hasText:"EUR/USD"}).click();
+    await page.waitForFunction(() => lastAnalysis?.ticker === "EUR/USD", {}, {timeout:8000});
+    assert.deepEqual(errors,[]);
     await page.screenshot({ path: "/tmp/bunmoney-smoke.png", fullPage: true });
     await context.close();
     console.log(
