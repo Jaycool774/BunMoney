@@ -459,21 +459,22 @@ class Engine:
                     self.validate_candles(candles, 900 if intervals[symbol] == '15min' else 300)
                 for symbol in active:
                     candles = histories[symbol]
+                    interval_label = intervals[symbol].replace('min', '-minute')
                     decision = evaluate(candles, interval=intervals[symbol])
                     if not decision:
-                        self.activity(symbol, 'quick / patient', 'wait', 'No qualifying completed-candle crossover', candles[-1].timestamp)
+                        self.activity(symbol, 'quick / patient', 'wait', f'No qualifying completed-candle crossover on {interval_label} candles', candles[-1].timestamp)
                         continue
                     side = decision.side
                     key = f'{symbol}:{candles[-1].timestamp}:{side}'
                     if key in s['signals']:
-                        self.activity(symbol, decision.strategy, 'duplicate', 'Signal already processed for this candle', candles[-1].timestamp)
+                        self.activity(symbol, decision.strategy, 'duplicate', f'Signal already processed for this completed {interval_label} candle', candles[-1].timestamp)
                         continue
                     s['signals'][key] = dict(side=side, at=self.now(), symbol=symbol, strategy=decision.strategy, reason=decision.reason)
                     self.event('signal', dict(id=key, **s['signals'][key]))
                     if side == 'sell':
                         position = next((p for p in self.positions(s) if p['symbol'] == symbol), None)
                         if not position:
-                            self.activity(symbol, decision.strategy, 'skip', 'Sell signal but no long position is held', candles[-1].timestamp)
+                            self.activity(symbol, decision.strategy, 'skip', f'Sell signal on completed {interval_label} candle but no long position is held', candles[-1].timestamp)
                             continue
                         proposal = dict(id=key, side='sell', symbol=symbol, position_id=position['id'],
                                         strategy=decision.strategy, explanation=decision.reason,
@@ -482,11 +483,11 @@ class Engine:
                                         created=self.now(), expires=self.now()+self.settings.proposal_ttl, status='pending')
                     else:
                         if self.news_blocked(s):
-                            self.activity(symbol, decision.strategy, 'blocked', 'Configured economic news blackout', candles[-1].timestamp)
+                            self.activity(symbol, decision.strategy, 'blocked', f'Configured economic news blackout; {interval_label} signal blocked', candles[-1].timestamp)
                             continue
                         if (len(self.positions(s)) >= s['max_open_positions'] or any(p['symbol'] == symbol for p in self.positions(s))
                                 or s['day_shutdown'] or s['day_entries'] >= self.settings.daily_trades):
-                            self.activity(symbol, decision.strategy, 'blocked', 'Open position, daily shutdown or daily entry limit', candles[-1].timestamp)
+                            self.activity(symbol, decision.strategy, 'blocked', f'Open position, daily shutdown or daily entry limit; {interval_label} signal', candles[-1].timestamp)
                             continue
                         proposal = self.plan(s, symbol, key, quotes[symbol].price)
                         proposal.update(strategy=decision.strategy, explanation=decision.reason)
