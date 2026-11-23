@@ -49,7 +49,7 @@ function createBotCryptoFeed({ fetchImpl = globalThis.fetch, now = Date.now, tim
         throw new FeedError("Invalid Coinbase candle");
       return { timestamp, low, high, open, close };
     }).filter(c => c.timestamp + granularity <= current).sort((a,b) => a.timestamp - b.timestamp);
-    if (bars.length < 21 || current - (bars[bars.length - 1].timestamp + granularity) > 360)
+    const staleTolerance = interval === "15min" ? granularity + 360 : 360;\n    if (bars.length < 21 || current - (bars[bars.length - 1].timestamp + granularity) > staleTolerance)
       throw new FeedError("Missing or stale completed Coinbase candles", 503);
     // Keep enough completed bars for both SMA(10/20) and SMA(20/40).
     const recent = bars.slice(-60);
