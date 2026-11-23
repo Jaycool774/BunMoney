@@ -115,7 +115,18 @@ function startAutoRefresh(){
 function bind(){
  document.querySelectorAll("[data-mi-asset]").forEach(b=>b.addEventListener("click",()=>{state.symbol=b.dataset.miAsset;state.samples=[];connectStream(state.symbol);document.querySelectorAll("[data-mi-asset]").forEach(x=>x.classList.toggle("active",x===b));refresh(false);}));
  $("miWindow").addEventListener("change",e=>{state.windowMinutes=Number(e.target.value)||15;refresh(false);});
- $("miTarget").addEventListener("input",e=>{state.target=e.target.value.trim();if(state.result){try{const r=engine.calculate({symbol:state.symbol,currentPrice:state.result.price,candles1m:state.historyCache.get(state.symbol)?.one.values||[],candles15m:state.historyCache.get(state.symbol)?.quarter.values||[],target:state.target,windowMinutes:state.windowMinutes,now:Date.now(),samples:state.samples});render(r);}catch{}}});
+ const updateTarget=()=>{
+  state.target=$("miTarget").value.trim();
+  if(!state.result){refresh(false);return;}
+  const history=state.historyCache.get(state.symbol);
+  if(!history){refresh(true);return;}
+  try{
+   const r=engine.calculate({symbol:state.symbol,currentPrice:state.result.price,candles1m:history.one.values,candles15m:history.quarter.values,target:state.target,windowMinutes:state.windowMinutes,now:Date.now(),samples:state.samples});
+   render(r);
+  }catch(error){status(error.message||"Target analysis unavailable; refreshing market history.");refresh(true);}
+ };
+ $("miTarget").addEventListener("input",updateTarget);
+ $("miTarget").addEventListener("change",updateTarget);
  $("miRefresh").addEventListener("click",()=>refresh(false));
  $("miRecord").addEventListener("click",recordForecast);
  document.querySelector('[data-screen="intelligenceScreen"]')?.addEventListener("click",()=>{startAutoRefresh();refresh(false);});
