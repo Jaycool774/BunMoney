@@ -7,7 +7,7 @@ const state={symbol:"BTC/USD",windowMinutes:15,target:"",samples:[],result:null,
 const HISTORY_TTL=5*60*1000;
 function loadHistory(){try{const v=JSON.parse(localStorage.getItem("bunmoney_mi_history")||"[]");return Array.isArray(v)?v.slice(-100):[];}catch{return [];}}
 function saveHistory(){try{localStorage.setItem("bunmoney_mi_history",JSON.stringify(state.history.slice(-100)));}catch{}}
-function money(n){return Number.isFinite(Number(n))?"$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";}
+function money(n){return n==null||n===""?"—":Number.isFinite(Number(n))?"$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";}
 function pct(n){return Number.isFinite(n)?(n>0?"+":"")+n.toFixed(3)+"%":"—";}
 function duration(ms){const s=Math.max(0,Math.floor(ms/1000));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");}
 function status(s){if($("miStatus"))$("miStatus").textContent=s;}
@@ -74,7 +74,7 @@ async function refresh(forceHistory=false){
   render(r);
   status("Quote updated "+new Date(stamp).toLocaleTimeString()+" · "+(demoMarketEnabled?"DEMO DATA":"Provider data")+" · Historical candles refreshed "+(needsHistory?"now":"from 5-minute cache")+".");
  }catch(e){status(e.message||"Market intelligence update failed.");}
- finally{state.refreshing=false;}
+ finally{state.refreshing=false;if(symbol!==state.symbol)refresh(false);}
 }
 function tickCountdown(){
  const r=state.result;if(!r)return;
@@ -82,7 +82,7 @@ function tickCountdown(){
  $("miCountdown").textContent=duration(remaining);
 }
 function recordForecast(){
- const r=state.result;if(!r||!r.moveNeeded){status("Enter a target and refresh before recording a forecast.");return;}if(r.window.remainingMs<=0){status("This 15-minute window has closed. Wait for the next window before recording.");return;}
+ const r=state.result;if(!r||!r.moveNeeded){status("Enter a target and refresh before recording a forecast.");return;}if(r.window.end-Date.now()<=0){status("This 15-minute window has closed. Wait for the next window before recording.");return;}
  if(state.history.some(x=>x.windowStart===r.window.start&&x.symbol===state.symbol)){status("A forecast is already recorded for this market window.");return;}
  const f={id:state.symbol+":"+r.window.start,symbol:state.symbol,target:r.target,direction:r.moveNeeded.direction,probability:r.historical.targetHitRate,windowStart:r.window.start,windowEnd:r.window.end,createdAt:Date.now(),outcome:null,correct:null};
  state.history.push(f);state.history=state.history.slice(-100);saveHistory();render(r);status("Forecast recorded. It will be checked after the 15-minute window closes.");
@@ -95,7 +95,7 @@ function startAutoRefresh(){
  if(!state.countdownTimer)state.countdownTimer=setInterval(tickCountdown,1000);
 }
 function bind(){
- document.querySelectorAll("[data-mi-asset]").forEach(b=>b.addEventListener("click",()=>{state.symbol=b.dataset.miAsset;document.querySelectorAll("[data-mi-asset]").forEach(x=>x.classList.toggle("active",x===b));refresh(false);}));
+ document.querySelectorAll("[data-mi-asset]").forEach(b=>b.addEventListener("click",()=>{state.symbol=b.dataset.miAsset;state.samples=[];document.querySelectorAll("[data-mi-asset]").forEach(x=>x.classList.toggle("active",x===b));refresh(false);}));
  $("miWindow").addEventListener("change",e=>{state.windowMinutes=Number(e.target.value)||15;refresh(false);});
  $("miTarget").addEventListener("input",e=>{state.target=e.target.value.trim();if(state.result){try{const r=engine.calculate({symbol:state.symbol,currentPrice:state.result.price,candles1m:state.historyCache.get(state.symbol)?.one.values||[],candles15m:state.historyCache.get(state.symbol)?.quarter.values||[],target:state.target,windowMinutes:state.windowMinutes,now:Date.now(),samples:state.samples});render(r);}catch{}}});
  $("miRefresh").addEventListener("click",()=>refresh(false));
