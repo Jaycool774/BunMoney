@@ -135,11 +135,35 @@
   }
   function openFavorites() {
     openModal("Favorites");
+    const form=document.createElement("div");form.className="bm-favorite-add";
+    const input=document.createElement("input");input.id="bmFavoriteInput";input.type="search";
+    input.placeholder="Add a verified ticker or market name…";input.setAttribute("aria-label","Add a favorite market");
+    const add=document.createElement("button");add.type="button";add.id="bmFavoriteAdd";add.textContent="Add favorite";
+    const feedback=document.createElement("p");feedback.id="bmFavoriteFeedback";feedback.className="bm-modal-note";feedback.setAttribute("role","status");
+    form.append(input,add,feedback);modalBody.append(form);
+    add.addEventListener("click",async()=>{
+      const symbol=input.value.trim().toUpperCase();
+      if(!symbol){feedback.textContent="Enter a market ticker or name.";return;}
+      const legacyInput=$("favoriteInput");if(legacyInput)legacyInput.value=symbol;
+      add.disabled=true;feedback.textContent="Verifying "+symbol+" with the provider…";
+      try{
+        if(typeof addFavorite!=="function")throw new Error("Favorites are unavailable in this build.");
+        await addFavorite();
+        const legacyFeedback=$("favoriteFeedback");
+        feedback.textContent=legacyFeedback?.textContent||"Favorite check complete.";
+        if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){
+          openFavorites();
+          const refreshed=$("bmFavoriteFeedback");if(refreshed)refreshed.textContent=symbol+" saved to Favorites.";
+        }
+      }catch(error){feedback.textContent=error.message||"Could not save this favorite.";}
+      finally{add.disabled=false;}
+    });
     const list=document.createElement("div");list.className="bm-favorite-grid";modalBody.append(list);
     const symbols=typeof bunFavorites!=="undefined"?bunFavorites:[];
-    if (!symbols.length) {const empty=document.createElement("p");empty.className="bm-empty";empty.textContent="No favorites yet. Add markets from the Markets search.";list.append(empty);return;}
+    if(!symbols.length){const empty=document.createElement("p");empty.className="bm-empty";empty.textContent="No saved favorites yet. Search and add a verified market above.";list.append(empty);}
     for(const symbol of symbols){
       const cached=typeof favoriteDetailsCache!=="undefined"?favoriteDetailsCache.get(symbol):null;
+      const wrap=document.createElement("div");wrap.className="bm-favorite-item";
       const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";
       const name=document.createElement("strong");name.textContent=symbol;
       const price=document.createElement("span");price.className="bm-fav-price";price.dataset.favPrice=symbol;price.textContent=fmtMoney(cached?.price);
@@ -148,13 +172,15 @@
       if(Number.isFinite(amount)&&Number.isFinite(pct)){
         const up=amount>=0;move.classList.add(up?"is-up":"is-down");
         move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(pct);
-      }else{move.textContent="Waiting for quote";}
+      }else move.textContent="Waiting for quote";
       const trend=document.createElement("small");trend.dataset.favTrend=symbol;trend.textContent=(cached?.trend||"Waiting for trend")+" · "+(cached?.setup||"No setup yet");
       card.append(name,price,move,trend);
       card.addEventListener("click",()=>{closeModal();if(typeof openFavorite==="function")openFavorite(symbol);});
-      list.append(card);
+      const remove=document.createElement("button");remove.type="button";remove.className="bm-favorite-remove";remove.dataset.symbol=symbol;remove.textContent="Remove";
+      remove.addEventListener("click",()=>{if(typeof removeFavorite==="function")removeFavorite(symbol);openFavorites();});
+      wrap.append(card,remove);list.append(wrap);
     }
-    const hint=document.createElement("p");hint.className="bm-modal-note";hint.textContent="Mini cards use the latest saved 5-minute snapshot. Provider refresh timing and market hours affect freshness.";modalBody.append(hint);
+    const hint=document.createElement("p");hint.className="bm-modal-note";hint.textContent="Favorites are saved in this browser and synchronized across tabs. Quote freshness depends on provider availability and market hours.";modalBody.append(hint);
     if(typeof updateFavorites==="function")updateFavorites(false);
   }
   function openMiniMoverSearch() {
