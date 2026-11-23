@@ -41,6 +41,8 @@ test("serves completed 15-minute BTC candles and rejects other 15-minute markets
   assert.equal(d.meta.exchange_timezone,"UTC");
   assert.equal(d.values.length,45);
   assert.ok(d.values.every((row,i)=>i===0||Date.parse(row.datetime)-Date.parse(d.values[i-1].datetime)===900000));
+  const stillCurrent = createBotCryptoFeed({now:()=>Date.parse("2026-11-05T14:59:00Z"),fetchImpl:async()=>({ok:true,status:200,json:async()=>bars})});
+  assert.equal((await stillCurrent.candles("BTC/USD","15min")).meta.interval,"15min");
   await assert.rejects(market.candles("ETH/USD","15min"),/Unsupported/);
 });
 
