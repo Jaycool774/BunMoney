@@ -19,6 +19,12 @@ async function marketEngineRequest(endpoint, params = {}, options = {}) {
     if (options.signal?.aborted) throw new DOMException("Cancelled", "AbortError");
     if (endpoint === "/time_series") return demoCandles(params.symbol, params.interval, params.outputsize);
     if (endpoint === "/price") return { price: demoLivePrice(params.symbol) };
+    if (endpoint === "/search") {
+      const catalog = [["BTC/USD","Bitcoin"],["ETH/USD","Ethereum"],["SOL/USD","Solana"],["XRP/USD","XRP"],["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["TSLA","Tesla"],["EUR/USD","Euro / US Dollar"],["GBP/USD","British Pound / US Dollar"],["USD/JPY","US Dollar / Japanese Yen"],["XAU/USD","Gold / US Dollar"]];
+      const q = String(params.symbol || "").toLowerCase();
+      const matches = catalog.filter(([symbol,name]) => symbol.toLowerCase().includes(q) || name.toLowerCase().includes(q));
+      return { data: matches.map(([symbol,name]) => ({symbol,name,exchange:"DEMO",type:"Demo market"})), count: matches.length };
+    }
     throw new Error("Unsupported demo request.");
   }
   const timeout = AbortSignal.timeout(15000);
@@ -176,6 +182,40 @@ function calculateRSI(values, period = 14) {
   return rsi;
 }
 
+function renderTradeSignal(signal, reason, analysis = null) {
+  const label = document.getElementById("tradeSignalLabel");
+  const detail = document.getElementById("tradeSignalReason");
+  const timeframe = document.getElementById("tradeSignalTimeframe");
+  const facts = document.getElementById("tradeSignalFacts");
+  const card = document.getElementById("tradeSignalCard");
+  if (!label || !detail || !card) return;
+  label.textContent = signal;
+  detail.textContent = reason || "Analyze a supported market to see the current setup.";
+  card.dataset.signal = signal.toLowerCase().replace(/ /g, "-");
+  if (timeframe) timeframe.textContent = "Chart timeframe: " + (selectedTimeframe || "5min");
+  if (facts) {
+    const values = analysis ? [
+      ["Trend", analysis.trend], ["Signal score", (analysis.score > 0 ? "+" : "") + analysis.score],
+      ["RSI", Number.isFinite(analysis.rsi) ? analysis.rsi.toFixed(1) : "—"],
+      ["Volume", Number.isFinite(analysis.volumeRatio) ? analysis.volumeRatio.toFixed(2) + "×" : "—"],
+      ["Risk / reward", Number.isFinite(analysis.rr) ? analysis.rr.toFixed(2) + ":1" : "—"],
+      ["Entry / Stop / Target", [analysis.entry,analysis.stop,analysis.target].map(v => formatMoney(v)).join(" / ")]
+    ] : [["Trend","—"],["Signal score","—"],["RSI","—"],["Volume","—"],["Risk / reward","—"],["Entry / Stop / Target","—"]];
+    facts.replaceChildren();
+    for (const [name,value] of values) {
+      const item=document.createElement("div"), caption=document.createElement("span"), strong=document.createElement("strong");
+      caption.textContent=name; strong.textContent=value; item.append(caption,strong); facts.append(item);
+    }
+  }
+}
+function classifyTradeSignal(input) {
+  if (input.longConfirmed && input.score >= 5) return "BUY";
+  if (input.shortConfirmed && input.score <= -3) return "SELL";
+  if (input.trend === "BULLISH" || input.score >= 2) return "HOLD BUY";
+  if (input.trend === "BEARISH" || input.score <= -2) return "HOLD SELL";
+  return "HOLD";
+}
+
 async function analyze(force = false) {
   const requestId = ++analyzeRequestId;
 
@@ -191,8 +231,9 @@ async function analyze(force = false) {
   if (!tickerElement) return;
   const ticker = tickerElement.value.toUpperCase().trim();
   lastAnalysis = null;
-  if (!Trading.validSymbol(ticker)) { setText("reason", "Enter a ticker symbol first."); return; }
+  if (!Trading.validSymbol(ticker)) { setText("reason", "Enter a ticker or search available markets."); renderTradeSignal("HOLD","No market selected. Search verified markets first."); window.BunMarketSearch?.open(ticker); return; }
   setText("symbol", ticker);
+  renderTradeSignal("HOLD","Checking this symbol against the market-data provider...");
   setText("decision", "LOADING MARKET DATA...");
   setText("reason", "BunAI is analyzing the market...");
   try {
@@ -438,6 +479,16 @@ if (longConfirmed && score >= 5) {
 } else if (shortConfirmed && score <= -3) {
   decision = "WATCH FOR SHORT";
 }
+const tradeSignal = classifyTradeSignal({longConfirmed,shortConfirmed,trend,score});
+const tradeSignalReason = tradeSignal === "BUY"
+  ? "Bullish trend and breakout/retest confirmation meet the signal threshold."
+  : tradeSignal === "SELL"
+    ? "Bearish trend and downside confirmation meet the signal threshold."
+    : tradeSignal === "HOLD BUY"
+      ? "Bullish pressure is present, but the full entry confirmation is not ready."
+      : tradeSignal === "HOLD SELL"
+        ? "Bearish pressure is present, but the full entry confirmation is not ready."
+        : "Signals are mixed or weak. Wait for a clearer setup.";
 
 let setupQuality = "LOW";
 
@@ -490,6 +541,7 @@ if (
     setText("potentialProfit", potentialProfit !== null ? "+" + formatMoney(potentialProfit) : "—");
     setText("decision", decision);
     setText("reason", reason);
+    renderTradeSignal(tradeSignal, tradeSignalReason, {trend,score,rsi,volumeRatio,rr,entry,stop,target});
     setText("setupQuality", setupQuality);
     setText("marketOutlook", outlook);
 
@@ -522,6 +574,8 @@ if (
   score,
   signalFactors,
   decision,
+  tradeSignal,
+  tradeSignalReason,
   setupQuality,
   outlook,
   source: marketSource(),
@@ -559,6 +613,8 @@ if (
     updateTradePlan();
     console.error("Market analysis error:", error); 
     setText("decision", "MARKET DATA UNAVAILABLE");
+    renderTradeSignal("HOLD","No verified market data is available for this symbol. Search the provider's available markets.");
+    if (!error.message.includes("credits") && !error.message.includes("not configured")) window.BunMarketSearch?.open(ticker);
     setText("reason", error.message.includes("credits")
       ? "The market-data provider has reached its current limit. BunMoney will work again when the provider allowance resets."
       : error.message.includes("not configured")
@@ -1605,7 +1661,7 @@ window.addEventListener("resize", () => {
 
 /* FAVORITES + CHART COPILOT */
 const BUN_FAVORITES_KEY = "bunmoney_favorites";
-let bunFavorites = ["GRAB", "SOUN", "BBAI"];
+let bunFavorites = [];
 let favoritesTimer = null;
 
 function loadFavorites() {
