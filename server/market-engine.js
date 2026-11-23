@@ -109,6 +109,43 @@ function createMarketEngine({
       pending.delete(key);
     }
   }
-  return { quote: (q) => request(q), series: (q) => request(q, true) };
+  async function search(query = {}) {
+    const term = typeof query.symbol === "string" ? query.symbol.trim() : "";
+    if (!term || term.length > 40 || !/[a-z0-9]/i.test(term))
+      throw new MarketError("Enter a ticker or market name to search.", 400);
+    if (!apiKey) throw new MarketError("Market API key is not configured", 503);
+    const key = JSON.stringify(["search", term.toLowerCase()]);
+    const cached = cache.get(key);
+    if (cached && now() < cached.expires) return cached.value;
+    const url = new URL("https://api.twelvedata.com/symbol_search");
+    url.search = new URLSearchParams({ symbol: term, apikey: apiKey });
+    try {
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+      const data = await response.json();
+      if (response.status === 429 || data.code === 429) {
+        retryAt = now() + 60000;
+        throw new MarketError("Market provider allowance exceeded. Try later.", 429);
+      }
+      if (!response.ok || data.status === "error")
+        throw new MarketError("Market search is temporarily unavailable.", 502);
+      const matches = (Array.isArray(data.data) ? data.data : [])
+        .filter(item => item && typeof item.symbol === "string" && item.symbol.trim())
+        .slice(0, 20)
+        .map(item => ({
+          symbol: item.symbol.trim().toUpperCase(),
+          name: String(item.instrument_name || item.name || item.symbol).slice(0, 100),
+          exchange: String(item.exchange || item.mic_code || "").slice(0, 80),
+          type: String(item.instrument_type || item.type || "").slice(0, 40),
+          currency: String(item.currency || "").slice(0, 12)
+        }));
+      const value = { data: matches, count: matches.length };
+      cache.set(key, { value, expires: now() + 300000 });
+      return value;
+    } catch (error) {
+      if (error instanceof MarketError) throw error;
+      throw new MarketError("Market search is temporarily unavailable.", 502);
+    }
+  }
+  return { quote: (q) => request(q), series: (q) => request(q, true), search };
 }
 module.exports = { createMarketEngine, parameters, MarketError };
