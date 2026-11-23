@@ -2310,8 +2310,8 @@ function toggleChatSetting(id) {
   if (chatMuted) showPopup("🔇 Chat Muted", "You won't receive BunBot replies until you unmute chat.");
 }
 function clearLocalProgress() {
-  if (!confirm("Reset BunMoney's saved prototype progress on this device?")) return;
-  ["bunmoney_state","bunmoney_favorites","bunmoney_mascot","bunmoney_last_analysis","bunmoney_profile","bunmoney_demo_market","bunmoney_pfp_asset","bunmoney_frame_asset","bunmoney_bg_asset"].forEach(k => localStorage.removeItem(k));
+  if (!confirm("Reset BunMoney's saved prototype progress on this device? Your saved favorite markets will be kept.")) return;
+  ["bunmoney_state","bunmoney_mascot","bunmoney_last_analysis","bunmoney_profile","bunmoney_demo_market","bunmoney_pfp_asset","bunmoney_frame_asset","bunmoney_bg_asset"].forEach(k => localStorage.removeItem(k));
   stateBlocked = true; // Prevent unload from saving the state just removed.
   location.reload();
 }
