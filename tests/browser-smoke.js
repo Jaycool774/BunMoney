@@ -198,7 +198,15 @@ const assert = require("node:assert/strict");
     assert.equal(await page.locator("#bmWhyMoving").isVisible(), true);
     await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
     await page.locator("#bmMarketSearch").fill("NOTAREALMARKET");
-    await page.waitForFunction(() => document.querySelector("#bmMarketResults .bm-empty")?.textContent.includes("No verified markets"));
+    await page.waitForFunction(() => document.querySelector("#bmMarketResults .bm-empty")?.textContent.includes("No verified markets"), {}, {timeout:8000}).catch(async error => {
+      console.error("Market search diagnostics:", {
+        input: await page.locator("#bmMarketSearch").inputValue(),
+        results: await page.locator("#bmMarketResults").textContent(),
+        status: await page.locator("#bmModalTools").textContent(),
+        errors,
+      });
+      throw error;
+    });
     assert.equal(await page.locator(".bm-market-option").count(),0);
     await page.locator(".bm-modal-close").click();
     await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
