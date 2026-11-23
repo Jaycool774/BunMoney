@@ -48,7 +48,10 @@ const assert = require("node:assert/strict");
     });
     const page = await context.newPage();
     // Keep the browser smoke test deterministic: use its mocked REST feed, not a public live WebSocket.
-    await page.addInitScript(() => { window.WebSocket = undefined; });
+    await page.addInitScript(() => {
+      window.WebSocket = undefined;
+      localStorage.setItem("bunmoney_favorites", JSON.stringify(["GRAB","SOUN","BBAI"]));
+    });
     const errors = [];
 
     page.on("pageerror", (error) => errors.push(error.message));
