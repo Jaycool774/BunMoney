@@ -12,7 +12,8 @@ from dataclasses import replace
 from bunbot.core import Blocked, Candle, Engine, Quote, Settings, signal
 from bunbot.market import BunMoneyMarket, timestamp
 from bunbot.service import handler
-from bunbot.backtest import run\nfrom bunbot.strategies import evaluate
+from bunbot.backtest import run
+from bunbot.strategies import evaluate
 
 
 class Market:
