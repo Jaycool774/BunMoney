@@ -47,7 +47,7 @@ function render(r){
 }
 function accuracyText(){const done=state.history.filter(x=>x.outcome);if(!done.length)return "No settled forecasts yet.";const correct=done.filter(x=>x.correct).length;return correct+"/"+done.length+" correct ("+(correct/done.length*100).toFixed(1)+"%)";}
 function historyMarkup(){if(!state.history.length)return '<div class="mi-empty">No recorded forecasts yet. Set a target and record a forecast.</div>';return state.history.slice(-8).reverse().map(x=>'<div class="mi-history-row"><span>'+x.symbol+' · '+x.direction+' · '+new Date(x.createdAt).toLocaleString()+'</span><strong>'+(x.outcome?(x.correct?'Correct':'Incorrect'):'Pending')+'</strong></div>').join("");}
-function settleForecasts(price,now){let changed=false;for(const f of state.history){if(!f.outcome&&now>=f.windowEnd){f.outcome=price>=f.target?"ABOVE":"BELOW";f.correct=f.direction==="UP"?price>=f.target:price<f.target;f.settledAt=now;changed=true;}}if(changed)saveHistory();}
+function settleForecasts(price,now){let changed=false;for(const f of state.history){if(!f.outcome&&f.symbol===state.symbol&&now>=f.windowEnd){f.outcome=price>=f.target?"ABOVE":"BELOW";f.correct=f.direction==="UP"?price>=f.target:price<f.target;f.settledAt=now;changed=true;}}if(changed)saveHistory();}
 async function refresh(forceHistory=false){
  if(state.refreshing)return;
  state.refreshing=true;
