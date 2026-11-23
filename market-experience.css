@@ -36,3 +36,11 @@
 @media(max-width:640px){.bm-modal{padding:9px}.bm-modal-panel{max-height:92vh;border-radius:14px}.bm-market-results{grid-template-columns:1fr}.bm-favorite-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bm-chart-intelligence{grid-template-columns:1fr}.bm-chart-mi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bm-chart-controls{align-items:flex-start}}
 
 .bun-market-hub #bun-scanner-status,.bun-market-hub #bun-scanner-results{display:none!important}
+
+.bm-favorite-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-bottom:12px}
+.bm-favorite-add input{min-width:0;padding:10px 12px;border:1px solid #334155;border-radius:9px;background:#0a111b;color:#f8fafc;font:inherit}
+.bm-favorite-add button{padding:9px 12px;border:1px solid #638b42;border-radius:9px;background:#1b3322;color:#c9f7a6;font-weight:700;cursor:pointer}
+.bm-favorite-add p{grid-column:1/-1;margin:0;min-height:16px}
+.bm-favorite-item{display:grid;gap:5px;min-width:0}
+.bm-favorite-remove{justify-self:end;border:0;background:transparent;color:#fb7185;font-size:10px;cursor:pointer;padding:2px 5px}
+.bm-favorite-remove:hover{text-decoration:underline}
