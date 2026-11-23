@@ -615,7 +615,7 @@ if (
     console.error("Market analysis error:", error); 
     setText("decision", "MARKET DATA UNAVAILABLE");
     renderTradeSignal("HOLD","No verified market data is available for this symbol. Search the provider's available markets.");
-    if (!error.message.includes("credits") && !error.message.includes("not configured")) window.BunMarketSearch?.open(ticker);
+    if (/rejected|no market data|invalid symbol|not recognized/i.test(error.message)) window.BunMarketSearch?.open(ticker);
     setText("reason", error.message.includes("credits")
       ? "The market-data provider has reached its current limit. BunMoney will work again when the provider allowance resets."
       : error.message.includes("not configured")
