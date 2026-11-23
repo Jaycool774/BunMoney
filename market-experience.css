@@ -44,3 +44,8 @@
 .bm-favorite-item{display:grid;gap:5px;min-width:0}
 .bm-favorite-remove{justify-self:end;border:0;background:transparent;color:#fb7185;font-size:10px;cursor:pointer;padding:2px 5px}
 .bm-favorite-remove:hover{text-decoration:underline}
+
+.bm-favorite-search-results{display:grid;gap:6px;max-height:220px;overflow:auto}
+.bm-favorite-add-option{padding:9px 11px;text-align:left;border:1px solid #334155;border-radius:8px;background:#121e2b;color:#e5edf7;font-size:11px;cursor:pointer}
+.bm-favorite-add-option:hover{border-color:#a3e635}
+.bm-favorite-add-option:disabled{opacity:.55;cursor:wait}
