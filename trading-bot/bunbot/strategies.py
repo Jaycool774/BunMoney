@@ -14,7 +14,10 @@ class Decision:
     reason: str
 
 
-def evaluate(candles, interval="5min"):\n    if interval not in ("5min", "15min"):\n        raise ValueError("Unsupported strategy timeframe")\n    timeframe = "completed " + interval.replace("min", "-minute") + " candles"
+def evaluate(candles, interval="5min"):
+    if interval not in ("5min", "15min"):
+        raise ValueError("Unsupported strategy timeframe")
+    timeframe = "completed " + interval.replace("min", "-minute") + " candles"
     if len(candles) < 41:
         # Preserve the original 21-candle quick strategy.
         if len(candles) < 21:
@@ -32,9 +35,9 @@ def evaluate(candles, interval="5min"):\n    if interval not in ("5min", "15min"
     qprev = sum(closes[-11:-1])/10 - sum(closes[-21:-1])/20
     qnow = sum(closes[-10:])/10 - sum(closes[-20:])/20
     if qprev <= 0 < qnow:
-        return Decision('buy','quick','SMA10 crossed above SMA20 on completed 5-minute candles')
+        return Decision('buy','quick',f'SMA10 crossed above SMA20 on {timeframe}')
     if qprev >= 0 > qnow:
-        return Decision('sell','quick','SMA10 crossed below SMA20 on completed 5-minute candles')
+        return Decision('sell','quick',f'SMA10 crossed below SMA20 on {timeframe}')
     pprev = sum(closes[-21:-1])/20 - sum(closes[-41:-1])/40
     pnow = sum(closes[-20:])/20 - sum(closes[-40:])/40
     if pprev <= 0 < pnow and closes[-1] > closes[-11]:
