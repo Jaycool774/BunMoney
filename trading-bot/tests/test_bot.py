@@ -12,18 +12,21 @@ from dataclasses import replace
 from bunbot.core import Blocked, Candle, Engine, Quote, Settings, signal
 from bunbot.market import BunMoneyMarket, timestamp
 from bunbot.service import handler
-from bunbot.backtest import run
+from bunbot.backtest import run\nfrom bunbot.strategies import evaluate
 
 
 class Market:
     def __init__(self, clock):
-        self.clock=clock;self.price=100;self.age=0;self.failure=False;self.bad_series=False;self.trend=True
+        self.clock=clock;self.price=100;self.age=0;self.failure=False;self.bad_series=False;self.trend=True;self.intervals=[]
     def quote(self,symbol):
         if self.failure:raise OSError('Disconnected')
         return Quote(symbol,self.price,self.clock[0]-self.age)
-    def candles(self,symbol):
+    def candles(self,symbol,interval='5min'):
         if self.bad_series and symbol=='ETH/USD':raise OSError('Series disconnected')
-        return [Candle(self.clock[0]-300*(21-i),p,p,p,p) for i,p in enumerate([100]*20+[110 if self.trend else 100])]
+        seconds=900 if interval=='15min' else 300
+        self.intervals.append((symbol,interval))
+        last_open=(int(self.clock[0]//seconds)*seconds)-seconds
+        return [Candle(last_open-seconds*(20-i),p,p,p,p) for i,p in enumerate([100]*20+[110 if self.trend else 100])]
 
 
 class BotTests(unittest.TestCase):
@@ -76,6 +79,31 @@ class BotTests(unittest.TestCase):
         self.e = Engine(self.path, self.market, lambda:self.clock[0])
         self.assertEqual(self.state()['news_blackouts'], windows)
         self.assertEqual(self.state()['status'], 'paused')
+
+    def test_btc_uses_15m_and_other_enabled_crypto_keeps_5m(self):
+        self.start()
+        self.assertIn(('BTC/USD','15min'), self.market.intervals)
+        self.assertIn(('ETH/USD','5min'), self.market.intervals)
+        activity={item['symbol']:item for item in self.state()['activity']}
+        self.assertIn('15-minute',activity['BTC/USD']['reason'])
+        self.assertIn('5-minute',activity['ETH/USD']['reason'])
+
+    def test_15m_candles_must_be_completed_and_contiguous(self):
+        bars=self.market.candles('BTC/USD','15min')
+        self.e.validate_candles(bars,900)
+        self.assertLessEqual(bars[-1].timestamp+900,self.clock[0])
+        incomplete=list(bars)
+        incomplete[-1]=replace(incomplete[-1],timestamp=self.clock[0])
+        with self.assertRaises(Blocked):self.e.validate_candles(incomplete,900)
+        gap=list(bars)
+        gap[-1]=replace(gap[-1],timestamp=gap[-1].timestamp-900)
+        with self.assertRaises(Blocked):self.e.validate_candles(gap,900)
+
+    def test_strategy_reasons_identify_live_market_timeframe(self):
+        btc=evaluate(self.market.candles('BTC/USD','15min'),interval='15min')
+        eth=evaluate(self.market.candles('ETH/USD','5min'),interval='5min')
+        self.assertIn('15-minute',btc.reason)
+        self.assertIn('5-minute',eth.reason)
 
     def test_activity_records_execution_and_successful_cycle(self):
         self.start()
@@ -437,10 +465,16 @@ class AdapterTests(unittest.TestCase):
         def request(path,**params):
             calls.append((path,params))
             if path=='/api/bot-market/quote':return {'symbol':'BTC/USD','close':'100','timestamp':1799999999}
-            return {'meta':{'symbol':'BTC/USD','interval':'5min','exchange_timezone':'UTC','source':'coinbase-exchange-epoch'},'values':[{'datetime':'2027-01-15 07:55:00','open':'100','high':'101','low':'99','close':'100'}]}
+            interval=params.get('interval','5min')
+            stamp='2027-01-15 07:45:00' if interval=='15min' else '2027-01-15 07:55:00'
+            return {'meta':{'symbol':'BTC/USD','interval':interval,'exchange_timezone':'UTC','source':'coinbase-exchange-epoch'},'values':[{'datetime':stamp,'open':'100','high':'101','low':'99','close':'100'}]}
         adapter.request=request
         self.assertEqual(adapter.quote('BTC/USD').price,100)
-        adapter.candles('BTC/USD');self.assertEqual(calls[1][0],'/api/bot-market/candles')
+        adapter.candles('BTC/USD')
+        self.assertEqual(calls[1],('/api/bot-market/candles',{'symbol':'BTC/USD','interval':'5min'}))
+        adapter.candles('BTC/USD','15min')
+        self.assertEqual(calls[2],('/api/bot-market/candles',{'symbol':'BTC/USD','interval':'15min'}))
+        with self.assertRaises(Blocked):adapter.candles('ETH/USD','15min')
         self.assertEqual(timestamp('2026-10-23T00:00:00Z'),timestamp('2026-10-23 00:00:00'))
         adapter.request=lambda *_a,**_k:{'symbol':'BTC/USD','close':'100'}
         with self.assertRaises(Blocked):adapter.quote('BTC/USD')
