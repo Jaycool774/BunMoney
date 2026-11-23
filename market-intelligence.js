@@ -15,7 +15,7 @@ function api(path,params){return marketEngineRequest(path,params);}
 function tone(node,value){if(!node)return;node.classList.remove("mi-up","mi-down","mi-warn");node.classList.add(value>0?"mi-up":value<0?"mi-down":"mi-warn");}
 function render(r){
  state.result=r;
- $("miPrice").textContent=money(r.price);
+ $("miPrice").textContent=money(r.price);\n tone($("miPrice"),r.momentum.fifteenMinute);
  $("miChange").textContent=pct(r.momentum.fifteenMinute)+" / 15m";
  tone($("miChange"),r.momentum.fifteenMinute);
  $("miWindowOpen").textContent=money(r.window.open);
@@ -90,7 +90,7 @@ function recordForecast(){
 function startAutoRefresh(){
  if(!state.timer)state.timer=setInterval(()=>{
   const home=$("home")?.classList.contains("active"),intel=$("intelligenceScreen")?.classList.contains("active");
-  if(home||intel)refresh(false);
+  if((home||intel)&&!document.hidden)refresh(false);
  },15000);
  if(!state.countdownTimer)state.countdownTimer=setInterval(tickCountdown,1000);
 }
