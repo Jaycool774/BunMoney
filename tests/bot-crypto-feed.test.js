@@ -27,6 +27,23 @@ test("requires contiguous completed UTC epoch candles", async () => {
   await assert.rejects(feed({}, bars.filter((_,i) => i !== 5)).candles("ETH/USD"), /Gap/);
   await assert.rejects(feed({}, bars.map(r => [r[0]-3600,...r.slice(1)])).candles("ETH/USD"), /stale/);
 });
+test("serves completed 15-minute BTC candles and rejects other 15-minute markets", async () => {
+  const end = Date.parse("2026-11-05T14:45:00Z")/1000;
+  const bars = Array.from({length: 45}, (_, i) => candle(end - (i+1)*900));
+  let requested = "";
+  const market = createBotCryptoFeed({now:()=>NOW,fetchImpl:async url=>{
+    requested=String(url);
+    return {ok:true,status:200,json:async()=>bars};
+  }});
+  const d = await market.candles("BTC/USD","15min");
+  assert.match(requested,/granularity=900/);
+  assert.equal(d.meta.interval,"15min");
+  assert.equal(d.meta.exchange_timezone,"UTC");
+  assert.equal(d.values.length,45);
+  assert.ok(d.values.every((row,i)=>i===0||Date.parse(row.datetime)-Date.parse(d.values[i-1].datetime)===900000));
+  await assert.rejects(market.candles("ETH/USD","15min"),/Unsupported/);
+});
+
 test("fails closed on malformed prices and candles", async () => {
   await assert.rejects(feed({price:"0",time:"2026-11-05T14:45:00Z"},[]).quote("BTC/USD"), /invalid/);
   await assert.rejects(feed({}, [[1,2,3,4,5,6]]).candles("BTC/USD"), /stale|Missing|Invalid Coinbase candle/);
