@@ -88,8 +88,13 @@ def signal(candles: list[Candle]) -> str | None:
 
 
 class Engine:
-    def __init__(self, path, market: MarketData, now, settings=Settings()):
+    def __init__(self, path, market: MarketData, now, settings=Settings(), intervals=None):
         self.market, self.now, self.settings = market, now, settings
+        self.intervals = {'BTC/USD': '15min'}
+        for symbol, interval in (intervals or {}).items():
+            if symbol not in SYMBOLS or interval not in ('5min', '15min') or (interval == '15min' and symbol != 'BTC/USD'):
+                raise ValueError('Invalid paper-bot candle timeframe')
+            self.intervals[symbol] = interval
         self.lock = threading.RLock()
         self.halt_requested = threading.Event()
         self.db = sqlite3.connect(path, check_same_thread=False, isolation_level=None, timeout=10)
@@ -453,7 +458,7 @@ class Engine:
                     return
                 # BTC uses a slower 15-minute signal candle; the other supported
                 # crypto markets retain their existing completed 5-minute strategy.
-                intervals = {symbol: ('15min' if symbol == 'BTC/USD' else '5min') for symbol in active}
+                intervals = {symbol: self.intervals.get(symbol, '5min') for symbol in active}
                 histories = {symbol: self.market.candles(symbol, interval=intervals[symbol]) for symbol in active}
                 for symbol, candles in histories.items():
                     self.validate_candles(candles, 900 if intervals[symbol] == '15min' else 300)
