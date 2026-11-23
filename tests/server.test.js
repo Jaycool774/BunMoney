@@ -21,6 +21,9 @@ test("Only public assets are served, with CSP", async (t) => {
     "/script.js",
     "/trading-core.js",
     "/coinbase-feed.js",
+    "/market-intelligence-core.js",
+    "/market-intelligence.js",
+    "/market-intelligence.css",
     "/assets/bg_city.webp",
   ]) {
     const r = await fetch(base + path);
@@ -97,6 +100,44 @@ test("Request validation, missing key and provider error status", async (t) => {
   const r = await fetch(failed + "/api/market/price?symbol=AAPL");
   assert.equal(r.status, 429);
   assert.ok(!(await r.text()).includes("secret upstream detail"));
+});
+test("Market search returns only symbols supplied by the data provider", async (t) => {
+  let requested;
+  const base = await serve(t, {
+    fetchImpl: async (url) => {
+      requested = new URL(url);
+      return {
+        ok: true,
+        json: async () => ({
+          data: [
+            { symbol: "AAPL", instrument_name: "Apple Inc.", exchange: "NASDAQ" },
+            { symbol: "BTC/USD", instrument_name: "Bitcoin", exchange: "Coinbase" },
+          ],
+        }),
+      };
+    },
+  });
+  const response = await fetch(base + "/api/market/search?symbol=apple");
+  assert.equal(response.status, 200);
+  assert.equal(requested.pathname, "/symbol_search");
+  assert.equal(requested.searchParams.get("symbol"), "apple");
+  const body = await response.json();
+  assert.deepEqual(body.data.map((item) => item.symbol), ["AAPL", "BTC/USD"]);
+  assert.equal(body.data[0].name, "Apple Inc.");
+  assert.equal(body.count, 2);
+});
+test("Market search rejects empty queries and handles provider errors safely", async (t) => {
+  const base = await serve(t);
+  assert.equal((await fetch(base + "/api/market/search")).status, 400);
+  const failed = await serve(t, {
+    fetchImpl: async () => ({
+      ok: false, status: 429,
+      json: async () => ({ code: 429, message: "private provider detail" }),
+    }),
+  });
+  const response = await fetch(failed + "/api/market/search?symbol=bitcoin");
+  assert.equal(response.status, 429);
+  assert.ok(!(await response.text()).includes("private provider detail"));
 });
 test("Rate limiting ignores spoofed forwarding headers", async (t) => {
   const base = await serve(t, { requestLimit: 1 });

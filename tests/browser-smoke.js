@@ -17,8 +17,20 @@ const assert = require("node:assert/strict");
     apiToken: "browser-test-token",
     fetchImpl: async (url) => ({
       ok: true,
-      json: async () =>
-        String(url).includes("time_series") ? { values } : { close: "100" },
+      json: async () => {
+        const address = new URL(url);
+        if (address.pathname.endsWith("/symbol_search")) {
+          const term = String(address.searchParams.get("symbol") || "").toLowerCase();
+          const catalog = [
+            {symbol:"AAPL",instrument_name:"Apple Inc.",exchange:"NASDAQ"},
+            {symbol:"ETH/USD",instrument_name:"Ethereum",exchange:"Coinbase"},
+            {symbol:"BTC/USD",instrument_name:"Bitcoin",exchange:"Coinbase"},
+            {symbol:"EUR/USD",instrument_name:"Euro / US Dollar",exchange:"FX"},
+          ];
+          return {data:catalog.filter(item=>item.symbol.toLowerCase().includes(term)||item.instrument_name.toLowerCase().includes(term))};
+        }
+        return String(url).includes("time_series") ? { values } : { close: "100" };
+      },
     }),
   }).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -35,6 +47,11 @@ const assert = require("node:assert/strict");
       viewport: { width: 390, height: 844 },
     });
     const page = await context.newPage();
+    // Keep the browser smoke test deterministic: use its mocked REST feed, not a public live WebSocket.
+    await page.addInitScript(() => {
+      window.WebSocket = undefined;
+      localStorage.setItem("bunmoney_favorites", JSON.stringify(["GRAB","SOUN","BBAI"]));
+    });
     const errors = [];
 
     page.on("pageerror", (error) => errors.push(error.message));
@@ -58,7 +75,25 @@ const assert = require("node:assert/strict");
         );
         throw error;
       });
+    assert.equal(await page.locator("#tradeSignalCard").isVisible(), true);
+    assert.equal(await page.locator("#tradeSignalLabel").textContent(), "HOLD");
     assert.equal(await page.locator("#engineToken").inputValue(), "");
+    await page.locator('.nav-button[data-screen="intelligenceScreen"]').click();
+    await page.waitForFunction(() => document.getElementById("miPrice")?.textContent !== "—", {}, { timeout: 8000 });
+    await page.locator("#miTarget").fill("101");
+    await page.locator("#miTarget").dispatchEvent("change");
+    await page.waitForFunction(() => document.getElementById("miMoveAmount")?.textContent.includes("$1.00"), {}, { timeout: 8000 }).catch(async (error) => {
+      console.error("Target diagnostics:", {
+        target: await page.locator("#miTarget").inputValue(),
+        price: await page.locator("#miPrice").textContent(),
+        move: await page.locator("#miMoveAmount").textContent(),
+        status: await page.locator("#miStatus").textContent(),
+        bars: await page.locator("#miBars").textContent(),
+      });
+      throw error;
+    });
+    assert.match(await page.locator("#miTargetHit").textContent(), /%/);
+    await page.locator('.nav-button[data-screen="home"]').click();
     await page.locator(".buy-button").click();
     await page.waitForFunction(() => position?.side === "LONG");
     await page.locator(".sell-button").click();
@@ -77,23 +112,17 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(() => lastAnalysis?.ticker === "AAPL");
     await page.keyboard.press("Tab");
     await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
-    await page.locator("#favoriteInput").fill("ETH/USD");
-    await page.locator('[data-action="addFavorite"]').click();
-    // Favorites validates against the provider before saving; wait for the async response.
-    await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').waitFor();
-    assert.equal(
-      await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').count(),
-      1,
-    );
+    await page.locator("#bmFavoriteInput").fill("ETH/USD");
+    await page.locator("#bmFavoriteAdd").click();
+    await page.locator('#bmFavoriteSearchResults button[data-symbol="ETH/USD"]').click();
+    // Favorites validates the returned symbol with a live quote before saving.
+    await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').waitFor();
+    assert.equal(await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').count(),1);
     await page
-      .locator('[data-action="removeFavorite"][data-symbol="ETH/USD"]')
+      .locator('.bm-favorite-remove[data-symbol="ETH/USD"]')
       .click();
-    assert.equal(
-      await page
-        .locator('[data-action="openFavorite"][data-symbol="ETH/USD"]')
-        .count(),
-      0,
-    );
+    assert.equal(await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').count(),0);
+    await page.locator(".bm-modal-close").click();
     await page
       .locator('[data-action="showScreen"][data-screen="home"]')
       .click();
@@ -127,6 +156,12 @@ const assert = require("node:assert/strict");
     await page.locator('[data-action="clearLocalProgress"]').click();
     await page.waitForFunction(() => tradingBalance === 10 && tradeHistory.length === 0);
     assert.equal(await page.evaluate(() => localStorage.getItem("bunmoney_demo_market")), null);
+    // Reset reload clears the in-memory private engine token; unlock again before provider-backed search.
+    await page.locator("details").filter({has:page.locator("#engineToken")}).locator("summary").click();
+    await page.locator("#engineToken").fill("browser-test-token");
+    await page.locator('[data-action="unlockMarketEngine"]').click();
+    await page.waitForFunction(() => Boolean(lastAnalysis?.ticker), {}, {timeout:8000});
+    assert.deepEqual(await page.evaluate(() => bunFavorites), ["GRAB","SOUN","BBAI"]);
     assert.deepEqual(errors, []);
     assert.equal(
       await page.evaluate(
@@ -161,6 +196,38 @@ const assert = require("node:assert/strict");
     await page.locator('[data-bot="emergency"]').click();
     await page.waitForFunction(()=>document.getElementById('bot-message').textContent.includes('Emergency ON'));
     assert.deepEqual(botControls.map(c=>c.action),['reject','mode','emergency']);
+    assert.deepEqual(errors,[]);
+    // New market experience: fast chart controls, market search, scanner popup and compact favorites.
+    await page.locator('[data-chart-mode="zigzag"]').click();
+    await page.locator('[data-chart-mode="candles"]').click();
+    assert.equal(await page.locator("#bmCandleCountdown").isVisible(), true);
+    assert.equal(await page.locator("#bmWhyMoving").isVisible(), true);
+    await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
+    await page.locator("#bmMarketSearch").fill("NOTAREALMARKET");
+    await page.waitForFunction(() => document.querySelector("#bmMarketResults .bm-empty")?.textContent.includes("No verified markets"), {}, {timeout:8000}).catch(async error => {
+      console.error("Market search diagnostics:", {
+        input: await page.locator("#bmMarketSearch").inputValue(),
+        results: await page.locator("#bmMarketResults").textContent(),
+        status: await page.locator("#bmModalTools").textContent(),
+        errors,
+      });
+      throw error;
+    });
+    assert.equal(await page.locator(".bm-market-option").count(),0);
+    await page.locator(".bm-modal-close").click();
+    await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
+    await page.locator("#bmMarketSearch").fill("AAPL");
+    await page.locator(".bm-market-option").first().click();
+    await page.waitForFunction(() => lastAnalysis?.ticker === "AAPL");
+    await page.locator('.bun-shortcuts a[href="#spikeBoard"]').click();
+    await page.locator(".bm-mover-filters button").filter({hasText:"All movers"}).click();
+    await page.waitForFunction(() => document.querySelectorAll("#bun-scanner-results .feature-card").length > 0, {}, {timeout:8000});
+    await page.locator(".bm-modal-close").click();
+    await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".bm-favorite-mini").length >= 3);
+    await page.locator(".bm-modal-close").click();
+    await page.locator("#bun-market-presets button").filter({hasText:"EUR/USD"}).click();
+    await page.waitForFunction(() => lastAnalysis?.ticker === "EUR/USD", {}, {timeout:8000});
     assert.deepEqual(errors,[]);
     await page.screenshot({ path: "/tmp/bunmoney-smoke.png", fullPage: true });
     await context.close();

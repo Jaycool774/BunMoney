@@ -1,0 +1,36 @@
+name: BunMoney checks
+
+on:
+  pull_request:
+    branches:
+      - feature/market-intelligence
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run Python paper-bot tests
+        run: PYTHONPATH=trading-bot python -m unittest discover -s trading-bot/tests -v
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install server and browser-test dependencies
+        run: npm ci --prefix server
+      - name: Install Chromium for browser smoke test
+        run: node server/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Check JavaScript syntax
+        run: npm run check --prefix server
+      - name: Run unit and API tests
+        run: npm test --prefix server
+      - name: Run browser smoke test
+        run: npm run test:browser --prefix server

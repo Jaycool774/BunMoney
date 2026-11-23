@@ -31,7 +31,7 @@ npm run test:browser --prefix server
 ## November v2 analytics additions (read-only)
 
 - **Strategy leaderboard:** summarizes completed paper trades by Quick and Patient strategy; net P/L, win rate, profit factor, and closed-trade drawdown. It does not mix in God Mode historical simulations.
-- **Multi-timeframe comparison:** on-demand 5m, 15m, 1H and 4H SMA trend read from the selected chart symbol through the existing market provider. Informational only; the Python execution engine is still based on verified 5m crypto candles.
+- **Multi-timeframe comparison:** on-demand 5m, 15m, 1H and 4H SMA trend read from the selected chart symbol through the existing market provider. The Python execution engine now uses verified 15m BTC/USD candles and verified 5m candles for the other supported crypto markets.
 - **Advanced risk panel:** remaining planned open risk, daily loss headroom, daily entry capacity and active symbols, using the existing authenticated bot snapshot. It does not change risk settings.
 - **Trade journal:** read-only completed-trade table and user-triggered CSV export. No credentials are exported.
 - **Smart alerts:** opt-in in-dashboard health warnings while the dashboard is open; not push notifications and not a guaranteed delivery system.
