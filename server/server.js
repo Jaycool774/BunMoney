@@ -125,8 +125,14 @@ function createApp({
   });
   // Authenticated by the existing /api middleware; exclusively for the paper bot.
   const botMarketRoute = method => async (req, res) => {
-    try { res.json(await botCrypto[method](req.query.symbol)); }
-    catch (error) { res.status(error.status || 502).json({ error: error.message || "Crypto feed unavailable" }); }
+    try {
+      const result = method === "candles"
+        ? await botCrypto[method](req.query.symbol, req.query.interval || "5min")
+        : await botCrypto[method](req.query.symbol);
+      res.json(result);
+    } catch (error) {
+      res.status(error.status || 502).json({ error: error.message || "Crypto feed unavailable" });
+    }
   };
   app.get("/api/bot-market/quote", botMarketRoute("quote"));
   app.get("/api/bot-market/candles", botMarketRoute("candles"));
