@@ -188,7 +188,7 @@
       window.bmAcceptPriceWrapped=true;
     }
     const colorize=()=>{
-      for(const id of ["miChange","miMom1","miMom5","miMom15","miMom30","miWindowDistance"]){
+      for(const id of ["change","miChange","miMom1","miMom5","miMom15","miMom30","miWindowDistance"]){
         const node=$(id);if(!node)continue;
         const value=node.textContent.trim();
         updateTone(node,value.startsWith("+")?1:value.startsWith("-")?-1:0);
