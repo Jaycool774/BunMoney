@@ -289,6 +289,7 @@
     const map=[["bmMiMomentum","miMom15"],["bmMiRsi","miRsi"]];
     for(const [dest,source] of map)safeText($(dest),$(source)?.textContent||"—");
     const miniChange=$("bmMiBtcChange");if(miniChange)updateTone(miniChange,(miniChange.textContent||"").startsWith("+")?1:(miniChange.textContent||"").startsWith("-")?-1:0);
+    const miniPrice=$("bmMiEth");if(miniPrice)updateTone(miniPrice,(miniChange?.textContent||"").startsWith("+")?1:(miniChange?.textContent||"").startsWith("-")?-1:0);
     const mom=$("bmMiMomentum");if(mom)updateTone(mom,(mom.textContent||"").startsWith("+")?1:(mom.textContent||"").startsWith("-")?-1:0);
     safeText($("bmWhyMoving"),explainMovement());
   }
