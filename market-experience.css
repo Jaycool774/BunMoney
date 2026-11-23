@@ -49,3 +49,5 @@
 .bm-favorite-add-option{padding:9px 11px;text-align:left;border:1px solid #334155;border-radius:8px;background:#121e2b;color:#e5edf7;font-size:11px;cursor:pointer}
 .bm-favorite-add-option:hover{border-color:#a3e635}
 .bm-favorite-add-option:disabled{opacity:.55;cursor:wait}
+
+.bm-favorite-search-results{grid-column:1/-1}
