@@ -4,8 +4,8 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const safeText = (node, value) => { if (node) node.textContent = value; };
-  const fmtMoney = (n) => Number.isFinite(Number(n)) ? "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) : "—";
-  const fmtPct = (n) => Number.isFinite(Number(n)) ? (Number(n) > 0 ? "+" : "") + Number(n).toFixed(2) + "%" : "—";
+  const fmtMoney = (n) => n==null||n==="" ? "—" : Number.isFinite(Number(n)) ? "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) : "—";
+  const fmtPct = (n) => n==null||n==="" ? "—" : Number.isFinite(Number(n)) ? (Number(n) > 0 ? "+" : "") + Number(n).toFixed(2) + "%" : "—";
   const markets = [
     ["BTC/USD","Bitcoin"],["ETH/USD","Ethereum"],["SOL/USD","Solana"],["XRP/USD","XRP"],
     ["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["TSLA","Tesla"],
@@ -120,7 +120,7 @@
       const name=document.createElement("strong");name.textContent=symbol;
       const price=document.createElement("span");price.className="bm-fav-price";price.dataset.favPrice=symbol;price.textContent=fmtMoney(cached?.price);
       const move=document.createElement("span");move.className="bm-fav-move";move.dataset.favMove=symbol;
-      const amount=Number(cached?.changeAmount),pct=Number(cached?.change);
+      const amount=cached?.changeAmount==null?NaN:Number(cached.changeAmount),pct=cached?.change==null?NaN:Number(cached.change);
       if(Number.isFinite(amount)&&Number.isFinite(pct)){
         const up=amount>=0;move.classList.add(up?"is-up":"is-down");
         move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(pct);
@@ -278,7 +278,7 @@
       const find=(attr)=>Array.from(modalBody.querySelectorAll("["+attr+"]")).find(node=>node.getAttribute(attr)===symbol);
       const price=find("data-fav-price"),move=find("data-fav-move"),trend=find("data-fav-trend");
       if(price)price.textContent=fmtMoney(data.price);
-      if(move){const amount=Number(data.changeAmount),change=Number(data.change);move.classList.remove("is-up","is-down");if(Number.isFinite(amount)&&Number.isFinite(change)){const up=amount>=0;move.classList.add(up?"is-up":"is-down");move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(change);}}
+      if(move){const amount=data.changeAmount==null?NaN:Number(data.changeAmount),change=data.change==null?NaN:Number(data.change);move.classList.remove("is-up","is-down");if(Number.isFinite(amount)&&Number.isFinite(change)){const up=amount>=0;move.classList.add(up?"is-up":"is-down");move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(change);}}
       if(trend)trend.textContent=(data.trend||"Waiting for trend")+" · "+(data.setup||"No setup yet");
     }
   }
