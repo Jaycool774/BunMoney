@@ -139,6 +139,7 @@ function createApp({
   app.use("/api/bot", require("./bot-proxy").botProxy({apiToken}));
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
+  app.get("/api/market/search", route("search"));
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "API endpoint is not implemented." }),
   );
