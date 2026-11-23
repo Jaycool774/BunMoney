@@ -224,6 +224,8 @@
       }
       const scan=event.target.closest("[data-scanner-mode]");
       if(scan){event.preventDefault();event.stopImmediatePropagation();openMovers(scan.dataset.scannerMode);return;}
+      const screenNav=event.target.closest(".nav-button[data-screen]");
+      if(screenNav&&screenNav.dataset.screen!=="favoritesScreen"&&modal?.classList.contains("open"))closeModal();
       const favNav=event.target.closest('.nav-button[data-screen="favoritesScreen"]');
       if(favNav){event.preventDefault();event.stopImmediatePropagation();openFavorites();return;}
       const preset=event.target.closest("#bun-market-presets button");
