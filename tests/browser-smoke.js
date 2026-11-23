@@ -161,6 +161,7 @@ const assert = require("node:assert/strict");
     await page.locator("#engineToken").fill("browser-test-token");
     await page.locator('[data-action="unlockMarketEngine"]').click();
     await page.waitForFunction(() => Boolean(lastAnalysis?.ticker), {}, {timeout:8000});
+    assert.deepEqual(await page.evaluate(() => bunFavorites), ["GRAB","SOUN","BBAI"]);
     assert.deepEqual(errors, []);
     assert.equal(
       await page.evaluate(
