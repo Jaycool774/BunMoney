@@ -164,7 +164,7 @@
     for(const symbol of symbols){
       const cached=typeof favoriteDetailsCache!=="undefined"?favoriteDetailsCache.get(symbol):null;
       const wrap=document.createElement("div");wrap.className="bm-favorite-item";
-      const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";
+      const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";card.dataset.symbol=symbol;
       const name=document.createElement("strong");name.textContent=symbol;
       const price=document.createElement("span");price.className="bm-fav-price";price.dataset.favPrice=symbol;price.textContent=fmtMoney(cached?.price);
       const move=document.createElement("span");move.className="bm-fav-move";move.dataset.favMove=symbol;
