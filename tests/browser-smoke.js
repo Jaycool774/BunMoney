@@ -17,8 +17,20 @@ const assert = require("node:assert/strict");
     apiToken: "browser-test-token",
     fetchImpl: async (url) => ({
       ok: true,
-      json: async () =>
-        String(url).includes("time_series") ? { values } : { close: "100" },
+      json: async () => {
+        const address = new URL(url);
+        if (address.pathname.endsWith("/symbol_search")) {
+          const term = String(address.searchParams.get("symbol") || "").toLowerCase();
+          const catalog = [
+            {symbol:"AAPL",instrument_name:"Apple Inc.",exchange:"NASDAQ"},
+            {symbol:"ETH/USD",instrument_name:"Ethereum",exchange:"Coinbase"},
+            {symbol:"BTC/USD",instrument_name:"Bitcoin",exchange:"Coinbase"},
+            {symbol:"EUR/USD",instrument_name:"Euro / US Dollar",exchange:"FX"},
+          ];
+          return {data:catalog.filter(item=>item.symbol.toLowerCase().includes(term)||item.instrument_name.toLowerCase().includes(term))};
+        }
+        return String(url).includes("time_series") ? { values } : { close: "100" };
+      },
     }),
   }).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -60,6 +72,8 @@ const assert = require("node:assert/strict");
         );
         throw error;
       });
+    assert.equal(await page.locator("#tradeSignalCard").isVisible(), true);
+    assert.equal(await page.locator("#tradeSignalLabel").textContent(), "HOLD");
     assert.equal(await page.locator("#engineToken").inputValue(), "");
     await page.locator('.nav-button[data-screen="intelligenceScreen"]').click();
     await page.waitForFunction(() => document.getElementById("miPrice")?.textContent !== "—", {}, { timeout: 8000 });
