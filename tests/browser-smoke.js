@@ -156,6 +156,11 @@ const assert = require("node:assert/strict");
     await page.locator('[data-action="clearLocalProgress"]').click();
     await page.waitForFunction(() => tradingBalance === 10 && tradeHistory.length === 0);
     assert.equal(await page.evaluate(() => localStorage.getItem("bunmoney_demo_market")), null);
+    // Reset reload clears the in-memory private engine token; unlock again before provider-backed search.
+    await page.locator("details").filter({has:page.locator("#engineToken")}).locator("summary").click();
+    await page.locator("#engineToken").fill("browser-test-token");
+    await page.locator('[data-action="unlockMarketEngine"]').click();
+    await page.waitForFunction(() => Boolean(lastAnalysis?.ticker), {}, {timeout:8000});
     assert.deepEqual(errors, []);
     assert.equal(
       await page.evaluate(
