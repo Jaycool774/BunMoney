@@ -357,8 +357,8 @@ class BotTests(unittest.TestCase):
 
     def set_bearish(self):
         original=self.market.candles
-        def candles(symbol):
-            bars=original(symbol)
+        def candles(symbol,interval='5min'):
+            bars=original(symbol,interval)
             bars[-1]=replace(bars[-1],open=90,high=90,low=90,close=90)
             return bars
         self.market.candles=candles
