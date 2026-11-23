@@ -1,8 +1,8 @@
-"""Deterministic, paper-only strategies using completed five-minute candles.
+"""Deterministic paper-only strategies on verified completed 5m or 15m candles.
 
-Quick: SMA(10/20) cross. Patient: SMA(20/40) cross confirmed by
-the 10-bar price trend. One signal per symbol/bar, with quick priority.
-No forecasts, broker calls, or hidden lookahead.
+BTC/USD uses 15m; other supported crypto markets use 5m. Quick: SMA(10/20)
+cross. Patient: SMA(20/40) cross confirmed by the 10-bar price trend.
+One signal per symbol/bar, with quick priority. No lookahead or broker calls.
 """
 from dataclasses import dataclass
 
