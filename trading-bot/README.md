@@ -42,9 +42,8 @@ multi-user permissions system. Serve the Node app over HTTPS before remote acces
 
 ## Strategy and safety behavior
 
-- BTC/USD and ETH/USD, completed five-minute candles only. A crossing of SMA10
-  above SMA20 proposes a long; a crossing below signals a sale of a held long.
-  Bearish signals without a held long are informational; no short positions.
+- BTC/USD uses verified, completed 15-minute Coinbase candles for its entry/exit signals. The other eight supported crypto markets (ETH, SOL, LTC, DOGE, ADA, XRP, AVAX and LINK) retain verified, completed five-minute candles. Quick SMA10/20 and Patient SMA20/40 signals use the selected market timeframe. A bullish cross proposes a long; a bearish cross signals a sale of an existing long. No short positions are opened.
+- The worker checks live provider quotes and protective stop/target conditions every 30 seconds. BTC strategy signals are evaluated only after a 15-minute candle has fully closed; it does not trade on a still-forming candle or repaint an intrabar signal. This is live market-data paper execution, not live-money trading.
 - Manual records signals/plans without new orders. Discretionary SMA sales follow the same mode as entries. Approval requires a pending,
   unexpired proposal (120 seconds). Rejection, expiry, restart, stop, pause, or a
   mode change makes a proposal permanently ineligible. A failed approval is also
