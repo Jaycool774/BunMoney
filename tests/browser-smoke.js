@@ -120,12 +120,7 @@ const assert = require("node:assert/strict");
     await page
       .locator('.bm-favorite-remove[data-symbol="ETH/USD"]')
       .click();
-    assert.equal(
-      await page
-        .locator('[data-action="openFavorite"][data-symbol="ETH/USD"]')
-        .count(),
-      0,
-    );
+    assert.equal(await page.locator('.bm-favorite-mini[data-symbol="ETH/USD"]').count(),0);
     await page
       .locator('[data-action="showScreen"][data-screen="home"]')
       .click();
