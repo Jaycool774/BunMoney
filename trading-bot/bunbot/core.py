@@ -522,7 +522,8 @@ class Engine:
                 raise Blocked('Incomplete or future candle')
             if i and c.timestamp-candles[i-1].timestamp != interval_seconds:
                 raise Blocked('Unordered, duplicate or missing candles')
-        if self.now()-(candles[-1].timestamp+interval_seconds) > 360:
+        stale_tolerance = interval_seconds + 360 if interval_seconds == 900 else 360
+        if self.now()-(candles[-1].timestamp+interval_seconds) > stale_tolerance:
             raise Blocked('Stale market candles')
 
     def snapshot(self):
