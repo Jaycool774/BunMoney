@@ -1624,3 +1624,22 @@ body{background:radial-gradient(ellipse 75% 650px at 50% -180px,rgba(61,149,42,.
 .bun-god-metric{display:flex;flex-direction:column;gap:5px;padding:9px;border:1px solid #34583c;border-radius:8px}
 .bun-god-metric span{font-size:11px;color:#b5cbb8}
 .bun-god-metric strong{font-size:14px;color:#e8f8e4}
+
+
+/* Compact signal card placed directly beside the paper Buy/Sell controls. */
+.trade-signal-card{margin:12px 0;padding:13px 14px;border:1px solid #3b5945;border-radius:13px;background:linear-gradient(135deg,#101b16,#10151d);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.trade-signal-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.trade-signal-heading>div{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.trade-signal-eyebrow{font-size:10px;letter-spacing:.13em;color:#9bb6a0;font-weight:800}
+#tradeSignalLabel{font-size:19px;letter-spacing:.04em;color:#e5e7eb}
+.trade-signal-card[data-signal="buy"] #tradeSignalLabel,.trade-signal-card[data-signal="hold-buy"] #tradeSignalLabel{color:#a3e635}
+.trade-signal-card[data-signal="sell"] #tradeSignalLabel,.trade-signal-card[data-signal="hold-sell"] #tradeSignalLabel{color:#fb7185}
+.trade-signal-card[data-signal="hold"] #tradeSignalLabel{color:#facc15}
+#tradeSignalTimeframe{font-size:11px;color:#aab7ad}
+#tradeSignalReason{margin:8px 0 10px;color:#d1d9d2;font-size:12px;line-height:1.5}
+.trade-signal-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.trade-signal-facts>div{min-width:0;padding:8px;border:1px solid rgba(148,163,184,.16);border-radius:8px;background:rgba(255,255,255,.025)}
+.trade-signal-facts span{display:block;font-size:10px;color:#94a3a8;margin-bottom:4px}
+.trade-signal-facts strong{display:block;font-size:12px;color:#f1f5f9;overflow-wrap:anywhere}
+.trade-signal-disclaimer{display:block;margin-top:9px;color:#87958c;font-size:10px;line-height:1.4}
+@media(max-width:560px){.trade-signal-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.trade-signal-heading{align-items:flex-start;flex-direction:column}}
