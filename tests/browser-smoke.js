@@ -112,8 +112,8 @@ const assert = require("node:assert/strict");
     await page.waitForFunction(() => lastAnalysis?.ticker === "AAPL");
     await page.keyboard.press("Tab");
     await page.locator('.nav-button[data-screen="favoritesScreen"]').click();
-    await page.locator("#favoriteInput").fill("ETH/USD");
-    await page.locator('[data-action="addFavorite"]').click();
+    await page.locator("#bmFavoriteInput").fill("ETH/USD");
+    await page.locator("#bmFavoriteAdd").click();
     // Favorites validates against the provider before saving; wait for the async response.
     await page.locator('[data-action="openFavorite"][data-symbol="ETH/USD"]').waitFor();
     assert.equal(
@@ -121,7 +121,7 @@ const assert = require("node:assert/strict");
       1,
     );
     await page
-      .locator('[data-action="removeFavorite"][data-symbol="ETH/USD"]')
+      .locator('.bm-favorite-remove[data-symbol="ETH/USD"]')
       .click();
     assert.equal(
       await page
