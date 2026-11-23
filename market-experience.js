@@ -294,7 +294,11 @@
   }
   function tickCountdown() {
     const node=$("bmCandleCountdown");if(!node)return;
-    const span=timeframeMs(),remaining=span-(Date.now()%span);
+    const interval=typeof selectedTimeframe!=="undefined"?selectedTimeframe:"5min";
+    const now=new Date(),span=timeframeMs();let remaining=span-(Date.now()%span);
+    if(interval==="1day"){const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1));remaining=next.getTime()-Date.now();}
+    if(interval==="1week"){const days=(8-now.getUTCDay())%7||7;const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+days));remaining=next.getTime()-Date.now();}
+    if(interval==="1month"||interval==="max"){const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1));remaining=next.getTime()-Date.now();}
     const seconds=Math.ceil(remaining/1000),m=Math.floor(seconds/60),s=seconds%60;
     safeText(node,"Next candle in "+(m?m+"m ":"")+String(s).padStart(2,"0")+"s");
   }
