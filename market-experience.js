@@ -64,36 +64,60 @@
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("bm-modal-open");
   }
-  function createSearchBox() {
-    const wrap = document.createElement("div");
-    wrap.className = "bm-market-search";
-    const input = document.createElement("input");
-    input.type = "search"; input.id = "bmMarketSearch"; input.placeholder = "Search ticker, crypto, forex or metal…";
-    input.autocomplete = "off"; input.setAttribute("aria-label", "Search markets");
-    const results = document.createElement("div");
-    results.className = "bm-market-results"; results.id = "bmMarketResults";
-    wrap.append(input, results);
-    const render = () => {
-      const q = input.value.trim().toLowerCase();
-      const matches = markets.filter(([symbol,name]) => !q || symbol.toLowerCase().includes(q) || name.toLowerCase().includes(q)).slice(0,12);
-      results.replaceChildren();
-      if (!matches.length) { const empty=document.createElement("p");empty.className="bm-empty";empty.textContent="No suggested match. You can still enter a valid provider symbol in Analyze.";results.append(empty);return; }
-      for (const [symbol,name] of matches) {
-        const button=document.createElement("button");button.type="button";button.className="bm-market-option";
-        const left=document.createElement("span");left.innerHTML='<strong></strong><small></small>';
-        left.querySelector("strong").textContent=symbol;left.querySelector("small").textContent=name;
-        const action=document.createElement("span");action.textContent="Analyze →";
-        button.append(left,action);
-        button.addEventListener("click",()=>{const ticker=$("ticker");if(ticker)ticker.value=symbol;closeModal();if(typeof showScreen==="function")showScreen("home");if(typeof analyze==="function")analyze(true);});
-        results.append(button);
+  function renderMarketResults(results, container, query) {
+    container.replaceChildren();
+    if (!results.length) {
+      const empty=document.createElement("p");empty.className="bm-empty";
+      empty.textContent="No verified markets matched “"+query+"”. Try a ticker or full market name.";
+      container.append(empty);return;
+    }
+    for (const item of results) {
+      const symbol=String(item.symbol||"").toUpperCase();
+      const name=String(item.name||item.instrument_name||symbol);
+      if(!symbol)continue;
+      const button=document.createElement("button");button.type="button";button.className="bm-market-option";
+      const left=document.createElement("span"),strong=document.createElement("strong"),small=document.createElement("small");
+      strong.textContent=symbol;small.textContent=name+(item.exchange?" · "+item.exchange:"");
+      left.append(strong,small);
+      const action=document.createElement("span");action.textContent="Analyze →";
+      button.append(left,action);
+      button.addEventListener("click",()=>{
+        const ticker=$("ticker");if(ticker)ticker.value=symbol;
+        closeModal();if(typeof showScreen==="function")showScreen("home");
+        if(typeof analyze==="function")analyze(true);
+      });
+      container.append(button);
+    }
+  }
+  function createSearchBox(initialQuery="") {
+    const wrap=document.createElement("div");wrap.className="bm-market-search";
+    const input=document.createElement("input");input.type="search";input.id="bmMarketSearch";
+    input.placeholder="Search real provider markets by ticker or name…";input.autocomplete="off";
+    input.setAttribute("aria-label","Search available markets");input.value=initialQuery||"";
+    const results=document.createElement("div");results.className="bm-market-results";results.id="bmMarketResults";
+    const status=document.createElement("p");status.className="bm-modal-note";status.setAttribute("role","status");
+    wrap.append(input,results,status);modalTools.append(wrap);
+    let request=0,timer=null;
+    const render=async()=>{
+      const q=input.value.trim();const id=++request;
+      if(!q){results.replaceChildren();status.textContent="Type a ticker or market name. Results come from your connected market-data provider.";return;}
+      status.textContent="Searching verified provider markets…";
+      try{
+        if(typeof marketEngineRequest!=="function")throw new Error("Market search is unavailable in this build.");
+        const response=await marketEngineRequest("/search",{symbol:q});
+        if(id!==request)return;
+        const matches=Array.isArray(response.data)?response.data:[];
+        renderMarketResults(matches,results,q);
+        status.textContent=matches.length+" provider match"+(matches.length===1?"":"es")+" · Select one to analyze. Availability can vary by provider plan and exchange hours.";
+      }catch(error){
+        if(id!==request)return;
+        results.replaceChildren();status.textContent=error.message||"Market search is temporarily unavailable.";
       }
     };
-    input.addEventListener("input",render);
-    modalTools.append(wrap);
-    render();
-    input.focus();
+    input.addEventListener("input",()=>{if(timer)clearTimeout(timer);timer=setTimeout(render,250);});
+    render();input.focus();
   }
-  function openMarkets() { openModal("Find a market"); createSearchBox(); }
+  function openMarkets(initialQuery="") { openModal("Find an available market"); createSearchBox(initialQuery); }
   function openMovers(mode="movers",directionFilter="all") {
     openModal(mode==="movers"?"Top movers":mode.replace(/\b\w/g,x=>x.toUpperCase()));
     const status=$("bun-scanner-status"), output=$("bun-scanner-results");
@@ -308,18 +332,36 @@
     if(countdownTimer)clearInterval(countdownTimer);countdownTimer=setInterval(tickCountdown,1000);tickCountdown();
     if(snapshotTimer)clearInterval(snapshotTimer);snapshotTimer=setInterval(syncMiniIntelligence,1000);syncMiniIntelligence();
     const ticker=$("ticker");
+    window.BunMarketSearch={open:openMarkets};
     if(ticker){
       const list=document.createElement("div");list.id="bmInlineSuggestions";list.className="bm-inline-suggestions";list.hidden=true;
       const search=ticker.closest(".search")||ticker.parentElement;search?.append(list);
-      const render=()=>{
-        const q=ticker.value.trim().toLowerCase();
+      let request=0,timer=null;
+      const render=async()=>{
+        const q=ticker.value.trim();const id=++request;
         if(!q){list.hidden=true;return;}
-        const matches=markets.filter(([s,n])=>s.toLowerCase().includes(q)||n.toLowerCase().includes(q)).slice(0,7);
-        list.replaceChildren();
-        for(const [symbol,name] of matches){const button=document.createElement("button");button.type="button";button.innerHTML="<strong></strong><small></small>";button.querySelector("strong").textContent=symbol;button.querySelector("small").textContent=name;button.addEventListener("click",()=>{ticker.value=symbol;list.hidden=true;if(typeof analyze==="function")analyze(true);});list.append(button);}
-        list.hidden=!matches.length;
+        list.hidden=false;list.replaceChildren();
+        const loading=document.createElement("p");loading.textContent="Searching available markets…";list.append(loading);
+        try{
+          if(typeof marketEngineRequest!=="function")throw new Error("Search unavailable");
+          const response=await marketEngineRequest("/search",{symbol:q});
+          if(id!==request)return;
+          const matches=Array.isArray(response.data)?response.data.slice(0,7):[];
+          list.replaceChildren();
+          for(const item of matches){
+            const symbol=String(item.symbol||"").toUpperCase();if(!symbol)continue;
+            const button=document.createElement("button");button.type="button";
+            const strong=document.createElement("strong"),small=document.createElement("small");
+            strong.textContent=symbol;small.textContent=String(item.name||symbol)+(item.exchange?" · "+item.exchange:"");
+            button.append(strong,small);
+            button.addEventListener("click",()=>{ticker.value=symbol;list.hidden=true;if(typeof analyze==="function")analyze(true);});
+            list.append(button);
+          }
+          if(!matches.length){const empty=document.createElement("p");empty.textContent="No verified market matches. Open Markets to search again.";list.append(empty);}
+        }catch(error){if(id!==request)return;list.replaceChildren();const empty=document.createElement("p");empty.textContent=error.message||"Market search unavailable.";list.append(empty);}
       };
-      ticker.addEventListener("input",render);ticker.addEventListener("focus",render);
+      ticker.addEventListener("input",()=>{if(timer)clearTimeout(timer);timer=setTimeout(render,250);});
+      ticker.addEventListener("focus",()=>{if(ticker.value.trim())render();});
       ticker.addEventListener("keydown",e=>{if(e.key==="Escape")list.hidden=true;if(e.key==="ArrowDown"&&!list.hidden){e.preventDefault();list.querySelector("button")?.focus();}});
       document.addEventListener("click",e=>{if(!e.target.closest("#homeSearch"))list.hidden=true;});
     }
