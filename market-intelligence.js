@@ -3,7 +3,7 @@
 const engine=window.BunMarketIntelligence;
 if(!engine)return;
 const $=id=>document.getElementById(id);
-const state={symbol:"BTC/USD",windowMinutes:15,target:"",samples:[],result:null,refreshing:false,timer:null,countdownTimer:null,history:loadHistory(),historyCache:new Map()};
+const state={symbol:"BTC/USD",windowMinutes:15,target:"",samples:[],result:null,refreshing:false,timer:null,countdownTimer:null,history:loadHistory(),historyCache:new Map(),feed:null,streamPrice:null,streamTime:0};
 const HISTORY_TTL=5*60*1000;
 function loadHistory(){try{const v=JSON.parse(localStorage.getItem("bunmoney_mi_history")||"[]");return Array.isArray(v)?v.slice(-100):[];}catch{return [];}}
 function saveHistory(){try{localStorage.setItem("bunmoney_mi_history",JSON.stringify(state.history.slice(-100)));}catch{}}
@@ -49,6 +49,23 @@ function render(r){
 function accuracyText(){const done=state.history.filter(x=>x.outcome);if(!done.length)return "No settled forecasts yet.";const correct=done.filter(x=>x.correct).length;return correct+"/"+done.length+" correct ("+(correct/done.length*100).toFixed(1)+"%)";}
 function historyMarkup(){if(!state.history.length)return '<div class="mi-empty">No recorded forecasts yet. Set a target and record a forecast.</div>';return state.history.slice(-8).reverse().map(x=>'<div class="mi-history-row"><span>'+x.symbol+' · '+x.direction+' · '+new Date(x.createdAt).toLocaleString()+'</span><strong>'+(x.outcome?(x.correct?'Correct':'Incorrect'):'Pending')+'</strong></div>').join("");}
 function settleForecasts(price,now){let changed=false;for(const f of state.history){if(!f.outcome&&f.symbol===state.symbol&&now>=f.windowEnd){f.outcome=price>=f.target?"ABOVE":"BELOW";f.correct=f.direction==="UP"?price>=f.target:price<f.target;f.settledAt=now;changed=true;}}if(changed)saveHistory();}
+function applyStreamPrice(price,stamp){
+ const hist=state.historyCache.get(state.symbol);if(!hist||!Number.isFinite(price)||price<=0)return;
+ state.samples=state.samples.filter(s=>stamp-s.time<=60000);state.samples.push({time:stamp,price});
+ settleForecasts(price,stamp);
+ const r=engine.calculate({symbol:state.symbol,currentPrice:price,candles1m:hist.one.values,candles15m:hist.quarter.values,target:state.target,windowMinutes:state.windowMinutes,now:stamp,samples:state.samples});
+ render(r);status("Coinbase live quote · "+new Date(stamp).toLocaleTimeString()+" · Historical candles cached.");
+}
+function connectStream(symbol){
+ if(state.feed){state.feed.stop();state.feed=null;}
+ state.streamPrice=null;state.streamTime=0;
+ if(demoMarketEnabled||!window.BunCoinbaseFeed)return;
+ state.feed=new window.BunCoinbaseFeed({
+  onPrice:(asset,price,time)=>{if(asset!==state.symbol||demoMarketEnabled)return;state.streamPrice=price;state.streamTime=time;applyStreamPrice(price,time);},
+  onStatus:value=>{if(value!=="Coinbase live")status("Crypto feed: "+value);}
+ });
+ state.feed.start(symbol);
+}
 async function refresh(forceHistory=false){
  if(state.refreshing)return;
  state.refreshing=true;
@@ -57,7 +74,7 @@ async function refresh(forceHistory=false){
  const needsHistory=forceHistory||!cached||now-cached.loadedAt>=HISTORY_TTL;
  status("Refreshing "+symbol+" quote"+(needsHistory?" and historical candles…":"…"));
  try{
-  const quotePromise=api("/price",{symbol});
+  const streamFresh=!demoMarketEnabled&&state.streamPrice>0&&now-state.streamTime<20000;\n  const quotePromise=streamFresh?Promise.resolve({price:state.streamPrice}):api("/price",{symbol});
   const historyPromise=needsHistory?Promise.all([
    api("/time_series",{symbol,interval:"1min",outputsize:300}),
    api("/time_series",{symbol,interval:"15min",outputsize:2880})
@@ -73,7 +90,7 @@ async function refresh(forceHistory=false){
   const target=Number(state.target);
   const r=engine.calculate({symbol,currentPrice:price,candles1m:hist.one.values,candles15m:hist.quarter.values,target:state.target,windowMinutes:state.windowMinutes,now:stamp,samples:state.samples});
   render(r);
-  status("Quote updated "+new Date(stamp).toLocaleTimeString()+" · "+(demoMarketEnabled?"DEMO DATA":"Provider data")+" · Historical candles refreshed "+(needsHistory?"now":"from 5-minute cache")+".");
+  status((streamFresh?"Coinbase live quote":"Quote updated "+new Date(stamp).toLocaleTimeString()+" · "+(demoMarketEnabled?"DEMO DATA":"Provider data"))+" · Historical candles refreshed "+(needsHistory?"now":"from 5-minute cache")+".");
  }catch(e){status(e.message||"Market intelligence update failed.");}
  finally{state.refreshing=false;if(symbol!==state.symbol)refresh(false);}
 }
@@ -96,7 +113,7 @@ function startAutoRefresh(){
  if(!state.countdownTimer)state.countdownTimer=setInterval(tickCountdown,1000);
 }
 function bind(){
- document.querySelectorAll("[data-mi-asset]").forEach(b=>b.addEventListener("click",()=>{state.symbol=b.dataset.miAsset;state.samples=[];document.querySelectorAll("[data-mi-asset]").forEach(x=>x.classList.toggle("active",x===b));refresh(false);}));
+ document.querySelectorAll("[data-mi-asset]").forEach(b=>b.addEventListener("click",()=>{state.symbol=b.dataset.miAsset;state.samples=[];connectStream(state.symbol);document.querySelectorAll("[data-mi-asset]").forEach(x=>x.classList.toggle("active",x===b));refresh(false);}));
  $("miWindow").addEventListener("change",e=>{state.windowMinutes=Number(e.target.value)||15;refresh(false);});
  $("miTarget").addEventListener("input",e=>{state.target=e.target.value.trim();if(state.result){try{const r=engine.calculate({symbol:state.symbol,currentPrice:state.result.price,candles1m:state.historyCache.get(state.symbol)?.one.values||[],candles15m:state.historyCache.get(state.symbol)?.quarter.values||[],target:state.target,windowMinutes:state.windowMinutes,now:Date.now(),samples:state.samples});render(r);}catch{}}});
  $("miRefresh").addEventListener("click",()=>refresh(false));
