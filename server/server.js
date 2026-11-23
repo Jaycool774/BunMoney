@@ -125,14 +125,21 @@ function createApp({
   });
   // Authenticated by the existing /api middleware; exclusively for the paper bot.
   const botMarketRoute = method => async (req, res) => {
-    try { res.json(await botCrypto[method](req.query.symbol)); }
-    catch (error) { res.status(error.status || 502).json({ error: error.message || "Crypto feed unavailable" }); }
+    try {
+      const result = method === "candles"
+        ? await botCrypto[method](req.query.symbol, req.query.interval || "5min")
+        : await botCrypto[method](req.query.symbol);
+      res.json(result);
+    } catch (error) {
+      res.status(error.status || 502).json({ error: error.message || "Crypto feed unavailable" });
+    }
   };
   app.get("/api/bot-market/quote", botMarketRoute("quote"));
   app.get("/api/bot-market/candles", botMarketRoute("candles"));
   app.use("/api/bot", require("./bot-proxy").botProxy({apiToken}));
   app.get(["/api/quote", "/api/market/price"], route("quote"));
   app.get(["/api/time-series", "/api/market/time_series"], route("series"));
+  app.get("/api/market/search", route("search"));
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "API endpoint is not implemented." }),
   );
@@ -145,6 +152,11 @@ function createApp({
     "trading-core.js",
     "coinbase-feed.js",
     "bot-dashboard.js",
+    "market-experience.css",
+    "market-experience.js",
+    "dashboard-layout.js",
+    "godmode-performance.js",
+    "bot-insights.js",
     "market-intelligence-core.js",
     "market-intelligence.js",
     "market-intelligence.css",

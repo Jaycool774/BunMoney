@@ -1,0 +1,417 @@
+/* BunMoney market experience: focused navigation, compact watchlist and chart UX.
+   All market actions remain observational or paper-only. */
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const safeText = (node, value) => { if (node) node.textContent = value; };
+  const fmtMoney = (n) => n==null||n==="" ? "—" : Number.isFinite(Number(n)) ? "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) : "—";
+  const fmtPct = (n) => n==null||n==="" ? "—" : Number.isFinite(Number(n)) ? (Number(n) > 0 ? "+" : "") + Number(n).toFixed(2) + "%" : "—";
+  const markets = [
+    ["BTC/USD","Bitcoin"],["ETH/USD","Ethereum"],["SOL/USD","Solana"],["XRP/USD","XRP"],
+    ["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["TSLA","Tesla"],
+    ["AMZN","Amazon"],["GOOGL","Alphabet"],["META","Meta"],["AMD","AMD"],
+    ["SOUN","SoundHound AI"],["PLTR","Palantir"],["BBAI","BigBear.ai"],["GRAB","Grab"],
+    ["EUR/USD","Euro / US Dollar"],["GBP/USD","British Pound / US Dollar"],["USD/JPY","US Dollar / Japanese Yen"],
+    ["AUD/USD","Australian Dollar / US Dollar"],["USD/CAD","US Dollar / Canadian Dollar"],
+    ["XAU/USD","Gold / US Dollar"],["XAG/USD","Silver / US Dollar"]
+  ];
+  let modal, modalTitle, modalBody, modalTools, modalSearch;
+  let chartMode = "candles";
+  let lastPrice = null;
+  let drawFrame = 0;
+  let queuedDraw = null;
+  let originalDraw = null;
+  let originalAcceptPrice = null;
+  let countdownTimer = null;
+  let snapshotTimer = null;
+
+  function ensureModal() {
+    if (modal) return;
+    modal = document.createElement("div");
+    modal.id = "bmExperienceModal";
+    modal.className = "bm-modal";
+    modal.setAttribute("aria-hidden", "true");
+    modal.innerHTML = '<div class="bm-modal-backdrop" data-bm-close></div><section class="bm-modal-panel" role="dialog" aria-modal="true" aria-labelledby="bmModalTitle"><header class="bm-modal-head"><div><span class="bm-modal-eyebrow">BUNMONEY / QUICK VIEW</span><h2 id="bmModalTitle">Markets</h2></div><button type="button" class="bm-modal-close" aria-label="Close" data-bm-close>×</button></header><div id="bmModalTools" class="bm-modal-tools"></div><div id="bmModalBody" class="bm-modal-body"></div></section>';
+    document.body.append(modal);
+    modalTitle = $("bmModalTitle");
+    modalBody = $("bmModalBody");
+    modalTools = $("bmModalTools");
+    modal.addEventListener("click", (event) => {
+      if (event.target.closest("[data-bm-close]")) closeModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && modal.classList.contains("open")) closeModal();
+    });
+  }
+  function restoreScannerNodes(){
+    const guide=$("bun-scanner-guide"),status=$("bun-scanner-status"),output=$("bun-scanner-results");
+    if(guide&&status&&output){guide.append(status,output);}
+  }
+  function openModal(title) {
+    ensureModal();
+    restoreScannerNodes();
+    safeText(modalTitle, title);
+    modalTools.replaceChildren();
+    modalBody.replaceChildren();
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("bm-modal-open");
+  }
+  function closeModal() {
+    if (!modal) return;
+    restoreScannerNodes();
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("bm-modal-open");
+  }
+  function renderMarketResults(results, container, query) {
+    container.replaceChildren();
+    if (!results.length) {
+      const empty=document.createElement("p");empty.className="bm-empty";
+      empty.textContent="No verified markets matched “"+query+"”. Try a ticker or full market name.";
+      container.append(empty);return;
+    }
+    for (const item of results) {
+      const symbol=String(item.symbol||"").toUpperCase();
+      const name=String(item.name||item.instrument_name||symbol);
+      if(!symbol)continue;
+      const button=document.createElement("button");button.type="button";button.className="bm-market-option";
+      const left=document.createElement("span"),strong=document.createElement("strong"),small=document.createElement("small");
+      strong.textContent=symbol;small.textContent=name+(item.exchange?" · "+item.exchange:"");
+      left.append(strong,small);
+      const action=document.createElement("span");action.textContent="Analyze →";
+      button.append(left,action);
+      button.addEventListener("click",()=>{
+        const ticker=$("ticker");if(ticker)ticker.value=symbol;
+        closeModal();if(typeof showScreen==="function")showScreen("home");
+        if(typeof analyze==="function")analyze(true);
+      });
+      container.append(button);
+    }
+  }
+  function createSearchBox(initialQuery="") {
+    const wrap=document.createElement("div");wrap.className="bm-market-search";
+    const input=document.createElement("input");input.type="search";input.id="bmMarketSearch";
+    input.placeholder="Search real provider markets by ticker or name…";input.autocomplete="off";
+    input.setAttribute("aria-label","Search available markets");input.value=initialQuery||"";
+    const results=document.createElement("div");results.className="bm-market-results";results.id="bmMarketResults";
+    const status=document.createElement("p");status.className="bm-modal-note";status.setAttribute("role","status");
+    wrap.append(input,results,status);modalTools.append(wrap);
+    let request=0,timer=null;
+    const render=async()=>{
+      const q=input.value.trim();const id=++request;
+      if(!q){results.replaceChildren();status.textContent="Type a ticker or market name. Results come from your connected market-data provider.";return;}
+      status.textContent="Searching verified provider markets…";
+      try{
+        if(typeof marketEngineRequest!=="function")throw new Error("Market search is unavailable in this build.");
+        const response=await marketEngineRequest("/search",{symbol:q});
+        if(id!==request)return;
+        const matches=Array.isArray(response.data)?response.data:[];
+        renderMarketResults(matches,results,q);
+        status.textContent=matches.length+" provider match"+(matches.length===1?"":"es")+" · Select one to analyze. Availability can vary by provider plan and exchange hours.";
+      }catch(error){
+        if(id!==request)return;
+        results.replaceChildren();status.textContent=error.message||"Market search is temporarily unavailable.";
+      }
+    };
+    input.addEventListener("input",()=>{if(timer)clearTimeout(timer);timer=setTimeout(render,250);});
+    render();input.focus();
+  }
+  function openMarkets(initialQuery="") { openModal("Find an available market"); createSearchBox(initialQuery); }
+  function openMovers(mode="movers",directionFilter="all") {
+    openModal(mode==="movers"?"Top movers":mode.replace(/\b\w/g,x=>x.toUpperCase()));
+    const status=$("bun-scanner-status"), output=$("bun-scanner-results");
+    if (status && output) {
+      modalBody.append(status,output);
+      status.textContent="Preparing watchlist scan…";
+      const filter=document.createElement("input");filter.type="search";filter.className="bm-result-filter";filter.placeholder="Filter scan results…";filter.setAttribute("aria-label","Filter scan results");
+      modalTools.append(filter);
+      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\s+([+-]?\d+(?:\.\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
+      if (typeof runBunScanner==="function") Promise.resolve(runBunScanner(mode)).then(()=>filter.dispatchEvent(new Event("input")));
+      else status.textContent="Scanner module is unavailable. Refresh BunMoney and try again.";
+    } else {
+      const msg=document.createElement("p");msg.className="bm-empty";msg.textContent="Scanner results are unavailable on this build.";modalBody.append(msg);
+    }
+  }
+  function openFavorites() {
+    openModal("Favorites");
+    const form=document.createElement("div");form.className="bm-favorite-add";
+    const input=document.createElement("input");input.id="bmFavoriteInput";input.type="search";
+    input.placeholder="Search a ticker or market name…";input.setAttribute("aria-label","Search for a favorite market");
+    const add=document.createElement("button");add.type="button";add.id="bmFavoriteAdd";add.textContent="Find markets";
+    const feedback=document.createElement("p");feedback.id="bmFavoriteFeedback";feedback.className="bm-modal-note";feedback.setAttribute("role","status");
+    const results=document.createElement("div");results.id="bmFavoriteSearchResults";results.className="bm-favorite-search-results";
+    form.append(input,add,feedback,results);modalBody.append(form);
+    add.addEventListener("click",async()=>{
+      const query=input.value.trim();
+      if(!query){feedback.textContent="Enter a ticker or market name to search.";return;}
+      add.disabled=true;feedback.textContent="Searching the connected provider…";results.replaceChildren();
+      try{
+        if(typeof marketEngineRequest!=="function")throw new Error("Market search is unavailable in this build.");
+        const response=await marketEngineRequest("/search",{symbol:query});
+        const matches=Array.isArray(response.data)?response.data:[];
+        if(!matches.length){feedback.textContent="No verified market matches. Try another ticker or name.";return;}
+        feedback.textContent=matches.length+" provider matches. Select one to verify and save it.";
+        for(const match of matches){
+          const symbol=String(match.symbol||"").toUpperCase();if(!symbol)continue;
+          const option=document.createElement("button");option.type="button";option.dataset.symbol=symbol;
+          option.className="bm-favorite-add-option";
+          option.textContent=symbol+" · "+String(match.name||symbol)+(match.exchange?" · "+match.exchange:"");
+          option.addEventListener("click",async()=>{
+            const legacyInput=$("favoriteInput");if(legacyInput)legacyInput.value=symbol;
+            option.disabled=true;feedback.textContent="Verifying "+symbol+" quote…";
+            try{
+              if(typeof addFavorite!=="function")throw new Error("Favorites are unavailable in this build.");
+              await addFavorite();
+              const legacyFeedback=$("favoriteFeedback");
+              feedback.textContent=legacyFeedback?.textContent||"Favorite check complete.";
+              if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){
+                openFavorites();
+                const refreshed=$("bmFavoriteFeedback");if(refreshed)refreshed.textContent=symbol+" saved to Favorites.";
+              }
+            }catch(error){feedback.textContent=error.message||"Could not save this favorite.";}
+            finally{option.disabled=false;}
+          });
+          results.append(option);
+        }
+      }catch(error){feedback.textContent=error.message||"Market search is temporarily unavailable.";}
+      finally{add.disabled=false;}
+    });
+    const list=document.createElement("div");list.className="bm-favorite-grid";modalBody.append(list);
+    const symbols=typeof bunFavorites!=="undefined"?bunFavorites:[];
+    if(!symbols.length){const empty=document.createElement("p");empty.className="bm-empty";empty.textContent="No saved favorites yet. Search and add a verified market above.";list.append(empty);}
+    for(const symbol of symbols){
+      const cached=typeof favoriteDetailsCache!=="undefined"?favoriteDetailsCache.get(symbol):null;
+      const wrap=document.createElement("div");wrap.className="bm-favorite-item";
+      const card=document.createElement("button");card.type="button";card.className="bm-favorite-mini";card.dataset.symbol=symbol;
+      const name=document.createElement("strong");name.textContent=symbol;
+      const price=document.createElement("span");price.className="bm-fav-price";price.dataset.favPrice=symbol;price.textContent=fmtMoney(cached?.price);
+      const move=document.createElement("span");move.className="bm-fav-move";move.dataset.favMove=symbol;
+      const amount=cached?.changeAmount==null?NaN:Number(cached.changeAmount),pct=cached?.change==null?NaN:Number(cached.change);
+      if(Number.isFinite(amount)&&Number.isFinite(pct)){
+        const up=amount>=0;move.classList.add(up?"is-up":"is-down");
+        move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(pct);
+      }else move.textContent="Waiting for quote";
+      const trend=document.createElement("small");trend.dataset.favTrend=symbol;trend.textContent=(cached?.trend||"Waiting for trend")+" · "+(cached?.setup||"No setup yet");
+      card.append(name,price,move,trend);
+      card.addEventListener("click",()=>{closeModal();if(typeof openFavorite==="function")openFavorite(symbol);});
+      const remove=document.createElement("button");remove.type="button";remove.className="bm-favorite-remove";remove.dataset.symbol=symbol;remove.textContent="Remove";
+      remove.addEventListener("click",()=>{if(typeof removeFavorite==="function")removeFavorite(symbol);openFavorites();});
+      wrap.append(card,remove);list.append(wrap);
+    }
+    const hint=document.createElement("p");hint.className="bm-modal-note";hint.textContent="Favorites are saved in this browser and synchronized across tabs. Quote freshness depends on provider availability and market hours.";modalBody.append(hint);
+    if(typeof updateFavorites==="function")updateFavorites(false);
+  }
+  function openMiniMoverSearch() {
+    openModal("Movers");
+    const search=document.createElement("input");search.type="search";search.placeholder="What are you looking for? e.g. gainers, losers, SOUN…";search.className="bm-result-filter";modalTools.append(search);
+    const actions=document.createElement("div");actions.className="bm-mover-filters";
+    for(const [label,mode,direction] of [["All movers","movers","all"],["Top gainers","movers","up"],["Top losers","movers","down"],["Breakouts","breakouts","all"],["High volatility","volatility","all"],["Market leaders","leaders","all"],["Potential gems","gems","all"]]){
+      const button=document.createElement("button");button.type="button";button.textContent=label;button.addEventListener("click",()=>openMovers(mode,direction));actions.append(button);
+    }
+    modalBody.append(actions);
+    const note=document.createElement("p");note.className="bm-empty";note.textContent="Choose a scan to rank your saved favorites, then filter the results by ticker or details.";modalBody.append(note);
+    search.addEventListener("input",()=>{const q=search.value.trim().toLowerCase();for(const button of actions.children)button.hidden=!button.textContent.toLowerCase().includes(q);note.textContent=q?"Showing scan types matching “"+search.value+"”.":"Choose a scan to rank your saved favorites, then filter the results by ticker or details.";});
+    search.focus();
+  }
+  function installNavigation() {
+    document.addEventListener("click",(event)=>{
+      const shortcut=event.target.closest(".bun-shortcuts a");
+      if(shortcut){
+        const href=shortcut.getAttribute("href");
+        if(href==="#homeSearch"){event.preventDefault();event.stopImmediatePropagation();openMarkets();return;}
+        if(href==="#spikeBoard"){event.preventDefault();event.stopImmediatePropagation();openMiniMoverSearch();return;}
+      }
+      const scan=event.target.closest("[data-scanner-mode]");
+      if(scan){event.preventDefault();event.stopImmediatePropagation();openMovers(scan.dataset.scannerMode);return;}
+      const screenNav=event.target.closest(".nav-button[data-screen]");
+      if(screenNav&&screenNav.dataset.screen!=="favoritesScreen"&&modal?.classList.contains("open"))closeModal();
+      const favNav=event.target.closest('.nav-button[data-screen="favoritesScreen"]');
+      if(favNav){event.preventDefault();event.stopImmediatePropagation();openFavorites();return;}
+      const preset=event.target.closest("#bun-market-presets button");
+      if(preset){
+        event.preventDefault();event.stopImmediatePropagation();
+        const symbol=(preset.textContent||"").replace(/^\+\s*/,"").trim().toUpperCase();
+        if(symbol&&typeof addFavorite==="function"){
+          if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){if(typeof openFavorite==="function")openFavorite(symbol);return;}
+          preset.disabled=true;
+          addFavorite(symbol).then(()=>{if(typeof openFavorite==="function"&&typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){closeModal();openFavorite(symbol);}else if(typeof showPopup==="function"){showPopup("Market unavailable","The data provider could not verify "+symbol+". Check the symbol, provider plan and market hours.");}}).catch(()=>{}).finally(()=>{preset.disabled=false;});
+        }
+      }
+    },true);
+  }
+  function updateTone(node, direction) {
+    if(!node)return;
+    node.classList.remove("bm-up","bm-down","bm-flat");
+    node.classList.add(direction>0?"bm-up":direction<0?"bm-down":"bm-flat");
+  }
+  function installPriceTone() {
+    if(typeof window.acceptPrice==="function"&&!window.bmAcceptPriceWrapped){
+      originalAcceptPrice=window.acceptPrice;
+      window.acceptPrice=function(symbol,price,time){
+        const before=symbol===((typeof selectedSymbol==="function")?selectedSymbol():"")?Number(window.lastLivePrice):NaN;
+        originalAcceptPrice(symbol,price,time);
+        if(symbol===((typeof selectedSymbol==="function")?selectedSymbol():"")){
+          const direction=Number(price)>before?1:Number(price)<before?-1:0;
+          updateTone($("price"),direction);updateTone($("change"),direction);
+        }
+      };
+      window.bmAcceptPriceWrapped=true;
+    }
+    const colorize=()=>{
+      for(const id of ["change","miChange","miMom1","miMom5","miMom15","miMom30","miWindowDistance"]){
+        const node=$(id);if(!node)continue;
+        const value=node.textContent.trim();
+        updateTone(node,value.startsWith("+")?1:value.startsWith("-")?-1:0);
+      }
+    };
+    const observer=new MutationObserver(colorize);
+    for(const id of ["miChange","miMom1","miMom5","miMom15","miMom30","miWindowDistance"]){const node=$(id);if(node)observer.observe(node,{childList:true,characterData:true,subtree:true});}
+    colorize();
+  }
+  function timeframeMs() {
+    const map={"1min":60000,"5min":300000,"15min":900000,"1h":3600000,"4h":14400000,"1day":86400000,"1week":604800000,"1month":2592000000,"max":2592000000};
+    return map[typeof selectedTimeframe!=="undefined"?selectedTimeframe:"5min"]||300000;
+  }
+  function explainMovement() {
+    const a=typeof lastAnalysis!=="undefined"?lastAnalysis:null;
+    if(!a)return "Analyze a market to see the factors behind its latest move.";
+    const parts=[];
+    if(a.trend)parts.push(a.trend.toLowerCase()+" trend");
+    if(Number.isFinite(Number(a.volumeRatio)))parts.push("volume "+Number(a.volumeRatio).toFixed(2)+"× average");
+    if(a.breakout&&a.breakout!=="NO CONFIRMATION")parts.push(a.breakout.toLowerCase());
+    if(a.retest&&a.retest!=="WAITING")parts.push(a.retest.toLowerCase());
+    if(Number.isFinite(Number(a.rsi)))parts.push("RSI "+Number(a.rsi).toFixed(1));
+    return parts.length?"Observed factors: "+parts.join(" · ")+". These describe the chart; they do not prove what caused the move.":"No strong directional factors detected in the latest analysis.";
+  }
+  function drawZigzag(args) {
+    const [candles,support,resistance,entry,stop,target]=args;
+    const canvas=$("chart");if(!canvas||!Array.isArray(candles)||!candles.length)return;
+    const width=canvas.clientWidth||350,height=canvas.clientHeight||340,dpr=window.devicePixelRatio||1;
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+    const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+    const zoom=Number($("zoomSlider")?.value||25),visible=candles.slice(-Math.min(zoom,candles.length));
+    const values=visible.map(c=>Number(c.close)).filter(Number.isFinite);
+    const levels=[...values,Number(support),Number(resistance),Number(entry),Number(stop),Number(target)].filter(Number.isFinite);
+    const min=Math.min(...levels),max=Math.max(...levels),range=max-min||1,pad=24;
+    const x=i=>pad+i/Math.max(1,values.length-1)*(width-pad*2),y=v=>height-pad-(v-min)/range*(height-pad*2);
+    ctx.strokeStyle="rgba(255,255,255,.07)";ctx.lineWidth=1;
+    for(let i=1;i<5;i++){const gy=pad+i/5*(height-pad*2);ctx.beginPath();ctx.moveTo(pad,gy);ctx.lineTo(width-pad,gy);ctx.stroke();}
+    ctx.beginPath();values.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));
+    const last=values.at(-1),first=values[0],up=last>=first;
+    ctx.strokeStyle=up?"#84cc16":"#ef4444";ctx.lineWidth=2.4;ctx.lineJoin="round";ctx.lineCap="round";ctx.stroke();
+    ctx.lineTo(x(values.length-1),height-pad);ctx.lineTo(x(0),height-pad);ctx.closePath();
+    const fill=ctx.createLinearGradient(0,pad,0,height-pad);fill.addColorStop(0,up?"rgba(132,204,22,.20)":"rgba(239,68,68,.20)");fill.addColorStop(1,"rgba(10,14,20,0)");ctx.fillStyle=fill;ctx.fill();
+    const current=values.at(-1);ctx.fillStyle=up?"#a3e635":"#fb7185";ctx.beginPath();ctx.arc(x(values.length-1),y(current),4,0,Math.PI*2);ctx.fill();
+    ctx.font="11px Arial";ctx.textAlign="right";ctx.fillStyle="#dbe4ef";ctx.fillText(fmtMoney(max),width-4,pad+4);ctx.fillText(fmtMoney(min),width-4,height-pad-4);
+    ctx.textAlign="left";ctx.fillStyle=up?"#a3e635":"#fb7185";ctx.font="bold 12px Arial";ctx.fillText((up?"▲ ":"▼ ")+fmtMoney(current),pad,pad+12);
+    for(const [v,label,color] of [[support,"SUPPORT","#22c55e"],[resistance,"RESISTANCE","#ef4444"],[entry,"ENTRY","#e5e7eb"],[stop,"STOP","#ef4444"],[target,"TARGET","#84cc16"]]){
+      if(!Number.isFinite(Number(v))||Number(v)<min||Number(v)>max)continue;
+      ctx.strokeStyle=color;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(pad,y(Number(v)));ctx.lineTo(width-pad,y(Number(v)));ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=color;ctx.font="9px Arial";ctx.fillText(label,pad+3,y(Number(v))-4);
+    }
+  }
+  function installChart() {
+    if(typeof window.drawChart!=="function"||window.bmDrawWrapped)return;
+    originalDraw=window.drawChart;
+    window.drawChart=function(...args){
+      queuedDraw=args;
+      if(drawFrame)return;
+      drawFrame=requestAnimationFrame(()=>{
+        drawFrame=0;const latest=queuedDraw;queuedDraw=null;
+        if(chartMode==="zigzag")drawZigzag(latest);
+        else originalDraw(...latest);
+      });
+    };
+    window.bmDrawWrapped=true;
+  }
+  function addChartControls() {
+    const card=$("mainChartCard");if(!card||$("bmChartExtras"))return;
+    const heading=card.querySelector(".chart-heading");
+    const controls=document.createElement("div");controls.className="bm-chart-controls";controls.id="bmChartExtras";
+    controls.innerHTML='<div class="bm-chart-mode" role="group" aria-label="Chart style"><button type="button" data-chart-mode="candles" class="active">Candles</button><button type="button" data-chart-mode="zigzag">Zigzag</button></div><span id="bmCandleCountdown">Next candle in —</span>';
+    if(heading)heading.insertAdjacentElement("afterend",controls);else card.prepend(controls);
+    controls.querySelectorAll("[data-chart-mode]").forEach(button=>button.addEventListener("click",()=>{
+      chartMode=button.dataset.chartMode;
+      controls.querySelectorAll("[data-chart-mode]").forEach(b=>b.classList.toggle("active",b===button));
+      if(typeof redrawChart==="function")redrawChart();
+    }));
+    const wrap=card.querySelector(".chart-wrap");
+    const extras=document.createElement("section");extras.id="bmChartExtrasInfo";extras.className="bm-chart-intelligence";
+    extras.innerHTML='<div class="bm-chart-why"><small>WHY IT IS MOVING</small><p id="bmWhyMoving">Analyze a market to see the factors behind its latest move.</p></div><div class="bm-chart-mi"><div class="bm-chart-mi-head"><strong>Market Intelligence</strong><button type="button" id="bmOpenIntelligence">Full view →</button></div><div class="bm-chart-mi-grid"><div><small>Active asset</small><strong id="bmMiBtc">BTC / USD</strong><span id="bmMiBtcChange">—</span></div><div><small>Live price</small><strong id="bmMiEth">—</strong><span id="bmMiEthChange">—</span></div><div><small>15m momentum</small><strong id="bmMiMomentum">—</strong></div><div><small>RSI (14)</small><strong id="bmMiRsi">—</strong></div></div><p class="bm-mi-foot">Provider quotes may be delayed or rate-limited. Indicators are descriptive, not predictions.</p></div>';
+    if(wrap)wrap.insertAdjacentElement("afterend",extras);else card.append(extras);
+    $("bmOpenIntelligence")?.addEventListener("click",()=>{if(typeof showScreen==="function")showScreen("intelligenceScreen");});
+  }
+  function syncFavoriteMiniCards(){
+    if(!modal || !modal.classList.contains("open") || modalTitle?.textContent!=="Favorites" || typeof favoriteDetailsCache==="undefined")return;
+    for(const symbol of (typeof bunFavorites!=="undefined"?bunFavorites:[])){
+      const data=favoriteDetailsCache.get(symbol);if(!data)continue;
+      const find=(attr)=>Array.from(modalBody.querySelectorAll("["+attr+"]")).find(node=>node.getAttribute(attr)===symbol);
+      const price=find("data-fav-price"),move=find("data-fav-move"),trend=find("data-fav-trend");
+      if(price)price.textContent=fmtMoney(data.price);
+      if(move){const amount=data.changeAmount==null?NaN:Number(data.changeAmount),change=data.change==null?NaN:Number(data.change);move.classList.remove("is-up","is-down");if(Number.isFinite(amount)&&Number.isFinite(change)){const up=amount>=0;move.classList.add(up?"is-up":"is-down");move.textContent=(up?"+":"-")+fmtMoney(Math.abs(amount))+"  "+fmtPct(change);}}
+      if(trend)trend.textContent=(data.trend||"Waiting for trend")+" · "+(data.setup||"No setup yet");
+    }
+  }
+  function syncMiniIntelligence() {
+    syncFavoriteMiniCards();
+    const originalSymbol=document.querySelector('[data-mi-asset].active')?.dataset.miAsset||"BTC/USD";
+    safeText($("bmMiBtc"),originalSymbol);safeText($("bmMiEth"),$("miPrice")?.textContent||"—");safeText($("bmMiBtcChange"),$("miChange")?.textContent||"—");
+    const map=[["bmMiMomentum","miMom15"],["bmMiRsi","miRsi"]];
+    for(const [dest,source] of map)safeText($(dest),$(source)?.textContent||"—");
+    const miniChange=$("bmMiBtcChange");if(miniChange)updateTone(miniChange,(miniChange.textContent||"").startsWith("+")?1:(miniChange.textContent||"").startsWith("-")?-1:0);
+    const miniPrice=$("bmMiEth");if(miniPrice)updateTone(miniPrice,(miniChange?.textContent||"").startsWith("+")?1:(miniChange?.textContent||"").startsWith("-")?-1:0);
+    const mom=$("bmMiMomentum");if(mom)updateTone(mom,(mom.textContent||"").startsWith("+")?1:(mom.textContent||"").startsWith("-")?-1:0);
+    safeText($("bmWhyMoving"),explainMovement());
+  }
+  function tickCountdown() {
+    const node=$("bmCandleCountdown");if(!node)return;
+    const interval=typeof selectedTimeframe!=="undefined"?selectedTimeframe:"5min";
+    const now=new Date(),span=timeframeMs();let remaining=span-(Date.now()%span);
+    if(interval==="1day"){const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1));remaining=next.getTime()-Date.now();}
+    if(interval==="1week"){const days=(8-now.getUTCDay())%7||7;const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+days));remaining=next.getTime()-Date.now();}
+    if(interval==="1month"||interval==="max"){const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1));remaining=next.getTime()-Date.now();}
+    const seconds=Math.ceil(remaining/1000),m=Math.floor(seconds/60),s=seconds%60;
+    safeText(node,"Next candle in "+(m?m+"m ":"")+String(s).padStart(2,"0")+"s");
+  }
+  function initialize() {
+    ensureModal();installNavigation();installPriceTone();installChart();addChartControls();
+    if(countdownTimer)clearInterval(countdownTimer);countdownTimer=setInterval(tickCountdown,1000);tickCountdown();
+    if(snapshotTimer)clearInterval(snapshotTimer);snapshotTimer=setInterval(syncMiniIntelligence,1000);syncMiniIntelligence();
+    const ticker=$("ticker");
+    window.BunMarketSearch={open:openMarkets};
+    if(ticker){
+      const list=document.createElement("div");list.id="bmInlineSuggestions";list.className="bm-inline-suggestions";list.hidden=true;
+      const search=ticker.closest(".search")||ticker.parentElement;search?.append(list);
+      let request=0,timer=null;
+      const render=async()=>{
+        const q=ticker.value.trim();const id=++request;
+        if(!q){list.hidden=true;return;}
+        list.hidden=false;list.replaceChildren();
+        const loading=document.createElement("p");loading.textContent="Searching available markets…";list.append(loading);
+        try{
+          if(typeof marketEngineRequest!=="function")throw new Error("Search unavailable");
+          const response=await marketEngineRequest("/search",{symbol:q});
+          if(id!==request)return;
+          const matches=Array.isArray(response.data)?response.data.slice(0,7):[];
+          list.replaceChildren();
+          for(const item of matches){
+            const symbol=String(item.symbol||"").toUpperCase();if(!symbol)continue;
+            const button=document.createElement("button");button.type="button";
+            const strong=document.createElement("strong"),small=document.createElement("small");
+            strong.textContent=symbol;small.textContent=String(item.name||symbol)+(item.exchange?" · "+item.exchange:"");
+            button.append(strong,small);
+            button.addEventListener("click",()=>{ticker.value=symbol;list.hidden=true;if(typeof analyze==="function")analyze(true);});
+            list.append(button);
+          }
+          if(!matches.length){const empty=document.createElement("p");empty.textContent="No verified market matches. Open Markets to search again.";list.append(empty);}
+        }catch(error){if(id!==request)return;list.replaceChildren();const empty=document.createElement("p");empty.textContent=error.message||"Market search unavailable.";list.append(empty);}
+      };
+      ticker.addEventListener("input",()=>{if(timer)clearTimeout(timer);timer=setTimeout(render,250);});
+      ticker.addEventListener("focus",()=>{if(ticker.value.trim())render();});
+      ticker.addEventListener("keydown",e=>{if(e.key==="Escape")list.hidden=true;if(e.key==="ArrowDown"&&!list.hidden){e.preventDefault();list.querySelector("button")?.focus();}});
+      document.addEventListener("click",e=>{if(!e.target.closest("#homeSearch"))list.hidden=true;});
+    }
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initialize,{once:true});else initialize();
+})();

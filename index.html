@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BunMoney — Market Command Center</title>
-  <link rel="stylesheet" href="style.css?v=layout-v6">
-  <link rel="stylesheet" href="market-intelligence.css?v=1">
+  <link rel="stylesheet" href="style.css?v=layout-v7">
+  <link rel="stylesheet" href="market-intelligence.css?v=2">
+  <link rel="stylesheet" href="market-experience.css?v=2">
 </head>
 
 <body>
@@ -311,6 +312,19 @@
         No open position.
       </div>
 
+      <section class="trade-signal-card" id="tradeSignalCard" data-signal="hold" aria-live="polite">
+        <div class="trade-signal-heading">
+          <div><span class="trade-signal-eyebrow">BUNMONEY SIGNAL</span><strong id="tradeSignalLabel">HOLD</strong></div>
+          <small id="tradeSignalTimeframe">Chart timeframe: 5min</small>
+        </div>
+        <p id="tradeSignalReason">Analyze a supported market to see the current setup.</p>
+        <div class="trade-signal-facts" id="tradeSignalFacts">
+          <div><span>Trend</span><strong>—</strong></div><div><span>Signal score</span><strong>—</strong></div>
+          <div><span>RSI</span><strong>—</strong></div><div><span>Volume</span><strong>—</strong></div>
+          <div><span>Risk / reward</span><strong>—</strong></div><div><span>Entry / Stop / Target</span><strong>—</strong></div>
+        </div>
+        <small class="trade-signal-disclaimer">Analysis only · confirm the data and risk before any paper trade.</small>
+      </section>
       <div class="trade-buttons">
         <button class="buy-button" data-action="paperBuy">BUY</button>
         <button class="sell-button" data-action="paperSell">SELL</button>
@@ -357,7 +371,7 @@
       <section class="mi-panel"><h3>📍 Where BTC / ETH Stands</h3><p class="mi-sub">Distance from the current window open, recent momentum and historical market context.</p><div class="mi-kpis"><div class="mi-kpi"><span>1-minute momentum</span><strong id="miMom1">—</strong></div><div class="mi-kpi"><span>5-minute momentum</span><strong id="miMom5">—</strong></div><div class="mi-kpi"><span>15-minute momentum</span><strong id="miMom15">—</strong></div><div class="mi-kpi"><span>30-minute momentum</span><strong id="miMom30">—</strong></div><div class="mi-kpi"><span>RSI (14)</span><strong id="miRsi">—</strong></div><div class="mi-kpi"><span>Positive 15m historical windows</span><strong id="miHistUp">—</strong></div></div><p class="mi-foot">Historical 15m return range: <strong id="miHistRange">—</strong></p></section>
       <section class="mi-panel mi-wide"><h3>🧾 Historical Accuracy</h3><p class="mi-sub">Record a target forecast during a window. BunMoney checks it after the window closes using the first available refreshed quote. This is an approximate paper-tracking record.</p><div class="mi-kpis"><div class="mi-kpi"><span>Settled forecast accuracy</span><strong id="miAccuracy">No settled forecasts yet.</strong></div><div class="mi-kpi"><span>Available history</span><strong id="miBars">—</strong></div></div><div id="miForecasts" class="mi-history-list" style="margin-top:12px"><div class="mi-empty">No recorded forecasts yet.</div></div><p class="mi-foot">History is stored in this browser's local storage and can be cleared by clearing site data. It is not a verified trading ledger.</p></section>
     </div>
-    <p class="mi-foot">Market data comes from BunMoney's configured provider. 30-day history depends on Twelve Data plan limits and data availability. Demo mode uses synthetic data and is clearly labeled. This module does not place orders or connect to Kalshi.</p>
+    <p class="mi-foot">BTC and ETH quotes use Coinbase streaming when available, with Twelve Data REST fallback. Historical candles come from Twelve Data and are cached for five minutes. Data freshness depends on upstream availability and market conditions. Demo mode uses synthetic data and is clearly labeled. This module does not place orders or connect to Kalshi.</p>
   </section>
 
   <section class="setup emperor-bunny-card" id="emperorBunny" aria-label="Emperor Bunny assistant">
@@ -454,6 +468,7 @@
   <script src="script.js"></script>
   <script src="market-intelligence-core.js"></script>
   <script src="market-intelligence.js"></script>
+  <script src="market-experience.js"></script>
 
 <script src="bot-dashboard.js?v=upgrade-v2-20261111" defer></script>
 <script src="dashboard-layout.js?v=layout-v5" defer></script>

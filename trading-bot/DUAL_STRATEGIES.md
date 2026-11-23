@@ -1,6 +1,6 @@
 # Dual-strategy paper trading (draft)
 
-Both strategies are enabled by the strategy evaluator. **Quick** uses a 10/20 moving-average crossover on completed five-minute candles. **Patient** uses a 20/40 crossover with ten-bar directional confirmation. Quick has priority if both fire on the same completed bar. Both use the same paper cash ledger and shared position, daily-entry, daily-loss and combined-open-risk limits.
+Both strategies are enabled by the strategy evaluator. **BTC/USD** uses verified, completed 15-minute candles; the other supported crypto markets continue using completed five-minute candles. **Quick** uses a 10/20 moving-average crossover. **Patient** uses a 20/40 crossover with ten-bar directional confirmation. Quick has priority if both fire on the same completed bar. Both use the same paper cash ledger and shared position, daily-entry, daily-loss and combined-open-risk limits. Live quotes continue to check protective stops/targets on the worker's 30-second cycle; new BTC signals wait for the 15-minute candle to close.
 
 Maximum planned risk per entry defaults to **0.5%** of paper equity (`Settings.risk_fraction = 0.005`). This is a sizing ceiling, not a guarantee of maximum realized loss; gap moves and execution costs can increase loss.
 

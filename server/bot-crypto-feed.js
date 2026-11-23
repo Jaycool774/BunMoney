@@ -32,27 +32,32 @@ function createBotCryptoFeed({ fetchImpl = globalThis.fetch, now = Date.now, tim
       throw new FeedError("Stale or invalid Coinbase quote", 503);
     return { symbol, price, timestamp, source: "coinbase-exchange" };
   }
-  async function candles(symbol) {
+  async function candles(symbol, interval = "5min") {
     const id = product(symbol);
-    const d = await get("/products/" + id + "/candles?granularity=300");
+    if (!["5min", "15min"].includes(interval) || (interval === "15min" && symbol !== "BTC/USD"))
+      throw new FeedError("Unsupported candle interval for this market", 400);
+    const granularity = interval === "15min" ? 900 : 300;
+    const d = await get("/products/" + id + "/candles?granularity=" + granularity);
     if (!Array.isArray(d)) throw new FeedError("Invalid Coinbase candles");
     const current = now() / 1000;
     const bars = d.map(row => {
       if (!Array.isArray(row) || row.length < 5) throw new FeedError("Invalid Coinbase candle");
       const [timestamp, low, high, open, close] = row.map(Number);
       if (![timestamp, low, high, open, close].every(Number.isFinite) ||
-          timestamp % 300 !== 0 || Math.min(low, high, open, close) <= 0 ||
+          timestamp % granularity !== 0 || Math.min(low, high, open, close) <= 0 ||
           low > high || open < low || open > high || close < low || close > high)
         throw new FeedError("Invalid Coinbase candle");
       return { timestamp, low, high, open, close };
-    }).filter(c => c.timestamp + 300 <= current).sort((a,b) => a.timestamp - b.timestamp);
-    if (bars.length < 21 || current - (bars[bars.length - 1].timestamp + 300) > 360)
+    }).filter(c => c.timestamp + granularity <= current).sort((a,b) => a.timestamp - b.timestamp);
+    const staleTolerance = interval === "15min" ? granularity + 360 : 360;
+    if (bars.length < 21 || current - (bars[bars.length - 1].timestamp + granularity) > staleTolerance)
       throw new FeedError("Missing or stale completed Coinbase candles", 503);
-    const recent = bars.slice(-40);
+    // Keep enough completed bars for both SMA(10/20) and SMA(20/40).
+    const recent = bars.slice(-60);
     for (let i = 1; i < recent.length; i++)
-      if (recent[i].timestamp - recent[i-1].timestamp !== 300)
+      if (recent[i].timestamp - recent[i-1].timestamp !== granularity)
         throw new FeedError("Gap in Coinbase candles", 503);
-    return { meta: { symbol, interval: "5min", exchange_timezone: "UTC", source: "coinbase-exchange-epoch" },
+    return { meta: { symbol, interval, exchange_timezone: "UTC", source: "coinbase-exchange-epoch" },
       values: recent.map(c => ({ datetime: new Date(c.timestamp * 1000).toISOString(), open: c.open, high: c.high, low: c.low, close: c.close })) };
   }
   return { quote, candles };

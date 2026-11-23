@@ -1,8 +1,8 @@
-"""Deterministic, paper-only strategies using completed five-minute candles.
+"""Deterministic paper-only strategies on verified completed 5m or 15m candles.
 
-Quick: SMA(10/20) cross. Patient: SMA(20/40) cross confirmed by
-the 10-bar price trend. One signal per symbol/bar, with quick priority.
-No forecasts, broker calls, or hidden lookahead.
+BTC/USD uses 15m; other supported crypto markets use 5m. Quick: SMA(10/20)
+cross. Patient: SMA(20/40) cross confirmed by the 10-bar price trend.
+One signal per symbol/bar, with quick priority. No lookahead or broker calls.
 """
 from dataclasses import dataclass
 
@@ -14,7 +14,10 @@ class Decision:
     reason: str
 
 
-def evaluate(candles):
+def evaluate(candles, interval="5min"):
+    if interval not in ("5min", "15min"):
+        raise ValueError("Unsupported strategy timeframe")
+    timeframe = "completed " + interval.replace("min", "-minute") + " candles"
     if len(candles) < 41:
         # Preserve the original 21-candle quick strategy.
         if len(candles) < 21:
@@ -23,22 +26,22 @@ def evaluate(candles):
         before = sum(closes[-11:-1])/10 - sum(closes[-21:-1])/20
         after = sum(closes[-10:])/10 - sum(closes[-20:])/20
         if before <= 0 < after:
-            return Decision('buy','quick','SMA10 crossed above SMA20 on completed 5-minute candles')
+            return Decision('buy','quick',f'SMA10 crossed above SMA20 on {timeframe}')
         if before >= 0 > after:
-            return Decision('sell','quick','SMA10 crossed below SMA20 on completed 5-minute candles')
+            return Decision('sell','quick',f'SMA10 crossed below SMA20 on {timeframe}')
         return None
 
     closes = [c.close for c in candles[-41:]]
     qprev = sum(closes[-11:-1])/10 - sum(closes[-21:-1])/20
     qnow = sum(closes[-10:])/10 - sum(closes[-20:])/20
     if qprev <= 0 < qnow:
-        return Decision('buy','quick','SMA10 crossed above SMA20 on completed 5-minute candles')
+        return Decision('buy','quick',f'SMA10 crossed above SMA20 on {timeframe}')
     if qprev >= 0 > qnow:
-        return Decision('sell','quick','SMA10 crossed below SMA20 on completed 5-minute candles')
+        return Decision('sell','quick',f'SMA10 crossed below SMA20 on {timeframe}')
     pprev = sum(closes[-21:-1])/20 - sum(closes[-41:-1])/40
     pnow = sum(closes[-20:])/20 - sum(closes[-40:])/40
     if pprev <= 0 < pnow and closes[-1] > closes[-11]:
-        return Decision('buy','patient','SMA20 crossed above SMA40; price rose over the last 10 completed bars')
+        return Decision('buy','patient',f'SMA20 crossed above SMA40; price rose over the last 10 {interval} bars')
     if pprev >= 0 > pnow and closes[-1] < closes[-11]:
-        return Decision('sell','patient','SMA20 crossed below SMA40; price fell over the last 10 completed bars')
+        return Decision('sell','patient',f'SMA20 crossed below SMA40; price fell over the last 10 {interval} bars')
     return None

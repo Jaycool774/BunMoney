@@ -20,13 +20,13 @@ def run(candles, symbol='BTC/USD'):
         index=21
         def quote(self, market_symbol):
             return Quote(market_symbol,candles[self.index].open,clock[0])
-        def candles(self, market_symbol):
+        def candles(self, market_symbol, interval='5min'):
             rows=candles[max(0,self.index-100):self.index]
             # Other market has no crossover; only the selected instrument trades.
             return rows if market_symbol==symbol else [Candle(c.timestamp,100,100,100,100) for c in rows]
     market=HistoricalMarket()
     with tempfile.TemporaryDirectory() as directory:
-        e=Engine(directory+'/backtest.sqlite3',market,lambda:clock[0])
+        e=Engine(directory+'/backtest.sqlite3',market,lambda:clock[0],intervals={symbol:'5min'})
         e.controls('mode','automatic');e.controls('start')
         for i in range(21,len(candles)):
             market.index=i;bar=candles[i];clock[0]=bar.timestamp
