@@ -232,7 +232,7 @@ async function analyze(force = false) {
   if (!tickerElement) return;
   const ticker = tickerElement.value.toUpperCase().trim();
   lastAnalysis = null;
-  if (!Trading.validSymbol(ticker)) { setText("reason", "Enter a ticker or search available markets."); renderTradeSignal("HOLD","No market selected. Search verified markets first."); window.BunMarketSearch?.open(ticker); return; }
+  if (!Trading.validSymbol(ticker)) { setText("reason", "No valid market selected. Use the live search suggestions to choose a verified market."); renderTradeSignal("HOLD","No market selected. Search verified markets first."); return; }
   setText("symbol", ticker);
   renderTradeSignal("HOLD","Checking this symbol against the market-data provider...");
   setText("decision", "LOADING MARKET DATA...");
