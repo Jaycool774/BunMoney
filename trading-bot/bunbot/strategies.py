@@ -14,7 +14,7 @@ class Decision:
     reason: str
 
 
-def evaluate(candles):
+def evaluate(candles, interval="5min"):\n    if interval not in ("5min", "15min"):\n        raise ValueError("Unsupported strategy timeframe")\n    timeframe = "completed " + interval.replace("min", "-minute") + " candles"
     if len(candles) < 41:
         # Preserve the original 21-candle quick strategy.
         if len(candles) < 21:
@@ -23,9 +23,9 @@ def evaluate(candles):
         before = sum(closes[-11:-1])/10 - sum(closes[-21:-1])/20
         after = sum(closes[-10:])/10 - sum(closes[-20:])/20
         if before <= 0 < after:
-            return Decision('buy','quick','SMA10 crossed above SMA20 on completed 5-minute candles')
+            return Decision('buy','quick',f'SMA10 crossed above SMA20 on {timeframe}')
         if before >= 0 > after:
-            return Decision('sell','quick','SMA10 crossed below SMA20 on completed 5-minute candles')
+            return Decision('sell','quick',f'SMA10 crossed below SMA20 on {timeframe}')
         return None
 
     closes = [c.close for c in candles[-41:]]
@@ -38,7 +38,7 @@ def evaluate(candles):
     pprev = sum(closes[-21:-1])/20 - sum(closes[-41:-1])/40
     pnow = sum(closes[-20:])/20 - sum(closes[-40:])/40
     if pprev <= 0 < pnow and closes[-1] > closes[-11]:
-        return Decision('buy','patient','SMA20 crossed above SMA40; price rose over the last 10 completed bars')
+        return Decision('buy','patient',f'SMA20 crossed above SMA40; price rose over the last 10 {interval} bars')
     if pprev >= 0 > pnow and closes[-1] < closes[-11]:
-        return Decision('sell','patient','SMA20 crossed below SMA40; price fell over the last 10 completed bars')
+        return Decision('sell','patient',f'SMA20 crossed below SMA40; price fell over the last 10 {interval} bars')
     return None
