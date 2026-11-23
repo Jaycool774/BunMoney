@@ -300,7 +300,7 @@ class BotTests(unittest.TestCase):
         self.start()
         for i in range(3):
             self.market.price=104;self.e.cycle()
-            self.clock[0]+=300;self.market.price=100;self.e.cycle()
+            self.clock[0]+=900;self.market.price=100;self.e.cycle()
         self.assertEqual(self.state()['day_entries'],3)
         self.assertEqual(len(self.state()['trades']),3)
         self.assertFalse(self.state()['position'])
