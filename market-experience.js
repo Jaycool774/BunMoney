@@ -88,7 +88,7 @@
     input.focus();
   }
   function openMarkets() { openModal("Find a market"); createSearchBox(); }
-  function openMovers(mode="movers") {
+  function openMovers(mode="movers",directionFilter="all") {
     openModal(mode==="movers"?"Top movers":mode.replace(/\b\w/g,x=>x.toUpperCase()));
     const status=$("bun-scanner-status"), output=$("bun-scanner-results");
     if (status && output) {
@@ -96,7 +96,7 @@
       status.textContent="Preparing watchlist scan…";
       const filter=document.createElement("input");filter.type="search";filter.className="bm-result-filter";filter.placeholder="Filter scan results…";filter.setAttribute("aria-label","Filter scan results");
       modalTools.append(filter);
-      filter.addEventListener("input",()=>{for(const card of output.children){card.hidden=!card.textContent.toLowerCase().includes(filter.value.toLowerCase());}});
+      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\\s+([+-]?\\d+(?:\\.\\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>=0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
       if (typeof runBunScanner==="function") runBunScanner(mode);
       else status.textContent="Scanner module is unavailable. Refresh BunMoney and try again.";
     } else {
@@ -131,8 +131,8 @@
     openModal("Movers");
     const search=document.createElement("input");search.type="search";search.placeholder="What are you looking for? e.g. gainers, losers, SOUN…";search.className="bm-result-filter";modalTools.append(search);
     const actions=document.createElement("div");actions.className="bm-mover-filters";
-    for(const [label,mode] of [["All movers","movers"],["Breakouts","breakouts"],["Volatility","volatility"],["Leaders","leaders"],["Potential gems","gems"]]){
-      const button=document.createElement("button");button.type="button";button.textContent=label;button.addEventListener("click",()=>openMovers(mode));actions.append(button);
+    for(const [label,mode,direction] of [["All movers","movers","all"],["Top gainers","movers","up"],["Top losers","movers","down"],["Breakouts","breakouts","all"],["High volatility","volatility","all"],["Market leaders","leaders","all"],["Potential gems","gems","all"]]){
+      const button=document.createElement("button");button.type="button";button.textContent=label;button.addEventListener("click",()=>openMovers(mode,direction));actions.append(button);
     }
     modalBody.append(actions);
     const note=document.createElement("p");note.className="bm-empty";note.textContent="Choose a scan to rank your saved favorites, then filter the results by ticker or details.";modalBody.append(note);
@@ -156,8 +156,9 @@
         event.preventDefault();event.stopImmediatePropagation();
         const symbol=(preset.textContent||"").replace(/^\+\s*/,"").trim().toUpperCase();
         if(symbol&&typeof addFavorite==="function"){
+          if(typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){if(typeof openFavorite==="function")openFavorite(symbol);return;}
           preset.disabled=true;
-          addFavorite(symbol).then(()=>{if(typeof openFavorite==="function"&&typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){closeModal();openFavorite(symbol);}}).catch(()=>{}).finally(()=>{preset.disabled=false;});
+          addFavorite(symbol).then(()=>{if(typeof openFavorite==="function"&&typeof bunFavorites!=="undefined"&&bunFavorites.includes(symbol)){closeModal();openFavorite(symbol);}else if(typeof showPopup==="function"){showPopup("Market unavailable","The data provider could not verify "+symbol+". Check the symbol, provider plan and market hours.");}}).catch(()=>{}).finally(()=>{preset.disabled=false;});
         }
       }
     },true);
