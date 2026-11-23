@@ -43,8 +43,13 @@
       if (event.key === "Escape" && modal.classList.contains("open")) closeModal();
     });
   }
+  function restoreScannerNodes(){
+    const guide=$("bun-scanner-guide"),status=$("bun-scanner-status"),output=$("bun-scanner-results");
+    if(guide&&status&&output){guide.append(status,output);}
+  }
   function openModal(title) {
     ensureModal();
+    restoreScannerNodes();
     safeText(modalTitle, title);
     modalTools.replaceChildren();
     modalBody.replaceChildren();
@@ -54,6 +59,7 @@
   }
   function closeModal() {
     if (!modal) return;
+    restoreScannerNodes();
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("bm-modal-open");
@@ -96,8 +102,8 @@
       status.textContent="Preparing watchlist scan…";
       const filter=document.createElement("input");filter.type="search";filter.className="bm-result-filter";filter.placeholder="Filter scan results…";filter.setAttribute("aria-label","Filter scan results");
       modalTools.append(filter);
-      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\\s+([+-]?\\d+(?:\\.\\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>=0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
-      if (typeof runBunScanner==="function") runBunScanner(mode);
+      filter.addEventListener("input",()=>{for(const card of output.children){const matches=card.textContent.toLowerCase().includes(filter.value.toLowerCase());const move=card.textContent.match(/20-bar change\s+([+-]?\d+(?:\.\d+)?)%/i);const value=move?Number(move[1]):null;const directionOk=directionFilter==="all"||(directionFilter==="up"&&value!==null&&value>=0)||(directionFilter==="down"&&value!==null&&value<0);card.hidden=!(matches&&directionOk);}});
+      if (typeof runBunScanner==="function") Promise.resolve(runBunScanner(mode)).then(()=>filter.dispatchEvent(new Event("input")));
       else status.textContent="Scanner module is unavailable. Refresh BunMoney and try again.";
     } else {
       const msg=document.createElement("p");msg.className="bm-empty";msg.textContent="Scanner results are unavailable on this build.";modalBody.append(msg);
