@@ -44,13 +44,16 @@ class BunMoneyMarket:
             raise Blocked('Unexpected quote symbol')
         return Quote(symbol, positive(d.get('price',d.get('close'))), timestamp(d.get('timestamp')))
 
-    def candles(self, symbol):
-        d = self.request('/api/bot-market/candles', symbol=symbol)
+    def candles(self, symbol, interval='5min'):
+        if interval not in ('5min', '15min') or (interval == '15min' and symbol != 'BTC/USD'):
+            raise Blocked('Unsupported candle timeframe for this market')
+        seconds = 900 if interval == '15min' else 300
+        d = self.request('/api/bot-market/candles', symbol=symbol, interval=interval)
         meta = d.get('meta',{})
-        if meta.get('symbol') != symbol or meta.get('interval') != '5min' or meta.get('exchange_timezone') != 'UTC' or meta.get('source') != 'coinbase-exchange-epoch':
+        if meta.get('symbol') != symbol or meta.get('interval') != interval or meta.get('exchange_timezone') != 'UTC' or meta.get('source') != 'coinbase-exchange-epoch':
             raise Blocked('Unexpected candle metadata or timezone')
         rows = [Candle(timestamp(c['datetime']), *(positive(c[k]) for k in ('open','high','low','close'))) for c in d['values']]
-        return sorted((c for c in rows if c.timestamp+300 <= self.now()), key=lambda c:c.timestamp)
+        return sorted((c for c in rows if c.timestamp+seconds <= self.now()), key=lambda c:c.timestamp)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
