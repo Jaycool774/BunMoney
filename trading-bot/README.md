@@ -50,7 +50,7 @@ multi-user permissions system. Serve the Node app over HTTPS before remote acces
   terminal. Automatic executes eligible simulated entries only.
 - Paper cash starts at $1,000; planned risk is capped at 0.5% of liquidation equity
   and the remaining daily loss allowance. Daily loss shutdown is 2%, with a maximum
-  of three entries per UTC day and one open position across both markets.
+  of three entries per UTC day and one open position across all enabled markets.
   No leverage, averaging down, or adding to positions. Cash cannot fund more than
   the account owns. Risk settings are fixed server-side in `Settings`, displayed
   read-only; the API cannot raise them or switch to live trading.
