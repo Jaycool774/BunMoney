@@ -75,7 +75,8 @@ function onOpen(){const sym=getSymbol();if(sym&&sym!==state.symbol){state.symbol
 function init(){
  ensureUI();const nav=document.querySelector('[data-screen="chartIntelligenceScreen"]');nav?.addEventListener("click",onOpen);
  document.addEventListener("click",e=>{const b=e.target.closest('[data-action="showScreen"][data-screen="chartIntelligenceScreen"]');if(b)onOpen();});
- window.addEventListener("resize",()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))renderActive();});\n if(state.timer)clearInterval(state.timer);state.timer=setInterval(()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))refresh(false);},60000);
+ window.addEventListener("resize",()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))renderActive();});
+ if(state.timer)clearInterval(state.timer);state.timer=setInterval(()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))refresh(false);},60000);
  const ticker=$("ticker");ticker?.addEventListener("change",()=>{if($("chartIntelligenceScreen")?.classList.contains("active")){state.symbol=getSymbol();state.cache.clear();refresh(true);}});
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
