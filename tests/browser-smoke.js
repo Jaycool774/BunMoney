@@ -202,6 +202,13 @@ const assert = require("node:assert/strict");
     await page.locator('[data-chart-mode="candles"]').click();
     assert.equal(await page.locator("#bmCandleCountdown").isVisible(), true);
     assert.equal(await page.locator("#bmWhyMoving").isVisible(), true);
+    await page.locator('.nav-button[data-screen="chartIntelligenceScreen"]').click();
+    await page.waitForFunction(() => document.getElementById("ciPatternName")?.textContent !== "Waiting for chart data", {}, {timeout:10000});
+    assert.equal(await page.locator("#ciCanvas").isVisible(), true);
+    assert.equal(await page.locator("#ciFrameGrid [data-ci-card]").count(), 4);
+    assert.ok((await page.locator("#ciPatternReason").textContent()).length > 10);
+    await page.locator('[data-frame="1y"]').click();
+    assert.equal(await page.locator("#ciFrameLabel").textContent(), "1 YEAR");
     await page.locator('.bun-shortcuts a[href="#homeSearch"]').click();
     await page.locator("#bmMarketSearch").fill("NOTAREALMARKET");
     await page.waitForFunction(() => document.querySelector("#bmMarketResults .bm-empty")?.textContent.includes("No verified markets"), {}, {timeout:8000}).catch(async error => {
