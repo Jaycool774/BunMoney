@@ -2,7 +2,7 @@
 "use strict";
 const $=id=>document.getElementById(id);
 const TIMEFRAMES=[
- {id:"now",label:"NOW",interval:"1min",size:60,description:"Latest price action · 1-minute candles"},
+ {id:"now",label:"NOW",interval:"1min",size:21,description:"Immediate price action · latest 20 minutes"},
  {id:"15m",label:"15 MIN",interval:"1min",size:60,description:"Short-term structure · 1-minute candles"},
  {id:"1h",label:"1 HOUR",interval:"5min",size:60,description:"Intraday structure · 5-minute candles"},
  {id:"1y",label:"1 YEAR",interval:"1day",size:365,description:"Long-term structure · daily candles"}
@@ -21,7 +21,7 @@ function ensureUI(){
  const frameBar=screen.querySelector(".ci-timeframes");
  for(const frame of TIMEFRAMES){const b=document.createElement("button");b.type="button";b.dataset.frame=frame.id;b.setAttribute("role","tab");b.textContent=frame.label;b.addEventListener("click",()=>selectFrame(frame.id));frameBar.append(b);}
  $("ciRefresh")?.addEventListener("click",()=>refresh(true));
- $("ciSymbol")?.addEventListener("change",()=>{const v=$("ciSymbol").value.trim().toUpperCase();if(v){state.symbol=v;refresh(true);}});
+ $("ciSymbol")?.addEventListener("change",()=>{const v=$("ciSymbol").value.trim().toUpperCase();if(v){state.symbol=v;state.cache.clear();refresh(true);}});
  screen.addEventListener("click",e=>{const card=e.target.closest("[data-ci-card]");if(card)selectFrame(card.dataset.ciCard);});
 }
 function getSymbol(){return (window.selectedSymbol?.()||$("ticker")?.value||$("symbol")?.textContent||"").trim().toUpperCase();}
@@ -55,7 +55,7 @@ function renderGrid(){
  for(const f of TIMEFRAMES){const d=state.cache.get(f.id);const card=document.createElement("button");card.type="button";card.dataset.ciCard=f.id;card.className="ci-frame-card"+(f.id===state.active?" active":"");const head=document.createElement("span"),name=document.createElement("strong"),desc=document.createElement("small"),meta=document.createElement("span");head.textContent=f.label;name.textContent=d?d.analysis.pattern.name:"Loading…";desc.textContent=d?d.analysis.pattern.direction+" · "+d.analysis.pattern.status:f.description;meta.textContent=d?money(d.analysis.price):"—";card.append(head,name,desc,meta);grid.append(card);}
 }
 async function refresh(force=false){
- const symbol=getSymbol()||state.symbol;if(!symbol){setStatus("Choose a market in Trading Core first.");return;}state.symbol=symbol;const id=++state.request;state.busy=true;text($("ciSymbol"),"");if($("ciSymbol"))$("ciSymbol").value=symbol;
+ if(state.busy)return;const symbol=getSymbol()||state.symbol;if(!symbol){setStatus("Choose a market in Trading Core first.");return;}state.symbol=symbol;const id=++state.request;state.busy=true;text($("ciSymbol"),"");if($("ciSymbol"))$("ciSymbol").value=symbol;
  setStatus("Building four chart snapshots for "+symbol+"…");
  const jobs=TIMEFRAMES.map(async f=>{
   const cached=state.cache.get(f.id);if(!force&&cached&&Date.now()-cached.loadedAt<60000)return;
@@ -75,7 +75,7 @@ function onOpen(){const sym=getSymbol();if(sym&&sym!==state.symbol){state.symbol
 function init(){
  ensureUI();const nav=document.querySelector('[data-screen="chartIntelligenceScreen"]');nav?.addEventListener("click",onOpen);
  document.addEventListener("click",e=>{const b=e.target.closest('[data-action="showScreen"][data-screen="chartIntelligenceScreen"]');if(b)onOpen();});
- window.addEventListener("resize",()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))renderActive();});
+ window.addEventListener("resize",()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))renderActive();});\n if(state.timer)clearInterval(state.timer);state.timer=setInterval(()=>{if($("chartIntelligenceScreen")?.classList.contains("active"))refresh(false);},60000);
  const ticker=$("ticker");ticker?.addEventListener("change",()=>{if($("chartIntelligenceScreen")?.classList.contains("active")){state.symbol=getSymbol();state.cache.clear();refresh(true);}});
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
