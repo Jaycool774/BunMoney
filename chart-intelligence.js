@@ -28,8 +28,8 @@ function getSymbol(){return (window.selectedSymbol?.()||$("ticker")?.value||$("s
 function api(path,params){if(typeof window.marketEngineRequest!=="function")throw new Error("Market data service is unavailable.");return window.marketEngineRequest(path,params);}
 function setStatus(s){text($("ciStatus"),s);}
 function selectFrame(id){state.active=id;document.querySelectorAll("[data-frame]").forEach(b=>b.classList.toggle("active",b.dataset.frame===id));renderActive();}
-function canvasDraw(canvas,candles,analysis){
- if(!canvas||!candles.length)return;const dpr=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth||600),h=300;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
+function canvasDraw(canvas,candles,analysis,height=300){
+ if(!canvas||!candles.length)return;const dpr=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth||600),h=height;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
  const pad={l:16,r:72,t:22,b:28},lo=Math.min(...candles.map(x=>x.low),analysis.support),hi=Math.max(...candles.map(x=>x.high),analysis.resistance),range=hi-lo||1;
  const x=i=>pad.l+i/(candles.length-1||1)*(w-pad.l-pad.r),y=v=>pad.t+(hi-v)/range*(h-pad.t-pad.b);
  c.font="11px system-ui";c.strokeStyle="rgba(148,163,184,.15)";c.fillStyle="#94a3b8";
