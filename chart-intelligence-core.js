@@ -31,19 +31,19 @@
     if(candles.length<20)throw new Error("At least 20 valid candles are required for pattern analysis.");
     const closes=candles.map(c=>c.close),last=candles.at(-1),recent=candles.slice(-Math.min(30,candles.length)),recentCloses=recent.map(c=>c.close);
     const slope=linearSlope(recentCloses),trendPct=pct(recentCloses.at(-1),recentCloses[0])||0;
-    const piv=pivots(candles.slice(-Math.min(80,candles.length)),2),hi=piv.highs,lo=piv.lows;
+    const patternCandles=candles.slice(-Math.min(80,candles.length));\n    const piv=pivots(patternCandles,2),hi=piv.highs,lo=piv.lows;
     const highBand=hi.slice(-4),lowBand=lo.slice(-4);
     const near=(a,b,tol=0.007)=>Math.abs(a-b)/Math.max(Math.abs(a),Math.abs(b),1e-9)<=tol;
     const patterns=[];
     const add=(name,direction,status,confidence,reason,up,down)=>patterns.push({name,direction,status,confidence:Math.round(confidence),reason,up,down});
     const topPair=hi.length>=2?hi.slice(-2):[],bottomPair=lo.length>=2?lo.slice(-2):[];
     if(topPair.length===2&&near(topPair[0].price,topPair[1].price)&&topPair[1].i-topPair[0].i>=5){
-      const between=candles.slice(topPair[0].i,topPair[1].i+1),neck=Math.min(...between.map(c=>c.low));
+      const between=patternCandles.slice(topPair[0].i,topPair[1].i+1),neck=Math.min(...between.map(c=>c.low));
       const confirmed=last.close<neck;
       add("Double top","BEARISH",confirmed?"confirmed":"forming",confirmed?78:62,"Two swing highs are close in price with a pullback between them.", "A close back above the twin highs weakens the setup.","A decisive close below the intervening low would confirm downside pressure.");
     }
     if(bottomPair.length===2&&near(bottomPair[0].price,bottomPair[1].price)&&bottomPair[1].i-bottomPair[0].i>=5){
-      const between=candles.slice(bottomPair[0].i,bottomPair[1].i+1),neck=Math.max(...between.map(c=>c.high));
+      const between=patternCandles.slice(bottomPair[0].i,bottomPair[1].i+1),neck=Math.max(...between.map(c=>c.high));
       const confirmed=last.close>neck;
       add("Double bottom","BULLISH",confirmed?"confirmed":"forming",confirmed?78:62,"Two swing lows are close in price with a rebound between them.","A close below the twin lows invalidates the reversal idea.","A decisive close above the intervening high would confirm upside pressure.");
     }
