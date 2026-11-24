@@ -31,7 +31,8 @@
     if(candles.length<20)throw new Error("At least 20 valid candles are required for pattern analysis.");
     const closes=candles.map(c=>c.close),last=candles.at(-1),recent=candles.slice(-Math.min(30,candles.length)),recentCloses=recent.map(c=>c.close);
     const slope=linearSlope(recentCloses),trendPct=pct(recentCloses.at(-1),recentCloses[0])||0;
-    const patternCandles=candles.slice(-Math.min(80,candles.length));\n    const piv=pivots(patternCandles,2),hi=piv.highs,lo=piv.lows;
+    const patternCandles=candles.slice(-Math.min(80,candles.length));
+    const piv=pivots(patternCandles,2),hi=piv.highs,lo=piv.lows;
     const highBand=hi.slice(-4),lowBand=lo.slice(-4);
     const near=(a,b,tol=0.007)=>Math.abs(a-b)/Math.max(Math.abs(a),Math.abs(b),1e-9)<=tol;
     const patterns=[];
